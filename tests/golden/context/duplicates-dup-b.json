@@ -1,0 +1,74 @@
+{
+  "results": [
+    {
+      "primary_result": {
+        "type": "entity",
+        "external_id": "<uuid>",
+        "entity_id": "<entity_id>",
+        "permalink": "oracle/duplicates/dup-b/same-title",
+        "title": "Same Title",
+        "content": "# Duplicate B\n\nSecond note with a duplicate title. See [[duplicates/dup-a/same-title]].\n\n- [fact] Duplicate title in folder B",
+        "file_path": "duplicates/dup-b/same-title.md",
+        "created_at": "<timestamp>"
+      },
+      "observations": [
+        {
+          "type": "observation",
+          "observation_id": "<observation_id>",
+          "entity_id": "<entity_id>",
+          "entity_external_id": "<uuid>",
+          "title": "Same Title",
+          "file_path": "duplicates/dup-b/same-title.md",
+          "permalink": "oracle/duplicates/dup-b/same-title/observations/fact/duplicate-title-in-folder-b",
+          "category": "fact",
+          "content": "Duplicate title in folder B",
+          "created_at": "<timestamp>"
+        }
+      ],
+      "related_results": [
+        {
+          "type": "relation",
+          "relation_id": "<relation_id>",
+          "entity_id": null,
+          "title": "links_to: duplicates/dup-a/same-title",
+          "file_path": "duplicates/dup-b/same-title.md",
+          "permalink": "",
+          "relation_type": "links_to",
+          "from_entity": "Same Title",
+          "from_entity_id": "<from_entity_id>",
+          "from_entity_external_id": "<uuid>",
+          "to_entity": "Same Title",
+          "to_name": "duplicates/dup-a/same-title",
+          "to_entity_id": "<to_entity_id>",
+          "to_entity_external_id": "<uuid>",
+          "created_at": "<timestamp>"
+        },
+        {
+          "type": "entity",
+          "external_id": "<uuid>",
+          "entity_id": "<entity_id>",
+          "permalink": "oracle/duplicates/dup-a/same-title",
+          "title": "Same Title",
+          "content": null,
+          "file_path": "duplicates/dup-a/same-title.md",
+          "created_at": "<timestamp>"
+        }
+      ]
+    }
+  ],
+  "metadata": {
+    "uri": "oracle/duplicates/dup-b/same-title",
+    "types": null,
+    "depth": 1,
+    "timeframe": "<timestamp>",
+    "generated_at": "<timestamp>",
+    "primary_count": 1,
+    "related_count": 2,
+    "total_results": 3,
+    "total_relations": 1,
+    "total_observations": 2
+  },
+  "page": 1,
+  "page_size": 10,
+  "has_more": false
+}

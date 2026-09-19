@@ -1,0 +1,77 @@
+{
+  "results": [
+    {
+      "title": "decision: Keep Markdown as the source of truth...",
+      "type": "observation",
+      "score": -0.0,
+      "entity": "notes/frontmatter-note",
+      "external_id": "<uuid>",
+      "permalink": "notes/frontmatter-note/observations/decision/keep-markdown-as-the-source-of-truth",
+      "content": "Keep Markdown as the source of truth",
+      "file_path": "notes/frontmatter.md",
+      "updated_at": "<timestamp>",
+      "metadata": {
+        "tags": null
+      },
+      "entity_id": "<entity_id>",
+      "observation_id": "<observation_id>",
+      "category": "decision"
+    },
+    {
+      "title": "decision: Use SQLite FTS5 for text search...",
+      "type": "observation",
+      "score": -0.0,
+      "entity": "oracle/notes/observations",
+      "external_id": "<uuid>",
+      "permalink": "oracle/notes/observations/observations/decision/use-sqlite-fts5-for-text-search",
+      "content": "Use SQLite FTS5 for text search",
+      "file_path": "notes/observations.md",
+      "updated_at": "<timestamp>",
+      "metadata": {
+        "tags": null
+      },
+      "entity_id": "<entity_id>",
+      "observation_id": "<observation_id>",
+      "category": "decision"
+    },
+    {
+      "title": "decision: Alpha uses the Rust core...",
+      "type": "observation",
+      "score": -0.0,
+      "entity": "oracle/projects/alpha",
+      "external_id": "<uuid>",
+      "permalink": "oracle/projects/alpha/observations/decision/alpha-uses-the-rust-core",
+      "content": "Alpha uses the Rust core",
+      "file_path": "projects/alpha.md",
+      "updated_at": "<timestamp>",
+      "metadata": {
+        "tags": null
+      },
+      "entity_id": "<entity_id>",
+      "observation_id": "<observation_id>",
+      "category": "decision"
+    },
+    {
+      "title": "decision: 使用 SQLite 作为本地索引...",
+      "type": "observation",
+      "score": -0.0,
+      "entity": "oracle/notes/cjk",
+      "external_id": "<uuid>",
+      "permalink": "oracle/notes/cjk/observations/decision/使用-sqlite-作为本地索引",
+      "content": "使用 SQLite 作为本地索引",
+      "file_path": "notes/cjk.md",
+      "updated_at": "<timestamp>",
+      "metadata": {
+        "tags": null
+      },
+      "entity_id": "<entity_id>",
+      "observation_id": "<observation_id>",
+      "category": "decision"
+    }
+  ],
+  "current_page": 1,
+  "page_size": 10,
+  "total": 4,
+  "total_is_exact": true,
+  "has_more": false
+}

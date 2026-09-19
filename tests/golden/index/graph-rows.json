@@ -1,0 +1,413 @@
+{
+  "entities": [
+    {
+      "id": 1,
+      "external_id": "1591d16e-f0ef-4bfa-9b42-2b32bfee2d54",
+      "project_id": 1,
+      "title": "Same Title",
+      "note_type": "note",
+      "permalink": "oracle/duplicates/dup-a/same-title",
+      "file_path": "duplicates/dup-a/same-title.md",
+      "created_at": "2026-09-11 08:49:36.076950",
+      "updated_at": "2026-09-10 10:09:51.950724"
+    },
+    {
+      "id": 2,
+      "external_id": "ec8f81fb-0047-4e3d-bae7-e8f848494695",
+      "project_id": 1,
+      "title": "Same Title",
+      "note_type": "note",
+      "permalink": "oracle/duplicates/dup-b/same-title",
+      "file_path": "duplicates/dup-b/same-title.md",
+      "created_at": "2026-09-11 08:49:36.077317",
+      "updated_at": "2026-09-10 10:09:51.951298"
+    },
+    {
+      "id": 3,
+      "external_id": "0911d6c4-5836-4ef1-bc67-c1f3fdfb12e9",
+      "project_id": 1,
+      "title": "Observations Demo",
+      "note_type": "note",
+      "permalink": "oracle/notes/observations",
+      "file_path": "notes/observations.md",
+      "created_at": "2026-09-11 08:49:36.079806",
+      "updated_at": "2026-09-10 10:09:51.944162"
+    },
+    {
+      "id": 4,
+      "external_id": "27415979-6068-461a-aada-e099fa589928",
+      "project_id": 1,
+      "title": "Deep Note",
+      "note_type": "note",
+      "permalink": "oracle/notes/nested/deep-note",
+      "file_path": "notes/nested/deep-note.md",
+      "created_at": "2026-09-11 08:49:36.078807",
+      "updated_at": "2026-09-10 10:09:51.947804"
+    },
+    {
+      "id": 5,
+      "external_id": "1937c971-d6bb-46fb-989f-40d5e24d17e1",
+      "project_id": 1,
+      "title": "中文测试文档",
+      "note_type": "note",
+      "permalink": "oracle/notes/cjk",
+      "file_path": "notes/cjk.md",
+      "created_at": "2026-09-11 08:49:36.077699",
+      "updated_at": "2026-09-10 10:09:51.945988"
+    },
+    {
+      "id": 6,
+      "external_id": "a4630482-0cb8-4ce3-a485-77bc2ab8adf6",
+      "project_id": 1,
+      "title": "empty",
+      "note_type": "note",
+      "permalink": "oracle/notes/empty",
+      "file_path": "notes/empty.md",
+      "created_at": "2026-09-11 08:49:36.077762",
+      "updated_at": "2026-09-10 10:09:51.947192"
+    },
+    {
+      "id": 7,
+      "external_id": "0c9900c8-02e8-45cb-9f66-227a3dbd6531",
+      "project_id": 1,
+      "title": "simple",
+      "note_type": "note",
+      "permalink": "oracle/notes/simple",
+      "file_path": "notes/simple.md",
+      "created_at": "2026-09-11 08:49:36.080530",
+      "updated_at": "2026-09-10 10:09:51.942941"
+    },
+    {
+      "id": 8,
+      "external_id": "8bb4d374-dc70-45bb-b997-54ac9e8e7c46",
+      "project_id": 1,
+      "title": "task-markers",
+      "note_type": "note",
+      "permalink": "oracle/notes/task-markers",
+      "file_path": "notes/task-markers.md",
+      "created_at": "2026-09-11 08:49:36.080853",
+      "updated_at": "2026-09-10 10:09:51.947192"
+    },
+    {
+      "id": 9,
+      "external_id": "08ab2bed-d6ee-4481-ba8d-d52df61e6f6c",
+      "project_id": 1,
+      "title": "Unresolved Links",
+      "note_type": "note",
+      "permalink": "oracle/notes/unresolved",
+      "file_path": "notes/unresolved.md",
+      "created_at": "2026-09-11 08:49:36.081058",
+      "updated_at": "2026-09-10 10:09:51.950134"
+    },
+    {
+      "id": 10,
+      "external_id": "c2204ef5-18a4-4925-9174-db4aa8b19010",
+      "project_id": 1,
+      "title": "Ada Lovelace",
+      "note_type": "person",
+      "permalink": "oracle/people/ada-lovelace",
+      "file_path": "people/ada-lovelace.md",
+      "created_at": "2026-09-11 08:49:36.081674",
+      "updated_at": "2026-09-10 10:09:51.948401"
+    },
+    {
+      "id": 11,
+      "external_id": "6a1cecab-5d8e-4a57-b6ac-d6029efbd85b",
+      "project_id": 1,
+      "title": "Beta Project",
+      "note_type": "project",
+      "permalink": "oracle/projects/beta",
+      "file_path": "projects/beta.md",
+      "created_at": "2026-09-11 08:49:36.082202",
+      "updated_at": "2026-09-10 10:09:51.949559"
+    },
+    {
+      "id": 12,
+      "external_id": "b2a5b4d4-9aba-471e-91c7-77cb36260b14",
+      "project_id": 1,
+      "title": "Wikilinks Demo",
+      "note_type": "note",
+      "permalink": "oracle/notes/wikilinks",
+      "file_path": "notes/wikilinks.md",
+      "created_at": "2026-09-11 08:49:36.081447",
+      "updated_at": "2026-09-10 10:09:51.945378"
+    },
+    {
+      "id": 13,
+      "external_id": "18d77648-9806-4b8c-b990-2943a37b2848",
+      "project_id": 1,
+      "title": "Alpha Project",
+      "note_type": "project",
+      "permalink": "oracle/projects/alpha",
+      "file_path": "projects/alpha.md",
+      "created_at": "2026-09-11 08:49:36.081974",
+      "updated_at": "2026-09-10 10:09:51.948976"
+    },
+    {
+      "id": 14,
+      "external_id": "e6d9b7b4-4a34-4dd7-8bd3-6324c844aef2",
+      "project_id": 1,
+      "title": "Frontmatter Demo",
+      "note_type": "reference",
+      "permalink": "notes/frontmatter-note",
+      "file_path": "notes/frontmatter.md",
+      "created_at": "2026-01-02 00:00:00.000000",
+      "updated_at": "2026-02-03 00:00:00.000000"
+    },
+    {
+      "id": 15,
+      "external_id": "b1dcc5bb-8c5d-4f04-a6b4-2bfff1fd7ee4",
+      "project_id": 1,
+      "title": "Relations Demo",
+      "note_type": "note",
+      "permalink": "oracle/notes/relations",
+      "file_path": "notes/relations.md",
+      "created_at": "2026-09-11 08:49:36.080315",
+      "updated_at": "2026-09-10 10:09:51.944777"
+    }
+  ],
+  "relations": [
+    {
+      "id": 1,
+      "project_id": 1,
+      "from_id": 2,
+      "to_id": 1,
+      "to_name": "duplicates/dup-a/same-title",
+      "relation_type": "links_to"
+    },
+    {
+      "id": 2,
+      "project_id": 1,
+      "from_id": 15,
+      "to_id": 13,
+      "to_name": "projects/alpha",
+      "relation_type": "depends_on"
+    },
+    {
+      "id": 3,
+      "project_id": 1,
+      "from_id": 15,
+      "to_id": 10,
+      "to_name": "people/ada-lovelace",
+      "relation_type": "implemented by"
+    },
+    {
+      "id": 4,
+      "project_id": 1,
+      "from_id": 15,
+      "to_id": 14,
+      "to_name": "notes/frontmatter",
+      "relation_type": "links_to"
+    },
+    {
+      "id": 5,
+      "project_id": 1,
+      "from_id": 15,
+      "to_id": 11,
+      "to_name": "projects/beta|Beta",
+      "relation_type": "links_to"
+    },
+    {
+      "id": 6,
+      "project_id": 1,
+      "from_id": 15,
+      "to_id": 7,
+      "to_name": "notes/simple",
+      "relation_type": "relates_to"
+    },
+    {
+      "id": 7,
+      "project_id": 1,
+      "from_id": 7,
+      "to_id": 13,
+      "to_name": "projects/alpha",
+      "relation_type": "links_to"
+    },
+    {
+      "id": 8,
+      "project_id": 1,
+      "from_id": 3,
+      "to_id": 13,
+      "to_name": "projects/alpha",
+      "relation_type": "links_to"
+    },
+    {
+      "id": 9,
+      "project_id": 1,
+      "from_id": 5,
+      "to_id": 13,
+      "to_name": "projects/alpha",
+      "relation_type": "关联"
+    },
+    {
+      "id": 10,
+      "project_id": 1,
+      "from_id": 4,
+      "to_id": 7,
+      "to_name": "notes/simple",
+      "relation_type": "links_to"
+    },
+    {
+      "id": 11,
+      "project_id": 1,
+      "from_id": 13,
+      "to_id": 7,
+      "to_name": "notes/simple",
+      "relation_type": "links_to"
+    },
+    {
+      "id": 12,
+      "project_id": 1,
+      "from_id": 9,
+      "to_id": null,
+      "to_name": "notes/does-not-exist",
+      "relation_type": "links_to"
+    },
+    {
+      "id": 13,
+      "project_id": 1,
+      "from_id": 12,
+      "to_id": 4,
+      "to_name": "notes/nested/deep-note",
+      "relation_type": "links_to"
+    },
+    {
+      "id": 14,
+      "project_id": 1,
+      "from_id": 12,
+      "to_id": 10,
+      "to_name": "people/ada-lovelace",
+      "relation_type": "links_to"
+    },
+    {
+      "id": 15,
+      "project_id": 1,
+      "from_id": 12,
+      "to_id": 13,
+      "to_name": "projects/alpha|Alpha Project",
+      "relation_type": "links_to"
+    },
+    {
+      "id": 16,
+      "project_id": 1,
+      "from_id": 12,
+      "to_id": 11,
+      "to_name": "projects/beta",
+      "relation_type": "links_to"
+    }
+  ],
+  "observations": [
+    {
+      "id": 15,
+      "project_id": 1,
+      "entity_id": 14,
+      "category": "decision",
+      "content": "Keep Markdown as the source of truth"
+    },
+    {
+      "id": 16,
+      "project_id": 1,
+      "entity_id": 14,
+      "category": "constraint",
+      "content": "No cloud functionality in the Rust port"
+    },
+    {
+      "id": 17,
+      "project_id": 1,
+      "entity_id": 2,
+      "category": "fact",
+      "content": "Duplicate title in folder B"
+    },
+    {
+      "id": 18,
+      "project_id": 1,
+      "entity_id": 1,
+      "category": "fact",
+      "content": "Duplicate title in folder A"
+    },
+    {
+      "id": 19,
+      "project_id": 1,
+      "entity_id": 5,
+      "category": "decision",
+      "content": "使用 SQLite 作为本地索引"
+    },
+    {
+      "id": 20,
+      "project_id": 1,
+      "entity_id": 3,
+      "category": "decision",
+      "content": "Use SQLite FTS5 for text search"
+    },
+    {
+      "id": 21,
+      "project_id": 1,
+      "entity_id": 3,
+      "category": "requirement",
+      "content": "Must support CJK #cjk #search"
+    },
+    {
+      "id": 22,
+      "project_id": 1,
+      "entity_id": 3,
+      "category": "fact",
+      "content": "Parser preserves frontmatter checksums"
+    },
+    {
+      "id": 23,
+      "project_id": 1,
+      "entity_id": 3,
+      "category": "note",
+      "content": "With no category but a #tag"
+    },
+    {
+      "id": 24,
+      "project_id": 1,
+      "entity_id": 7,
+      "category": "note",
+      "content": "Created as a baseline fixture"
+    },
+    {
+      "id": 25,
+      "project_id": 1,
+      "entity_id": 10,
+      "category": "fact",
+      "content": "First programmer"
+    },
+    {
+      "id": 26,
+      "project_id": 1,
+      "entity_id": 4,
+      "category": "fact",
+      "content": "Nested paths must keep slash-separated permalinks"
+    },
+    {
+      "id": 27,
+      "project_id": 1,
+      "entity_id": 11,
+      "category": "note",
+      "content": "Beta is archived"
+    },
+    {
+      "id": 28,
+      "project_id": 1,
+      "entity_id": 13,
+      "category": "decision",
+      "content": "Alpha uses the Rust core"
+    },
+    {
+      "id": 29,
+      "project_id": 1,
+      "entity_id": 13,
+      "category": "requirement",
+      "content": "Must stay offline"
+    },
+    {
+      "id": 30,
+      "project_id": 1,
+      "entity_id": 8,
+      "category": "note",
+      "content": "a genuine observation"
+    }
+  ]
+}

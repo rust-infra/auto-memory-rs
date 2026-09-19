@@ -1,0 +1,5 @@
+{
+  "exit_code": 1,
+  "stdout": "",
+  "stderr": "Error: page_size must be >= 1, got 0\n"
+}

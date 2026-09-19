@@ -1,0 +1,145 @@
+{
+  "results": [
+    {
+      "primary_result": {
+        "type": "entity",
+        "external_id": "<uuid>",
+        "entity_id": "<entity_id>",
+        "permalink": "oracle/notes/simple",
+        "title": "simple",
+        "content": "# Simple Note\n\nA plain note without frontmatter. It links to [[projects/alpha]] and mentions rust.\n\n- [note] Created as a baseline fixture",
+        "file_path": "notes/simple.md",
+        "created_at": "<timestamp>"
+      },
+      "observations": [
+        {
+          "type": "observation",
+          "observation_id": "<observation_id>",
+          "entity_id": "<entity_id>",
+          "entity_external_id": "<uuid>",
+          "title": "simple",
+          "file_path": "notes/simple.md",
+          "permalink": "oracle/notes/simple/observations/note/created-as-a-baseline-fixture",
+          "category": "note",
+          "content": "Created as a baseline fixture",
+          "created_at": "<timestamp>"
+        }
+      ],
+      "related_results": [
+        {
+          "type": "relation",
+          "relation_id": "<relation_id>",
+          "entity_id": null,
+          "title": "relates_to: notes/simple",
+          "file_path": "notes/relations.md",
+          "permalink": "",
+          "relation_type": "relates_to",
+          "from_entity": "Relations Demo",
+          "from_entity_id": "<from_entity_id>",
+          "from_entity_external_id": "<uuid>",
+          "to_entity": "simple",
+          "to_name": "notes/simple",
+          "to_entity_id": "<to_entity_id>",
+          "to_entity_external_id": "<uuid>",
+          "created_at": "<timestamp>"
+        },
+        {
+          "type": "relation",
+          "relation_id": "<relation_id>",
+          "entity_id": null,
+          "title": "links_to: projects/alpha",
+          "file_path": "notes/simple.md",
+          "permalink": "",
+          "relation_type": "links_to",
+          "from_entity": "simple",
+          "from_entity_id": "<from_entity_id>",
+          "from_entity_external_id": "<uuid>",
+          "to_entity": "Alpha Project",
+          "to_name": "projects/alpha",
+          "to_entity_id": "<to_entity_id>",
+          "to_entity_external_id": "<uuid>",
+          "created_at": "<timestamp>"
+        },
+        {
+          "type": "relation",
+          "relation_id": "<relation_id>",
+          "entity_id": null,
+          "title": "links_to: notes/simple",
+          "file_path": "notes/nested/deep-note.md",
+          "permalink": "",
+          "relation_type": "links_to",
+          "from_entity": "Deep Note",
+          "from_entity_id": "<from_entity_id>",
+          "from_entity_external_id": "<uuid>",
+          "to_entity": "simple",
+          "to_name": "notes/simple",
+          "to_entity_id": "<to_entity_id>",
+          "to_entity_external_id": "<uuid>",
+          "created_at": "<timestamp>"
+        },
+        {
+          "type": "relation",
+          "relation_id": "<relation_id>",
+          "entity_id": null,
+          "title": "links_to: notes/simple",
+          "file_path": "projects/alpha.md",
+          "permalink": "",
+          "relation_type": "links_to",
+          "from_entity": "Alpha Project",
+          "from_entity_id": "<from_entity_id>",
+          "from_entity_external_id": "<uuid>",
+          "to_entity": "simple",
+          "to_name": "notes/simple",
+          "to_entity_id": "<to_entity_id>",
+          "to_entity_external_id": "<uuid>",
+          "created_at": "<timestamp>"
+        },
+        {
+          "type": "entity",
+          "external_id": "<uuid>",
+          "entity_id": "<entity_id>",
+          "permalink": "oracle/notes/nested/deep-note",
+          "title": "Deep Note",
+          "content": null,
+          "file_path": "notes/nested/deep-note.md",
+          "created_at": "<timestamp>"
+        },
+        {
+          "type": "entity",
+          "external_id": "<uuid>",
+          "entity_id": "<entity_id>",
+          "permalink": "oracle/projects/alpha",
+          "title": "Alpha Project",
+          "content": null,
+          "file_path": "projects/alpha.md",
+          "created_at": "<timestamp>"
+        },
+        {
+          "type": "entity",
+          "external_id": "<uuid>",
+          "entity_id": "<entity_id>",
+          "permalink": "oracle/notes/relations",
+          "title": "Relations Demo",
+          "content": null,
+          "file_path": "notes/relations.md",
+          "created_at": "<timestamp>"
+        }
+      ]
+    }
+  ],
+  "metadata": {
+    "uri": "oracle/notes/simple",
+    "types": null,
+    "depth": 1,
+    "timeframe": "<timestamp>",
+    "generated_at": "<timestamp>",
+    "primary_count": 1,
+    "related_count": 7,
+    "total_results": 8,
+    "total_relations": 4,
+    "total_observations": 4
+  },
+  "page": 1,
+  "page_size": 10,
+  "has_more": false
+}

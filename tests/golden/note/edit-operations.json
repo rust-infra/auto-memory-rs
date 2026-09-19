@@ -1,0 +1,227 @@
+{
+ "source": "basic_memory.services.note_preparation",
+ "cases": [
+  {
+   "id": "append-adds-newline",
+   "content": "# Doc\n\nBody without trailing newline",
+   "operation": "append",
+   "payload": "Appended",
+   "kwargs": {},
+   "result": "# Doc\n\nBody without trailing newline\nAppended"
+  },
+  {
+   "id": "append-with-frontmatter",
+   "content": "---\ntitle: Doc\ntype: note\n---\n\nBody\n",
+   "operation": "append",
+   "payload": "Tail",
+   "kwargs": {},
+   "result": "---\ntitle: Doc\ntype: note\n---\n\nBody\nTail"
+  },
+  {
+   "id": "prepend-after-frontmatter",
+   "content": "---\ntitle: Doc\ntype: note\npermalink: notes/doc\n---\n\nBody\n",
+   "operation": "prepend",
+   "payload": "Opening paragraph.",
+   "kwargs": {},
+   "result": "---\ntitle: Doc\ntype: note\npermalink: notes/doc\n---\n\nOpening paragraph.\nBody"
+  },
+  {
+   "id": "prepend-without-frontmatter",
+   "content": "Body only\n",
+   "operation": "prepend",
+   "payload": "Opening.",
+   "kwargs": {},
+   "result": "Opening.\nBody only\n"
+  },
+  {
+   "id": "find-replace-single",
+   "content": "# Doc\n\nIntro line.\n\n## Alpha\n\nAlpha body.\n\n### Nested\n\nNested body.\n\n## Beta\n\nBeta body.\n",
+   "operation": "find_replace",
+   "payload": "Beta body replaced.",
+   "kwargs": {
+    "find_text": "Beta body.",
+    "expected_replacements": 1
+   },
+   "result": "# Doc\n\nIntro line.\n\n## Alpha\n\nAlpha body.\n\n### Nested\n\nNested body.\n\n## Beta\n\nBeta body replaced.\n"
+  },
+  {
+   "id": "find-replace-all",
+   "content": "# Doc\n\nIntro line.\n\n## Alpha\n\nAlpha body.\n\n### Nested\n\nNested body.\n\n## Beta\n\nBeta body.\n",
+   "operation": "find_replace",
+   "payload": "line",
+   "kwargs": {
+    "find_text": "body",
+    "expected_replacements": 2
+   },
+   "error": "ValueError: Expected 2 occurrences of 'body', but found 3"
+  },
+  {
+   "id": "replace-section",
+   "content": "# Doc\n\nIntro line.\n\n## Alpha\n\nAlpha body.\n\n### Nested\n\nNested body.\n\n## Beta\n\nBeta body.\n",
+   "operation": "replace_section",
+   "payload": "Replacement body.",
+   "kwargs": {
+    "section": "## Alpha"
+   },
+   "result": "# Doc\n\nIntro line.\n\n## Alpha\nReplacement body.\n## Beta\n\nBeta body.\n"
+  },
+  {
+   "id": "replace-section-preserving-subsections",
+   "content": "# Doc\n\nIntro line.\n\n## Alpha\n\nAlpha body.\n\n### Nested\n\nNested body.\n\n## Beta\n\nBeta body.\n",
+   "operation": "replace_section",
+   "payload": "Replacement body.",
+   "kwargs": {
+    "section": "Alpha",
+    "replace_subsections": false
+   },
+   "result": "# Doc\n\nIntro line.\n\n## Alpha\nReplacement body.\n### Nested\n\nNested body.\n\n## Beta\n\nBeta body.\n"
+  },
+  {
+   "id": "replace-section-with-header-in-payload",
+   "content": "# Doc\n\nIntro line.\n\n## Alpha\n\nAlpha body.\n\n### Nested\n\nNested body.\n\n## Beta\n\nBeta body.\n",
+   "operation": "replace_section",
+   "payload": "## Alpha\n\nPayload body.",
+   "kwargs": {
+    "section": "Alpha"
+   },
+   "result": "# Doc\n\nIntro line.\n\n## Alpha\nPayload body.\n## Beta\n\nBeta body.\n"
+  },
+  {
+   "id": "replace-section-missing-appends",
+   "content": "# Doc\n\nIntro line.\n\n## Alpha\n\nAlpha body.\n\n### Nested\n\nNested body.\n\n## Beta\n\nBeta body.\n",
+   "operation": "replace_section",
+   "payload": "New section body.",
+   "kwargs": {
+    "section": "Gamma"
+   },
+   "result": "# Doc\n\nIntro line.\n\n## Alpha\n\nAlpha body.\n\n### Nested\n\nNested body.\n\n## Beta\n\nBeta body.\n\n\n## Gamma\nNew section body."
+  },
+  {
+   "id": "insert-after-section",
+   "content": "# Doc\n\nIntro line.\n\n## Alpha\n\nAlpha body.\n\n### Nested\n\nNested body.\n\n## Beta\n\nBeta body.\n",
+   "operation": "insert_after_section",
+   "payload": "Inserted after alpha.",
+   "kwargs": {
+    "section": "Alpha"
+   },
+   "result": "# Doc\n\nIntro line.\n\n## Alpha\nInserted after alpha.\n\nAlpha body.\n\n### Nested\n\nNested body.\n\n## Beta\n\nBeta body.\n"
+  },
+  {
+   "id": "insert-before-section",
+   "content": "# Doc\n\nIntro line.\n\n## Alpha\n\nAlpha body.\n\n### Nested\n\nNested body.\n\n## Beta\n\nBeta body.\n",
+   "operation": "insert_before_section",
+   "payload": "Inserted before beta.",
+   "kwargs": {
+    "section": "Beta"
+   },
+   "result": "# Doc\n\nIntro line.\n\n## Alpha\n\nAlpha body.\n\n### Nested\n\nNested body.\n\nInserted before beta.\n\n## Beta\n\nBeta body.\n"
+  },
+  {
+   "id": "fenced-heading-is-not-a-section",
+   "content": "# Doc\n\n```md\n## Alpha\n\nfenced body\n```\n\n## Alpha\n\nreal body\n",
+   "operation": "insert_after_section",
+   "payload": "Inserted after the real heading.",
+   "kwargs": {
+    "section": "Alpha"
+   },
+   "result": "# Doc\n\n```md\n## Alpha\n\nfenced body\n```\n\n## Alpha\nInserted after the real heading.\n\nreal body\n"
+  },
+  {
+   "id": "metadata-merge-adds-key",
+   "content": "---\ntitle: Doc\ntype: note\n---\n\nBody\n",
+   "operation": "metadata_merge",
+   "payload": null,
+   "kwargs": {
+    "metadata": {
+     "status": "active",
+     "priority": 3
+    }
+   },
+   "result": "---\ntitle: Doc\ntype: note\nstatus: active\npriority: 3\n---\n\nBody\n"
+  },
+  {
+   "id": "metadata-merge-drops-identity-fields",
+   "content": "---\ntitle: Doc\ntype: note\n---\n\nBody\n",
+   "operation": "metadata_merge",
+   "payload": null,
+   "kwargs": {
+    "metadata": {
+     "title": "Other",
+     "permalink": "x",
+     "status": "done"
+    }
+   },
+   "result": "---\ntitle: Doc\ntype: note\nstatus: done\n---\n\nBody\n"
+  },
+  {
+   "id": "metadata-merge-into-file-without-frontmatter",
+   "content": "Body only",
+   "operation": "metadata_merge",
+   "payload": null,
+   "kwargs": {
+    "metadata": {
+     "status": "active"
+    }
+   },
+   "result": "---\nstatus: active\n---\n\nBody only"
+  },
+  {
+   "id": "find-replace-missing-text",
+   "content": "# Doc\n\nIntro line.\n\n## Alpha\n\nAlpha body.\n\n### Nested\n\nNested body.\n\n## Beta\n\nBeta body.\n",
+   "operation": "find_replace",
+   "payload": "x",
+   "kwargs": {
+    "find_text": "not present",
+    "expected_replacements": 1
+   },
+   "error": "ValueError: Text to replace not found: 'not present'"
+  },
+  {
+   "id": "find-replace-wrong-count",
+   "content": "# Doc\n\nIntro line.\n\n## Alpha\n\nAlpha body.\n\n### Nested\n\nNested body.\n\n## Beta\n\nBeta body.\n",
+   "operation": "find_replace",
+   "payload": "x",
+   "kwargs": {
+    "find_text": "body",
+    "expected_replacements": 1
+   },
+   "error": "ValueError: Expected 1 occurrences of 'body', but found 3"
+  },
+  {
+   "id": "unsupported-operation",
+   "content": "# Doc\n\nIntro line.\n\n## Alpha\n\nAlpha body.\n\n### Nested\n\nNested body.\n\n## Beta\n\nBeta body.\n",
+   "operation": "frobnicate",
+   "payload": "x",
+   "kwargs": {},
+   "error": "ValueError: Unsupported operation: frobnicate"
+  },
+  {
+   "id": "section-missing-for-insert",
+   "content": "# Doc\n\nIntro line.\n\n## Alpha\n\nAlpha body.\n\n### Nested\n\nNested body.\n\n## Beta\n\nBeta body.\n",
+   "operation": "insert_after_section",
+   "payload": "x",
+   "kwargs": {},
+   "error": "ValueError: section is required for insert section operations"
+  },
+  {
+   "id": "insert-into-missing-section",
+   "content": "# Doc\n\nIntro line.\n\n## Alpha\n\nAlpha body.\n\n### Nested\n\nNested body.\n\n## Beta\n\nBeta body.\n",
+   "operation": "insert_after_section",
+   "payload": "x",
+   "kwargs": {
+    "section": "Gamma"
+   },
+   "error": "ValueError: Section '## Gamma' not found in document. Use replace_section to create a new section."
+  },
+  {
+   "id": "duplicate-section-header",
+   "content": "## Alpha\n\none\n\n## Alpha\n\ntwo\n",
+   "operation": "replace_section",
+   "payload": "x",
+   "kwargs": {
+    "section": "Alpha"
+   },
+   "error": "ValueError: Multiple sections found with header '## Alpha'. Section replacement requires unique headers."
+  }
+ ]
+}

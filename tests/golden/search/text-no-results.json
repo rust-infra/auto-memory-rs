@@ -1,0 +1,159 @@
+{
+  "results": [
+    {
+      "title": "Deep Note",
+      "type": "entity",
+      "score": -1.333471541308309,
+      "entity": "oracle/notes/nested/deep-note",
+      "external_id": "<uuid>",
+      "permalink": "oracle/notes/nested/deep-note",
+      "content": "# Deep Note\n\nNested fixture linking back to [[notes/simple]].\n\n- [fact] Nested paths must keep slash-separated permalinks",
+      "file_path": "notes/nested/deep-note.md",
+      "updated_at": "<timestamp>",
+      "metadata": {
+        "note_type": "note"
+      },
+      "entity_id": "<entity_id>"
+    },
+    {
+      "title": "empty",
+      "type": "entity",
+      "score": -1.0454500146116286,
+      "entity": "oracle/notes/empty",
+      "external_id": "<uuid>",
+      "permalink": "oracle/notes/empty",
+      "content": "",
+      "file_path": "notes/empty.md",
+      "updated_at": "<timestamp>",
+      "metadata": {
+        "note_type": "note"
+      },
+      "entity_id": "<entity_id>"
+    },
+    {
+      "title": "simple",
+      "type": "entity",
+      "score": -0.9941681094289189,
+      "entity": "oracle/notes/simple",
+      "external_id": "<uuid>",
+      "permalink": "oracle/notes/simple",
+      "content": "# Simple Note\n\nA plain note without frontmatter. It links to [[projects/alpha]] and mentions rust.\n\n- [note] Created as a baseline fixture",
+      "file_path": "notes/simple.md",
+      "updated_at": "<timestamp>",
+      "metadata": {
+        "note_type": "note"
+      },
+      "entity_id": "<entity_id>"
+    },
+    {
+      "title": "Unresolved Links",
+      "type": "entity",
+      "score": -0.9930786580861211,
+      "entity": "oracle/notes/unresolved",
+      "external_id": "<uuid>",
+      "permalink": "oracle/notes/unresolved",
+      "content": "# Unresolved Links\n\nThis links to [[notes/does-not-exist]] before the target exists.",
+      "file_path": "notes/unresolved.md",
+      "updated_at": "<timestamp>",
+      "metadata": {
+        "note_type": "note"
+      },
+      "entity_id": "<entity_id>"
+    },
+    {
+      "title": "Wikilinks Demo",
+      "type": "entity",
+      "score": -0.9476503990143549,
+      "entity": "oracle/notes/wikilinks",
+      "external_id": "<uuid>",
+      "permalink": "oracle/notes/wikilinks",
+      "content": "# Wikilinks\n\n- links_to [[projects/alpha|Alpha Project]]\n- links_to [[notes/nested/deep-note]]\n\nSee also [[people/ada-lovelace]] and [[projects/beta]].",
+      "file_path": "notes/wikilinks.md",
+      "updated_at": "<timestamp>",
+      "metadata": {
+        "note_type": "note"
+      },
+      "entity_id": "<entity_id>"
+    },
+    {
+      "title": "Frontmatter Demo",
+      "type": "entity",
+      "score": -0.9409480125211735,
+      "entity": "notes/frontmatter-note",
+      "external_id": "<uuid>",
+      "permalink": "notes/frontmatter-note",
+      "content": "# Frontmatter Demo\n\nThis note carries structured metadata and is tagged for search.\n\n- [decision] Keep Markdown as the source of truth\n- [constraint] No cloud functionality in the Rust port",
+      "file_path": "notes/frontmatter.md",
+      "updated_at": "<timestamp>",
+      "metadata": {
+        "note_type": "reference"
+      },
+      "entity_id": "<entity_id>"
+    },
+    {
+      "title": "中文测试文档",
+      "type": "entity",
+      "score": -0.9309352069755678,
+      "entity": "oracle/notes/cjk",
+      "external_id": "<uuid>",
+      "permalink": "oracle/notes/cjk",
+      "content": "# 中文测试\n\n这是一个中文笔记，包含 English 混合内容。\n\n- [decision] 使用 SQLite 作为本地索引\n- 关联 [[projects/alpha]]",
+      "file_path": "notes/cjk.md",
+      "updated_at": "<timestamp>",
+      "metadata": {
+        "note_type": "note"
+      },
+      "entity_id": "<entity_id>"
+    },
+    {
+      "title": "task-markers",
+      "type": "entity",
+      "score": -0.9159325411993959,
+      "entity": "oracle/notes/task-markers",
+      "external_id": "<uuid>",
+      "permalink": "oracle/notes/task-markers",
+      "content": "# Task Markers\n\n- [ ] unchecked task\n- [x] checked task\n- [/] in progress task\n- [00:01:02] transcript timestamp\n\n- [note] a genuine observation",
+      "file_path": "notes/task-markers.md",
+      "updated_at": "<timestamp>",
+      "metadata": {
+        "note_type": "note"
+      },
+      "entity_id": "<entity_id>"
+    },
+    {
+      "title": "Relations Demo",
+      "type": "entity",
+      "score": -0.9012684356029494,
+      "entity": "oracle/notes/relations",
+      "external_id": "<uuid>",
+      "permalink": "oracle/notes/relations",
+      "content": "# Relations\n\n- depends_on [[projects/alpha]]\n- \"implemented by\" [[people/ada-lovelace]]\n- relates_to [[notes/simple]] (primary source)\n\nProse with an inline [[notes/frontmatter]] link and an [[projects/beta|Beta]] display link.",
+      "file_path": "notes/relations.md",
+      "updated_at": "<timestamp>",
+      "metadata": {
+        "note_type": "note"
+      },
+      "entity_id": "<entity_id>"
+    },
+    {
+      "title": "Observations Demo",
+      "type": "entity",
+      "score": -0.7957300964598291,
+      "entity": "oracle/notes/observations",
+      "external_id": "<uuid>",
+      "permalink": "oracle/notes/observations",
+      "content": "# Observations\n\n- [decision] Use SQLite FTS5 for text search\n- [requirement] Must support CJK #cjk #search\n- [fact] Parser preserves frontmatter checksums\n- With no category but a #tag\n- [] Empty bracket content\n- [00:00:11] transcript line should not be a category\n- [ ] unchecked task\n- [x] checked task\n- [link](https://example.com) markdown link\n\n> [!info] Callout\n> - [note] callout bullet should not be an observation\n\nRegular prose with a [[projects/alpha]] link.",
+      "file_path": "notes/observations.md",
+      "updated_at": "<timestamp>",
+      "metadata": {
+        "note_type": "note"
+      },
+      "entity_id": "<entity_id>"
+    }
+  ],
+  "current_page": 1,
+  "page_size": 10,
+  "total": 15,
+  "total_is_exact": true,
+  "has_more": true
+}

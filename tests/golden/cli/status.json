@@ -1,0 +1,85 @@
+{
+  "total_files": 16,
+  "observed_files": [
+    {
+      "path": "duplicates/dup-a/same-title.md",
+      "checksum": "9eec510ec091adcdbd766966e46ae49b3ff80212353a37bec509ccefbb081633",
+      "size": 171
+    },
+    {
+      "path": "duplicates/dup-b/same-title.md",
+      "checksum": "b88d016c5363192bc71e0bed2e7a52da2df3b26641f7de8051a5e994177f83ca",
+      "size": 209
+    },
+    {
+      "path": "notes/cjk.md",
+      "checksum": "94d81ac2d6b1f6f4438fbb86363e943df25d1eaf116dd37321920fdaaf2648da",
+      "size": 246
+    },
+    {
+      "path": "notes/empty.md",
+      "checksum": "b3a560228ff095527cbb12a803961ef013c97acac1a8baa57e5032cf1f9e442a",
+      "size": 63
+    },
+    {
+      "path": "notes/frontmatter.md",
+      "checksum": "45c5f0e0d9dc70635f91b7f446cf06016eb080fe2af7df5af1e4f4dd4629ca48",
+      "size": 368
+    },
+    {
+      "path": "notes/malformed-frontmatter.md",
+      "checksum": "a6f8c922fa7d604c3cc6497ea2c643e481e27455c0f302175e5b1827bab4def5",
+      "size": 132
+    },
+    {
+      "path": "notes/nested/deep-note.md",
+      "checksum": "8b1ea67e582d2c20ad5e3994663b5fb2b513a9454afda22dd4a8138aed225a65",
+      "size": 199
+    },
+    {
+      "path": "notes/observations.md",
+      "checksum": "bc6e092c687a518fcace54fb8f91785392c8f6677e3f2a81b81572dd1449ad6e",
+      "size": 565
+    },
+    {
+      "path": "notes/relations.md",
+      "checksum": "f672cd06f39a15e4b5167527e94720f501a702e989b52103d9aa3ae02270c3d9",
+      "size": 303
+    },
+    {
+      "path": "notes/simple.md",
+      "checksum": "86ac9f31a80ac9934ac80d500b71d1771edd5b4e67800727e8760c363bf03c98",
+      "size": 203
+    },
+    {
+      "path": "notes/task-markers.md",
+      "checksum": "a8042b0f6d36555b5037de8e5a6f8bf35dd7f6ed58bf608a8402138285350e2a",
+      "size": 221
+    },
+    {
+      "path": "notes/unresolved.md",
+      "checksum": "38b57da771d4465e2b5aabdd177a1249709193d6c7d74f55627d72960e3ae0a7",
+      "size": 163
+    },
+    {
+      "path": "notes/wikilinks.md",
+      "checksum": "04aba4f50b4ba566cab839d115c5471f32357aab38c09394c3709de2636edfa6",
+      "size": 227
+    },
+    {
+      "path": "people/ada-lovelace.md",
+      "checksum": "2b945791d7004bae8bc4a2612966fc56ed6763a0bb8923235db41066a7734268",
+      "size": 198
+    },
+    {
+      "path": "projects/alpha.md",
+      "checksum": "02b9e958c7763ec117b755c33b963ce976ca726399234ff40da9bb6d8213ff6f",
+      "size": 252
+    },
+    {
+      "path": "projects/beta.md",
+      "checksum": "6906b2ff2fbe9c6e87336f221d58fea764fb2a1fdf140754b4a8c101de5bee74",
+      "size": 161
+    }
+  ]
+}

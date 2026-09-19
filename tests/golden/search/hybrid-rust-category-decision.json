@@ -1,0 +1,27 @@
+{
+  "results": [
+    {
+      "title": "decision: Alpha uses the Rust core...",
+      "type": "observation",
+      "score": 1.2025977185227616,
+      "entity": "oracle/projects/alpha",
+      "external_id": "<uuid>",
+      "permalink": "oracle/projects/alpha/observations/decision/alpha-uses-the-rust-core",
+      "content": "Alpha uses the Rust core",
+      "matched_chunk": "Alpha uses the Rust core",
+      "file_path": "projects/alpha.md",
+      "updated_at": "<timestamp>",
+      "metadata": {
+        "tags": null
+      },
+      "entity_id": "<entity_id>",
+      "observation_id": "<observation_id>",
+      "category": "decision"
+    }
+  ],
+  "current_page": 1,
+  "page_size": 10,
+  "total": 0,
+  "total_is_exact": false,
+  "has_more": false
+}

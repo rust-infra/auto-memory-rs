@@ -1,0 +1,2380 @@
+{
+ "source": "basic_memory.picoschema",
+ "parse": [
+  {
+   "id": "scalars-and-optional",
+   "schema": {
+    "name": "string, full name",
+    "role?": "string",
+    "age": "integer",
+    "score": "number",
+    "active?": "boolean",
+    "extra": "any"
+   },
+   "fields": [
+    {
+     "name": "name",
+     "type": "string",
+     "required": true,
+     "is_array": false,
+     "is_enum": false,
+     "enum_values": [],
+     "description": "full name",
+     "is_entity_ref": false,
+     "children": []
+    },
+    {
+     "name": "role",
+     "type": "string",
+     "required": false,
+     "is_array": false,
+     "is_enum": false,
+     "enum_values": [],
+     "description": null,
+     "is_entity_ref": false,
+     "children": []
+    },
+    {
+     "name": "age",
+     "type": "integer",
+     "required": true,
+     "is_array": false,
+     "is_enum": false,
+     "enum_values": [],
+     "description": null,
+     "is_entity_ref": false,
+     "children": []
+    },
+    {
+     "name": "score",
+     "type": "number",
+     "required": true,
+     "is_array": false,
+     "is_enum": false,
+     "enum_values": [],
+     "description": null,
+     "is_entity_ref": false,
+     "children": []
+    },
+    {
+     "name": "active",
+     "type": "boolean",
+     "required": false,
+     "is_array": false,
+     "is_enum": false,
+     "enum_values": [],
+     "description": null,
+     "is_entity_ref": false,
+     "children": []
+    },
+    {
+     "name": "extra",
+     "type": "any",
+     "required": true,
+     "is_array": false,
+     "is_enum": false,
+     "enum_values": [],
+     "description": null,
+     "is_entity_ref": false,
+     "children": []
+    }
+   ]
+  },
+  {
+   "id": "array-modifier",
+   "schema": {
+    "tags?(array)": "string",
+    "labels(array, free-form labels)": "string",
+    "aliases?(array)": "string, other names"
+   },
+   "fields": [
+    {
+     "name": "tags",
+     "type": "string",
+     "required": false,
+     "is_array": true,
+     "is_enum": false,
+     "enum_values": [],
+     "description": null,
+     "is_entity_ref": false,
+     "children": []
+    },
+    {
+     "name": "labels",
+     "type": "string",
+     "required": true,
+     "is_array": true,
+     "is_enum": false,
+     "enum_values": [],
+     "description": "free-form labels",
+     "is_entity_ref": false,
+     "children": []
+    },
+    {
+     "name": "aliases",
+     "type": "string",
+     "required": false,
+     "is_array": true,
+     "is_enum": false,
+     "enum_values": [],
+     "description": "other names",
+     "is_entity_ref": false,
+     "children": []
+    }
+   ]
+  },
+  {
+   "id": "entity-refs",
+   "schema": {
+    "employer?": "Organization, where they work",
+    "works_at": "Company",
+    "nickname": "string"
+   },
+   "fields": [
+    {
+     "name": "employer",
+     "type": "Organization",
+     "required": false,
+     "is_array": false,
+     "is_enum": false,
+     "enum_values": [],
+     "description": "where they work",
+     "is_entity_ref": true,
+     "children": []
+    },
+    {
+     "name": "works_at",
+     "type": "Company",
+     "required": true,
+     "is_array": false,
+     "is_enum": false,
+     "enum_values": [],
+     "description": null,
+     "is_entity_ref": true,
+     "children": []
+    },
+    {
+     "name": "nickname",
+     "type": "string",
+     "required": true,
+     "is_array": false,
+     "is_enum": false,
+     "enum_values": [],
+     "description": null,
+     "is_entity_ref": false,
+     "children": []
+    }
+   ]
+  },
+  {
+   "id": "enum-as-list",
+   "schema": {
+    "status?(enum)": [
+     "active",
+     "blocked",
+     "done"
+    ]
+   },
+   "fields": [
+    {
+     "name": "status",
+     "type": "enum",
+     "required": false,
+     "is_array": false,
+     "is_enum": true,
+     "enum_values": [
+      "active",
+      "blocked",
+      "done"
+     ],
+     "description": null,
+     "is_entity_ref": false,
+     "children": []
+    }
+   ]
+  },
+  {
+   "id": "enum-as-quoted-string",
+   "schema": {
+    "status?(enum)": "[active, blocked, done], current state"
+   },
+   "fields": [
+    {
+     "name": "status",
+     "type": "enum",
+     "required": false,
+     "is_array": false,
+     "is_enum": true,
+     "enum_values": [
+      "active",
+      "blocked",
+      "done"
+     ],
+     "description": "current state",
+     "is_entity_ref": false,
+     "children": []
+    }
+   ]
+  },
+  {
+   "id": "enum-single-value",
+   "schema": {
+    "flag?(enum)": "on"
+   },
+   "fields": [
+    {
+     "name": "flag",
+     "type": "enum",
+     "required": false,
+     "is_array": false,
+     "is_enum": true,
+     "enum_values": [
+      "on"
+     ],
+     "description": null,
+     "is_entity_ref": false,
+     "children": []
+    }
+   ]
+  },
+  {
+   "id": "object-nested",
+   "schema": {
+    "metadata?(object)": {
+     "source": "string",
+     "confidence?": "number"
+    },
+    "plain-object": {
+     "label": "string"
+    }
+   },
+   "fields": [
+    {
+     "name": "metadata",
+     "type": "object",
+     "required": false,
+     "is_array": false,
+     "is_enum": false,
+     "enum_values": [],
+     "description": null,
+     "is_entity_ref": false,
+     "children": [
+      {
+       "name": "source",
+       "type": "string",
+       "required": true,
+       "is_array": false,
+       "is_enum": false,
+       "enum_values": [],
+       "description": null,
+       "is_entity_ref": false,
+       "children": []
+      },
+      {
+       "name": "confidence",
+       "type": "number",
+       "required": false,
+       "is_array": false,
+       "is_enum": false,
+       "enum_values": [],
+       "description": null,
+       "is_entity_ref": false,
+       "children": []
+      }
+     ]
+    },
+    {
+     "name": "plain-object",
+     "type": "object",
+     "required": true,
+     "is_array": false,
+     "is_enum": false,
+     "enum_values": [],
+     "description": null,
+     "is_entity_ref": false,
+     "children": [
+      {
+       "name": "label",
+       "type": "string",
+       "required": true,
+       "is_array": false,
+       "is_enum": false,
+       "enum_values": [],
+       "description": null,
+       "is_entity_ref": false,
+       "children": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "parentheses-in-names-and-descriptions",
+   "schema": {
+    "risk(score)": "string",
+    "notes?(array, freeform (no format))": "string"
+   },
+   "fields": [
+    {
+     "name": "risk(score)",
+     "type": "string",
+     "required": true,
+     "is_array": false,
+     "is_enum": false,
+     "enum_values": [],
+     "description": null,
+     "is_entity_ref": false,
+     "children": []
+    },
+    {
+     "name": "notes",
+     "type": "string",
+     "required": false,
+     "is_array": true,
+     "is_enum": false,
+     "enum_values": [],
+     "description": "freeform (no format)",
+     "is_entity_ref": false,
+     "children": []
+    }
+   ]
+  },
+  {
+   "id": "empty-schema",
+   "schema": {},
+   "fields": []
+  }
+ ],
+ "parse_schema_note": [
+  {
+   "id": "person-warn",
+   "frontmatter": {
+    "title": "Person",
+    "type": "schema",
+    "entity": "person",
+    "version": 2,
+    "schema": {
+     "name": "string",
+     "employer?": "Organization"
+    },
+    "settings": {
+     "validation": "warn"
+    }
+   },
+   "definition": {
+    "entity": "person",
+    "version": 2,
+    "fields": [
+     {
+      "name": "name",
+      "type": "string",
+      "required": true,
+      "is_array": false,
+      "is_enum": false,
+      "enum_values": [],
+      "description": null,
+      "is_entity_ref": false,
+      "children": []
+     },
+     {
+      "name": "employer",
+      "type": "Organization",
+      "required": false,
+      "is_array": false,
+      "is_enum": false,
+      "enum_values": [],
+      "description": null,
+      "is_entity_ref": true,
+      "children": []
+     }
+    ],
+    "validation_mode": "warn",
+    "frontmatter_fields": []
+   }
+  },
+  {
+   "id": "person-strict",
+   "frontmatter": {
+    "entity": "person",
+    "schema": {
+     "name": "string"
+    },
+    "settings": {
+     "validation": "strict"
+    }
+   },
+   "definition": {
+    "entity": "person",
+    "version": 1,
+    "fields": [
+     {
+      "name": "name",
+      "type": "string",
+      "required": true,
+      "is_array": false,
+      "is_enum": false,
+      "enum_values": [],
+      "description": null,
+      "is_entity_ref": false,
+      "children": []
+     }
+    ],
+    "validation_mode": "strict",
+    "frontmatter_fields": []
+   }
+  },
+  {
+   "id": "error-alias",
+   "frontmatter": {
+    "entity": "person",
+    "schema": {
+     "name": "string"
+    },
+    "settings": {
+     "validation": "error"
+    }
+   },
+   "definition": {
+    "entity": "person",
+    "version": 1,
+    "fields": [
+     {
+      "name": "name",
+      "type": "string",
+      "required": true,
+      "is_array": false,
+      "is_enum": false,
+      "enum_values": [],
+      "description": null,
+      "is_entity_ref": false,
+      "children": []
+     }
+    ],
+    "validation_mode": "strict",
+    "frontmatter_fields": []
+   }
+  },
+  {
+   "id": "defaults",
+   "frontmatter": {
+    "entity": "person",
+    "schema": {
+     "name": "string"
+    }
+   },
+   "definition": {
+    "entity": "person",
+    "version": 1,
+    "fields": [
+     {
+      "name": "name",
+      "type": "string",
+      "required": true,
+      "is_array": false,
+      "is_enum": false,
+      "enum_values": [],
+      "description": null,
+      "is_entity_ref": false,
+      "children": []
+     }
+    ],
+    "validation_mode": "warn",
+    "frontmatter_fields": []
+   }
+  },
+  {
+   "id": "frontmatter-settings",
+   "frontmatter": {
+    "entity": "person",
+    "schema": {
+     "name": "string"
+    },
+    "settings": {
+     "validation": "warn",
+     "frontmatter": {
+      "status?(enum)": [
+       "active",
+       "archived"
+      ],
+      "tags?(array)": "string"
+     }
+    }
+   },
+   "definition": {
+    "entity": "person",
+    "version": 1,
+    "fields": [
+     {
+      "name": "name",
+      "type": "string",
+      "required": true,
+      "is_array": false,
+      "is_enum": false,
+      "enum_values": [],
+      "description": null,
+      "is_entity_ref": false,
+      "children": []
+     }
+    ],
+    "validation_mode": "warn",
+    "frontmatter_fields": [
+     {
+      "name": "status",
+      "type": "enum",
+      "required": false,
+      "is_array": false,
+      "is_enum": true,
+      "enum_values": [
+       "active",
+       "archived"
+      ],
+      "description": null,
+      "is_entity_ref": false,
+      "children": []
+     },
+     {
+      "name": "tags",
+      "type": "string",
+      "required": false,
+      "is_array": true,
+      "is_enum": false,
+      "enum_values": [],
+      "description": null,
+      "is_entity_ref": false,
+      "children": []
+     }
+    ]
+   }
+  }
+ ],
+ "parse_schema_note_errors": [
+  {
+   "id": "missing-entity",
+   "frontmatter": {
+    "schema": {
+     "name": "string"
+    }
+   },
+   "error": "Schema note missing required 'entity' field in frontmatter"
+  },
+  {
+   "id": "missing-schema",
+   "frontmatter": {
+    "entity": "person"
+   },
+   "error": "Schema note missing required 'schema' dict in frontmatter"
+  },
+  {
+   "id": "schema-not-a-dict",
+   "frontmatter": {
+    "entity": "person",
+    "schema": "Person"
+   },
+   "error": "Schema note missing required 'schema' dict in frontmatter"
+  },
+  {
+   "id": "invalid-validation",
+   "frontmatter": {
+    "entity": "person",
+    "schema": {
+     "name": "string"
+    },
+    "settings": {
+     "validation": "loud"
+    }
+   },
+   "error": "Invalid settings.validation value 'loud'; expected one of: 'warn', 'strict', or 'error' (alias for 'strict')"
+  }
+ ],
+ "validate": [
+  {
+   "id": "fully-valid",
+   "schema": {
+    "entity": "person",
+    "schema": {
+     "name": "string",
+     "role?": "string",
+     "status?(enum)": [
+      "active",
+      "archived"
+     ],
+     "tags?(array)": "string",
+     "employer?": "Organization"
+    },
+    "settings": {
+     "validation": "warn",
+     "frontmatter": {
+      "status?(enum)": [
+       "active",
+       "archived"
+      ]
+     }
+    }
+   },
+   "note": {
+    "identifier": "people/ada",
+    "observations": [
+     {
+      "category": "name",
+      "content": "Ada Lovelace"
+     },
+     {
+      "category": "role",
+      "content": "Mathematician"
+     },
+     {
+      "category": "status",
+      "content": "active"
+     },
+     {
+      "category": "tags",
+      "content": "math"
+     },
+     {
+      "category": "tags",
+      "content": "history"
+     }
+    ],
+    "relations": [
+     {
+      "relation_type": "employer",
+      "target_name": "Analytical Engine",
+      "target_note_type": "organization"
+     }
+    ]
+   },
+   "frontmatter": {
+    "status": "active"
+   },
+   "result": {
+    "note_identifier": "people/ada",
+    "schema_entity": "person",
+    "passed": true,
+    "field_results": [
+     {
+      "field": {
+       "name": "name",
+       "type": "string",
+       "required": true,
+       "is_array": false,
+       "is_enum": false,
+       "enum_values": [],
+       "description": null,
+       "is_entity_ref": false,
+       "children": []
+      },
+      "status": "present",
+      "values": [
+       "Ada Lovelace"
+      ],
+      "message": null
+     },
+     {
+      "field": {
+       "name": "role",
+       "type": "string",
+       "required": false,
+       "is_array": false,
+       "is_enum": false,
+       "enum_values": [],
+       "description": null,
+       "is_entity_ref": false,
+       "children": []
+      },
+      "status": "present",
+      "values": [
+       "Mathematician"
+      ],
+      "message": null
+     },
+     {
+      "field": {
+       "name": "status",
+       "type": "enum",
+       "required": false,
+       "is_array": false,
+       "is_enum": true,
+       "enum_values": [
+        "active",
+        "archived"
+       ],
+       "description": null,
+       "is_entity_ref": false,
+       "children": []
+      },
+      "status": "present",
+      "values": [
+       "active"
+      ],
+      "message": null
+     },
+     {
+      "field": {
+       "name": "tags",
+       "type": "string",
+       "required": false,
+       "is_array": true,
+       "is_enum": false,
+       "enum_values": [],
+       "description": null,
+       "is_entity_ref": false,
+       "children": []
+      },
+      "status": "present",
+      "values": [
+       "math",
+       "history"
+      ],
+      "message": null
+     },
+     {
+      "field": {
+       "name": "employer",
+       "type": "Organization",
+       "required": false,
+       "is_array": false,
+       "is_enum": false,
+       "enum_values": [],
+       "description": null,
+       "is_entity_ref": true,
+       "children": []
+      },
+      "status": "present",
+      "values": [
+       "Analytical Engine"
+      ],
+      "message": null
+     },
+     {
+      "field": {
+       "name": "status",
+       "type": "enum",
+       "required": false,
+       "is_array": false,
+       "is_enum": true,
+       "enum_values": [
+        "active",
+        "archived"
+       ],
+       "description": null,
+       "is_entity_ref": false,
+       "children": []
+      },
+      "status": "present",
+      "values": [
+       "active"
+      ],
+      "message": null
+     }
+    ],
+    "unmatched_observations": {},
+    "unmatched_relations": [],
+    "warnings": [],
+    "errors": []
+   }
+  },
+  {
+   "id": "missing-required",
+   "schema": {
+    "entity": "person",
+    "schema": {
+     "name": "string",
+     "role?": "string",
+     "status?(enum)": [
+      "active",
+      "archived"
+     ],
+     "tags?(array)": "string",
+     "employer?": "Organization"
+    },
+    "settings": {
+     "validation": "warn",
+     "frontmatter": {
+      "status?(enum)": [
+       "active",
+       "archived"
+      ]
+     }
+    }
+   },
+   "note": {
+    "identifier": "people/ada",
+    "observations": [
+     {
+      "category": "role",
+      "content": "Mathematician"
+     }
+    ],
+    "relations": []
+   },
+   "frontmatter": null,
+   "result": {
+    "note_identifier": "people/ada",
+    "schema_entity": "person",
+    "passed": true,
+    "field_results": [
+     {
+      "field": {
+       "name": "name",
+       "type": "string",
+       "required": true,
+       "is_array": false,
+       "is_enum": false,
+       "enum_values": [],
+       "description": null,
+       "is_entity_ref": false,
+       "children": []
+      },
+      "status": "missing",
+      "values": [],
+      "message": "Missing required field: name (expected [name] observation)"
+     },
+     {
+      "field": {
+       "name": "role",
+       "type": "string",
+       "required": false,
+       "is_array": false,
+       "is_enum": false,
+       "enum_values": [],
+       "description": null,
+       "is_entity_ref": false,
+       "children": []
+      },
+      "status": "present",
+      "values": [
+       "Mathematician"
+      ],
+      "message": null
+     },
+     {
+      "field": {
+       "name": "status",
+       "type": "enum",
+       "required": false,
+       "is_array": false,
+       "is_enum": true,
+       "enum_values": [
+        "active",
+        "archived"
+       ],
+       "description": null,
+       "is_entity_ref": false,
+       "children": []
+      },
+      "status": "missing",
+      "values": [],
+      "message": "Missing optional field: status (expected [status] observation)"
+     },
+     {
+      "field": {
+       "name": "tags",
+       "type": "string",
+       "required": false,
+       "is_array": true,
+       "is_enum": false,
+       "enum_values": [],
+       "description": null,
+       "is_entity_ref": false,
+       "children": []
+      },
+      "status": "missing",
+      "values": [],
+      "message": "Missing optional field: tags (expected [tags] observation)"
+     },
+     {
+      "field": {
+       "name": "employer",
+       "type": "Organization",
+       "required": false,
+       "is_array": false,
+       "is_enum": false,
+       "enum_values": [],
+       "description": null,
+       "is_entity_ref": true,
+       "children": []
+      },
+      "status": "missing",
+      "values": [],
+      "message": "Missing relation: employer (no 'employer [[...]]' relation found)"
+     }
+    ],
+    "unmatched_observations": {},
+    "unmatched_relations": [],
+    "warnings": [
+     "Missing required field: name (expected [name] observation)"
+    ],
+    "errors": []
+   }
+  },
+  {
+   "id": "enum-mismatch",
+   "schema": {
+    "entity": "person",
+    "schema": {
+     "name": "string",
+     "role?": "string",
+     "status?(enum)": [
+      "active",
+      "archived"
+     ],
+     "tags?(array)": "string",
+     "employer?": "Organization"
+    },
+    "settings": {
+     "validation": "warn",
+     "frontmatter": {
+      "status?(enum)": [
+       "active",
+       "archived"
+      ]
+     }
+    }
+   },
+   "note": {
+    "identifier": "people/ada",
+    "observations": [
+     {
+      "category": "name",
+      "content": "Ada"
+     },
+     {
+      "category": "status",
+      "content": "retired"
+     }
+    ],
+    "relations": []
+   },
+   "frontmatter": null,
+   "result": {
+    "note_identifier": "people/ada",
+    "schema_entity": "person",
+    "passed": true,
+    "field_results": [
+     {
+      "field": {
+       "name": "name",
+       "type": "string",
+       "required": true,
+       "is_array": false,
+       "is_enum": false,
+       "enum_values": [],
+       "description": null,
+       "is_entity_ref": false,
+       "children": []
+      },
+      "status": "present",
+      "values": [
+       "Ada"
+      ],
+      "message": null
+     },
+     {
+      "field": {
+       "name": "role",
+       "type": "string",
+       "required": false,
+       "is_array": false,
+       "is_enum": false,
+       "enum_values": [],
+       "description": null,
+       "is_entity_ref": false,
+       "children": []
+      },
+      "status": "missing",
+      "values": [],
+      "message": "Missing optional field: role (expected [role] observation)"
+     },
+     {
+      "field": {
+       "name": "status",
+       "type": "enum",
+       "required": false,
+       "is_array": false,
+       "is_enum": true,
+       "enum_values": [
+        "active",
+        "archived"
+       ],
+       "description": null,
+       "is_entity_ref": false,
+       "children": []
+      },
+      "status": "enum_mismatch",
+      "values": [
+       "retired"
+      ],
+      "message": "Field 'status' has invalid value(s): retired (allowed: active, archived)"
+     },
+     {
+      "field": {
+       "name": "tags",
+       "type": "string",
+       "required": false,
+       "is_array": true,
+       "is_enum": false,
+       "enum_values": [],
+       "description": null,
+       "is_entity_ref": false,
+       "children": []
+      },
+      "status": "missing",
+      "values": [],
+      "message": "Missing optional field: tags (expected [tags] observation)"
+     },
+     {
+      "field": {
+       "name": "employer",
+       "type": "Organization",
+       "required": false,
+       "is_array": false,
+       "is_enum": false,
+       "enum_values": [],
+       "description": null,
+       "is_entity_ref": true,
+       "children": []
+      },
+      "status": "missing",
+      "values": [],
+      "message": "Missing relation: employer (no 'employer [[...]]' relation found)"
+     }
+    ],
+    "unmatched_observations": {},
+    "unmatched_relations": [],
+    "warnings": [
+     "Field 'status' has invalid value(s): retired (allowed: active, archived)"
+    ],
+    "errors": []
+   }
+  },
+  {
+   "id": "unmatched-content",
+   "schema": {
+    "entity": "person",
+    "schema": {
+     "name": "string",
+     "role?": "string",
+     "status?(enum)": [
+      "active",
+      "archived"
+     ],
+     "tags?(array)": "string",
+     "employer?": "Organization"
+    },
+    "settings": {
+     "validation": "warn",
+     "frontmatter": {
+      "status?(enum)": [
+       "active",
+       "archived"
+      ]
+     }
+    }
+   },
+   "note": {
+    "identifier": "people/ada",
+    "observations": [
+     {
+      "category": "name",
+      "content": "Ada"
+     },
+     {
+      "category": "hobby",
+      "content": "poetry"
+     },
+     {
+      "category": "hobby",
+      "content": "chess"
+     }
+    ],
+    "relations": [
+     {
+      "relation_type": "mentor",
+      "target_name": "Charles Babbage",
+      "target_note_type": null
+     }
+    ]
+   },
+   "frontmatter": null,
+   "result": {
+    "note_identifier": "people/ada",
+    "schema_entity": "person",
+    "passed": true,
+    "field_results": [
+     {
+      "field": {
+       "name": "name",
+       "type": "string",
+       "required": true,
+       "is_array": false,
+       "is_enum": false,
+       "enum_values": [],
+       "description": null,
+       "is_entity_ref": false,
+       "children": []
+      },
+      "status": "present",
+      "values": [
+       "Ada"
+      ],
+      "message": null
+     },
+     {
+      "field": {
+       "name": "role",
+       "type": "string",
+       "required": false,
+       "is_array": false,
+       "is_enum": false,
+       "enum_values": [],
+       "description": null,
+       "is_entity_ref": false,
+       "children": []
+      },
+      "status": "missing",
+      "values": [],
+      "message": "Missing optional field: role (expected [role] observation)"
+     },
+     {
+      "field": {
+       "name": "status",
+       "type": "enum",
+       "required": false,
+       "is_array": false,
+       "is_enum": true,
+       "enum_values": [
+        "active",
+        "archived"
+       ],
+       "description": null,
+       "is_entity_ref": false,
+       "children": []
+      },
+      "status": "missing",
+      "values": [],
+      "message": "Missing optional field: status (expected [status] observation)"
+     },
+     {
+      "field": {
+       "name": "tags",
+       "type": "string",
+       "required": false,
+       "is_array": true,
+       "is_enum": false,
+       "enum_values": [],
+       "description": null,
+       "is_entity_ref": false,
+       "children": []
+      },
+      "status": "missing",
+      "values": [],
+      "message": "Missing optional field: tags (expected [tags] observation)"
+     },
+     {
+      "field": {
+       "name": "employer",
+       "type": "Organization",
+       "required": false,
+       "is_array": false,
+       "is_enum": false,
+       "enum_values": [],
+       "description": null,
+       "is_entity_ref": true,
+       "children": []
+      },
+      "status": "missing",
+      "values": [],
+      "message": "Missing relation: employer (no 'employer [[...]]' relation found)"
+     }
+    ],
+    "unmatched_observations": {
+     "hobby": 2
+    },
+    "unmatched_relations": [
+     "mentor"
+    ],
+    "warnings": [],
+    "errors": []
+   }
+  },
+  {
+   "id": "strict-promotes-to-error",
+   "schema": {
+    "entity": "person",
+    "schema": {
+     "name": "string",
+     "role?": "string",
+     "status?(enum)": [
+      "active",
+      "archived"
+     ],
+     "tags?(array)": "string",
+     "employer?": "Organization"
+    },
+    "settings": {
+     "validation": "strict"
+    }
+   },
+   "note": {
+    "identifier": "people/ada",
+    "observations": [
+     {
+      "category": "role",
+      "content": "Mathematician"
+     }
+    ],
+    "relations": []
+   },
+   "frontmatter": null,
+   "result": {
+    "note_identifier": "people/ada",
+    "schema_entity": "person",
+    "passed": false,
+    "field_results": [
+     {
+      "field": {
+       "name": "name",
+       "type": "string",
+       "required": true,
+       "is_array": false,
+       "is_enum": false,
+       "enum_values": [],
+       "description": null,
+       "is_entity_ref": false,
+       "children": []
+      },
+      "status": "missing",
+      "values": [],
+      "message": "Missing required field: name (expected [name] observation)"
+     },
+     {
+      "field": {
+       "name": "role",
+       "type": "string",
+       "required": false,
+       "is_array": false,
+       "is_enum": false,
+       "enum_values": [],
+       "description": null,
+       "is_entity_ref": false,
+       "children": []
+      },
+      "status": "present",
+      "values": [
+       "Mathematician"
+      ],
+      "message": null
+     },
+     {
+      "field": {
+       "name": "status",
+       "type": "enum",
+       "required": false,
+       "is_array": false,
+       "is_enum": true,
+       "enum_values": [
+        "active",
+        "archived"
+       ],
+       "description": null,
+       "is_entity_ref": false,
+       "children": []
+      },
+      "status": "missing",
+      "values": [],
+      "message": "Missing optional field: status (expected [status] observation)"
+     },
+     {
+      "field": {
+       "name": "tags",
+       "type": "string",
+       "required": false,
+       "is_array": true,
+       "is_enum": false,
+       "enum_values": [],
+       "description": null,
+       "is_entity_ref": false,
+       "children": []
+      },
+      "status": "missing",
+      "values": [],
+      "message": "Missing optional field: tags (expected [tags] observation)"
+     },
+     {
+      "field": {
+       "name": "employer",
+       "type": "Organization",
+       "required": false,
+       "is_array": false,
+       "is_enum": false,
+       "enum_values": [],
+       "description": null,
+       "is_entity_ref": true,
+       "children": []
+      },
+      "status": "missing",
+      "values": [],
+      "message": "Missing relation: employer (no 'employer [[...]]' relation found)"
+     }
+    ],
+    "unmatched_observations": {},
+    "unmatched_relations": [],
+    "warnings": [],
+    "errors": [
+     "Missing required field: name (expected [name] observation)"
+    ]
+   }
+  },
+  {
+   "id": "frontmatter-missing-and-mismatch",
+   "schema": {
+    "entity": "person",
+    "schema": {
+     "name": "string",
+     "role?": "string",
+     "status?(enum)": [
+      "active",
+      "archived"
+     ],
+     "tags?(array)": "string",
+     "employer?": "Organization"
+    },
+    "settings": {
+     "validation": "warn",
+     "frontmatter": {
+      "status?(enum)": [
+       "active",
+       "archived"
+      ]
+     }
+    }
+   },
+   "note": {
+    "identifier": "people/ada",
+    "observations": [
+     {
+      "category": "name",
+      "content": "Ada"
+     }
+    ],
+    "relations": []
+   },
+   "frontmatter": {
+    "status": "retired"
+   },
+   "result": {
+    "note_identifier": "people/ada",
+    "schema_entity": "person",
+    "passed": true,
+    "field_results": [
+     {
+      "field": {
+       "name": "name",
+       "type": "string",
+       "required": true,
+       "is_array": false,
+       "is_enum": false,
+       "enum_values": [],
+       "description": null,
+       "is_entity_ref": false,
+       "children": []
+      },
+      "status": "present",
+      "values": [
+       "Ada"
+      ],
+      "message": null
+     },
+     {
+      "field": {
+       "name": "role",
+       "type": "string",
+       "required": false,
+       "is_array": false,
+       "is_enum": false,
+       "enum_values": [],
+       "description": null,
+       "is_entity_ref": false,
+       "children": []
+      },
+      "status": "missing",
+      "values": [],
+      "message": "Missing optional field: role (expected [role] observation)"
+     },
+     {
+      "field": {
+       "name": "status",
+       "type": "enum",
+       "required": false,
+       "is_array": false,
+       "is_enum": true,
+       "enum_values": [
+        "active",
+        "archived"
+       ],
+       "description": null,
+       "is_entity_ref": false,
+       "children": []
+      },
+      "status": "missing",
+      "values": [],
+      "message": "Missing optional field: status (expected [status] observation)"
+     },
+     {
+      "field": {
+       "name": "tags",
+       "type": "string",
+       "required": false,
+       "is_array": true,
+       "is_enum": false,
+       "enum_values": [],
+       "description": null,
+       "is_entity_ref": false,
+       "children": []
+      },
+      "status": "missing",
+      "values": [],
+      "message": "Missing optional field: tags (expected [tags] observation)"
+     },
+     {
+      "field": {
+       "name": "employer",
+       "type": "Organization",
+       "required": false,
+       "is_array": false,
+       "is_enum": false,
+       "enum_values": [],
+       "description": null,
+       "is_entity_ref": true,
+       "children": []
+      },
+      "status": "missing",
+      "values": [],
+      "message": "Missing relation: employer (no 'employer [[...]]' relation found)"
+     },
+     {
+      "field": {
+       "name": "status",
+       "type": "enum",
+       "required": false,
+       "is_array": false,
+       "is_enum": true,
+       "enum_values": [
+        "active",
+        "archived"
+       ],
+       "description": null,
+       "is_entity_ref": false,
+       "children": []
+      },
+      "status": "enum_mismatch",
+      "values": [
+       "retired"
+      ],
+      "message": "Frontmatter key 'status' has invalid value: retired (allowed: active, archived)"
+     }
+    ],
+    "unmatched_observations": {},
+    "unmatched_relations": [],
+    "warnings": [
+     "Frontmatter key 'status' has invalid value: retired (allowed: active, archived)"
+    ],
+    "errors": []
+   }
+  },
+  {
+   "id": "frontmatter-array-values",
+   "schema": {
+    "entity": "person",
+    "schema": {
+     "name": "string",
+     "role?": "string",
+     "status?(enum)": [
+      "active",
+      "archived"
+     ],
+     "tags?(array)": "string",
+     "employer?": "Organization"
+    },
+    "settings": {
+     "validation": "warn",
+     "frontmatter": {
+      "status?(enum)": [
+       "active",
+       "archived"
+      ]
+     }
+    }
+   },
+   "note": {
+    "identifier": "people/ada",
+    "observations": [
+     {
+      "category": "name",
+      "content": "Ada"
+     }
+    ],
+    "relations": []
+   },
+   "frontmatter": {
+    "status": "active",
+    "tags": [
+     "math",
+     "history"
+    ]
+   },
+   "result": {
+    "note_identifier": "people/ada",
+    "schema_entity": "person",
+    "passed": true,
+    "field_results": [
+     {
+      "field": {
+       "name": "name",
+       "type": "string",
+       "required": true,
+       "is_array": false,
+       "is_enum": false,
+       "enum_values": [],
+       "description": null,
+       "is_entity_ref": false,
+       "children": []
+      },
+      "status": "present",
+      "values": [
+       "Ada"
+      ],
+      "message": null
+     },
+     {
+      "field": {
+       "name": "role",
+       "type": "string",
+       "required": false,
+       "is_array": false,
+       "is_enum": false,
+       "enum_values": [],
+       "description": null,
+       "is_entity_ref": false,
+       "children": []
+      },
+      "status": "missing",
+      "values": [],
+      "message": "Missing optional field: role (expected [role] observation)"
+     },
+     {
+      "field": {
+       "name": "status",
+       "type": "enum",
+       "required": false,
+       "is_array": false,
+       "is_enum": true,
+       "enum_values": [
+        "active",
+        "archived"
+       ],
+       "description": null,
+       "is_entity_ref": false,
+       "children": []
+      },
+      "status": "missing",
+      "values": [],
+      "message": "Missing optional field: status (expected [status] observation)"
+     },
+     {
+      "field": {
+       "name": "tags",
+       "type": "string",
+       "required": false,
+       "is_array": true,
+       "is_enum": false,
+       "enum_values": [],
+       "description": null,
+       "is_entity_ref": false,
+       "children": []
+      },
+      "status": "missing",
+      "values": [],
+      "message": "Missing optional field: tags (expected [tags] observation)"
+     },
+     {
+      "field": {
+       "name": "employer",
+       "type": "Organization",
+       "required": false,
+       "is_array": false,
+       "is_enum": false,
+       "enum_values": [],
+       "description": null,
+       "is_entity_ref": true,
+       "children": []
+      },
+      "status": "missing",
+      "values": [],
+      "message": "Missing relation: employer (no 'employer [[...]]' relation found)"
+     },
+     {
+      "field": {
+       "name": "status",
+       "type": "enum",
+       "required": false,
+       "is_array": false,
+       "is_enum": true,
+       "enum_values": [
+        "active",
+        "archived"
+       ],
+       "description": null,
+       "is_entity_ref": false,
+       "children": []
+      },
+      "status": "present",
+      "values": [
+       "active"
+      ],
+      "message": null
+     }
+    ],
+    "unmatched_observations": {},
+    "unmatched_relations": [],
+    "warnings": [],
+    "errors": []
+   }
+  }
+ ],
+ "infer": [
+  {
+   "id": "empty",
+   "notes": [],
+   "result": {
+    "note_type": "empty",
+    "notes_analyzed": 0,
+    "field_frequencies": [],
+    "suggested_schema": {},
+    "suggested_required": [],
+    "suggested_optional": [],
+    "excluded": []
+   }
+  },
+  {
+   "id": "uniform",
+   "notes": [
+    {
+     "identifier": "a",
+     "observations": [
+      {
+       "category": "name",
+       "content": "A"
+      },
+      {
+       "category": "role",
+       "content": "R"
+      }
+     ],
+     "relations": [
+      {
+       "relation_type": "employer",
+       "target_name": "Org",
+       "target_note_type": "organization"
+      }
+     ]
+    },
+    {
+     "identifier": "b",
+     "observations": [
+      {
+       "category": "name",
+       "content": "B"
+      },
+      {
+       "category": "role",
+       "content": "S"
+      }
+     ],
+     "relations": [
+      {
+       "relation_type": "employer",
+       "target_name": "Org2",
+       "target_note_type": "organization"
+      }
+     ]
+    }
+   ],
+   "result": {
+    "note_type": "uniform",
+    "notes_analyzed": 2,
+    "field_frequencies": [
+     {
+      "name": "name",
+      "source": "observation",
+      "count": 2,
+      "total": 2,
+      "percentage": 1.0,
+      "sample_values": [
+       "A",
+       "B"
+      ],
+      "is_array": false,
+      "target_type": null
+     },
+     {
+      "name": "role",
+      "source": "observation",
+      "count": 2,
+      "total": 2,
+      "percentage": 1.0,
+      "sample_values": [
+       "R",
+       "S"
+      ],
+      "is_array": false,
+      "target_type": null
+     },
+     {
+      "name": "employer",
+      "source": "relation",
+      "count": 2,
+      "total": 2,
+      "percentage": 1.0,
+      "sample_values": [
+       "Org",
+       "Org2"
+      ],
+      "is_array": false,
+      "target_type": "organization"
+     }
+    ],
+    "suggested_schema": {
+     "name": "string",
+     "role": "string",
+     "employer": "Organization"
+    },
+    "suggested_required": [
+     "name",
+     "role",
+     "employer"
+    ],
+    "suggested_optional": [],
+    "excluded": []
+   }
+  },
+  {
+   "id": "mixed-frequency",
+   "notes": [
+    {
+     "identifier": "a",
+     "observations": [
+      {
+       "category": "name",
+       "content": "A"
+      },
+      {
+       "category": "status",
+       "content": "active"
+      },
+      {
+       "category": "tags",
+       "content": "x"
+      },
+      {
+       "category": "tags",
+       "content": "y"
+      }
+     ],
+     "relations": []
+    },
+    {
+     "identifier": "b",
+     "observations": [
+      {
+       "category": "name",
+       "content": "B"
+      },
+      {
+       "category": "status",
+       "content": "archived"
+      }
+     ],
+     "relations": []
+    },
+    {
+     "identifier": "c",
+     "observations": [
+      {
+       "category": "name",
+       "content": "C"
+      }
+     ],
+     "relations": []
+    },
+    {
+     "identifier": "d",
+     "observations": [
+      {
+       "category": "name",
+       "content": "D"
+      },
+      {
+       "category": "rare",
+       "content": "once"
+      }
+     ],
+     "relations": []
+    }
+   ],
+   "result": {
+    "note_type": "mixed-frequency",
+    "notes_analyzed": 4,
+    "field_frequencies": [
+     {
+      "name": "name",
+      "source": "observation",
+      "count": 4,
+      "total": 4,
+      "percentage": 1.0,
+      "sample_values": [
+       "A",
+       "B",
+       "C",
+       "D"
+      ],
+      "is_array": false,
+      "target_type": null
+     },
+     {
+      "name": "status",
+      "source": "observation",
+      "count": 2,
+      "total": 4,
+      "percentage": 0.5,
+      "sample_values": [
+       "active",
+       "archived"
+      ],
+      "is_array": false,
+      "target_type": null
+     },
+     {
+      "name": "tags",
+      "source": "observation",
+      "count": 1,
+      "total": 4,
+      "percentage": 0.25,
+      "sample_values": [
+       "x",
+       "y"
+      ],
+      "is_array": true,
+      "target_type": null
+     },
+     {
+      "name": "rare",
+      "source": "observation",
+      "count": 1,
+      "total": 4,
+      "percentage": 0.25,
+      "sample_values": [
+       "once"
+      ],
+      "is_array": false,
+      "target_type": null
+     }
+    ],
+    "suggested_schema": {
+     "name": "string",
+     "status?": "string",
+     "tags?(array)": "string",
+     "rare?": "string"
+    },
+    "suggested_required": [
+     "name"
+    ],
+    "suggested_optional": [
+     "status",
+     "tags",
+     "rare"
+    ],
+    "excluded": []
+   }
+  },
+  {
+   "id": "relations-mixed-targets",
+   "notes": [
+    {
+     "identifier": "a",
+     "observations": [],
+     "relations": [
+      {
+       "relation_type": "knows",
+       "target_name": "X",
+       "target_note_type": "person"
+      },
+      {
+       "relation_type": "knows",
+       "target_name": "Y",
+       "target_note_type": "person"
+      },
+      {
+       "relation_type": "knows",
+       "target_name": "Z",
+       "target_note_type": "organization"
+      }
+     ]
+    },
+    {
+     "identifier": "b",
+     "observations": [],
+     "relations": [
+      {
+       "relation_type": "knows",
+       "target_name": "W",
+       "target_note_type": "person"
+      }
+     ]
+    },
+    {
+     "identifier": "c",
+     "observations": [],
+     "relations": [
+      {
+       "relation_type": "works_at",
+       "target_name": "Org",
+       "target_note_type": null
+      }
+     ]
+    }
+   ],
+   "result": {
+    "note_type": "relations-mixed-targets",
+    "notes_analyzed": 3,
+    "field_frequencies": [
+     {
+      "name": "knows",
+      "source": "relation",
+      "count": 2,
+      "total": 3,
+      "percentage": 0.6666666666666666,
+      "sample_values": [
+       "X",
+       "Y",
+       "Z",
+       "W"
+      ],
+      "is_array": false,
+      "target_type": "person"
+     },
+     {
+      "name": "works_at",
+      "source": "relation",
+      "count": 1,
+      "total": 3,
+      "percentage": 0.3333333333333333,
+      "sample_values": [
+       "Org"
+      ],
+      "is_array": false,
+      "target_type": null
+     }
+    ],
+    "suggested_schema": {
+     "knows?": "Person",
+     "works_at?": "string"
+    },
+    "suggested_required": [],
+    "suggested_optional": [
+     "knows",
+     "works_at"
+    ],
+    "excluded": []
+   }
+  }
+ ],
+ "diff": [
+  {
+   "id": "no-drift",
+   "schema": {
+    "entity": "person",
+    "schema": {
+     "name": "string",
+     "status?": "string",
+     "tags?(array)": "string",
+     "employer?": "Organization"
+    }
+   },
+   "notes": [
+    {
+     "identifier": "a",
+     "observations": [
+      {
+       "category": "name",
+       "content": "A"
+      },
+      {
+       "category": "status",
+       "content": "active"
+      },
+      {
+       "category": "tags",
+       "content": "x"
+      },
+      {
+       "category": "tags",
+       "content": "y"
+      }
+     ],
+     "relations": []
+    },
+    {
+     "identifier": "b",
+     "observations": [
+      {
+       "category": "name",
+       "content": "B"
+      },
+      {
+       "category": "status",
+       "content": "archived"
+      }
+     ],
+     "relations": []
+    },
+    {
+     "identifier": "c",
+     "observations": [
+      {
+       "category": "name",
+       "content": "C"
+      },
+      {
+       "category": "status",
+       "content": "active"
+      }
+     ],
+     "relations": []
+    }
+   ],
+   "result": {
+    "new_fields": [],
+    "dropped_fields": [
+     {
+      "name": "employer",
+      "source": "relation",
+      "count": 0,
+      "total": 3,
+      "percentage": 0.0,
+      "sample_values": [],
+      "is_array": false,
+      "target_type": null
+     }
+    ],
+    "cardinality_changes": []
+   }
+  },
+  {
+   "id": "new-and-dropped",
+   "schema": {
+    "entity": "person",
+    "schema": {
+     "name": "string",
+     "status?": "string",
+     "tags?(array)": "string",
+     "employer?": "Organization"
+    }
+   },
+   "notes": [
+    {
+     "identifier": "a",
+     "observations": [
+      {
+       "category": "name",
+       "content": "A"
+      },
+      {
+       "category": "team",
+       "content": "core"
+      },
+      {
+       "category": "team",
+       "content": "infra"
+      }
+     ],
+     "relations": []
+    },
+    {
+     "identifier": "b",
+     "observations": [
+      {
+       "category": "name",
+       "content": "B"
+      },
+      {
+       "category": "team",
+       "content": "core"
+      }
+     ],
+     "relations": []
+    },
+    {
+     "identifier": "c",
+     "observations": [
+      {
+       "category": "name",
+       "content": "C"
+      },
+      {
+       "category": "status",
+       "content": "active"
+      }
+     ],
+     "relations": []
+    },
+    {
+     "identifier": "d",
+     "observations": [
+      {
+       "category": "name",
+       "content": "D"
+      }
+     ],
+     "relations": []
+    }
+   ],
+   "result": {
+    "new_fields": [
+     {
+      "name": "team",
+      "source": "observation",
+      "count": 2,
+      "total": 4,
+      "percentage": 0.5,
+      "sample_values": [
+       "core",
+       "infra"
+      ],
+      "is_array": false,
+      "target_type": null
+     }
+    ],
+    "dropped_fields": [
+     {
+      "name": "tags",
+      "source": "observation",
+      "count": 0,
+      "total": 4,
+      "percentage": 0.0,
+      "sample_values": [],
+      "is_array": false,
+      "target_type": null
+     },
+     {
+      "name": "employer",
+      "source": "relation",
+      "count": 0,
+      "total": 4,
+      "percentage": 0.0,
+      "sample_values": [],
+      "is_array": false,
+      "target_type": null
+     }
+    ],
+    "cardinality_changes": []
+   }
+  },
+  {
+   "id": "cardinality-changes",
+   "schema": {
+    "entity": "person",
+    "schema": {
+     "name": "string",
+     "status?": "string",
+     "tags?(array)": "string",
+     "employer?": "Organization"
+    }
+   },
+   "notes": [
+    {
+     "identifier": "a",
+     "observations": [
+      {
+       "category": "name",
+       "content": "A"
+      },
+      {
+       "category": "status",
+       "content": "one"
+      },
+      {
+       "category": "status",
+       "content": "two"
+      }
+     ],
+     "relations": []
+    },
+    {
+     "identifier": "b",
+     "observations": [
+      {
+       "category": "name",
+       "content": "B"
+      }
+     ],
+     "relations": []
+    },
+    {
+     "identifier": "c",
+     "observations": [
+      {
+       "category": "name",
+       "content": "C"
+      },
+      {
+       "category": "tags",
+       "content": "solo"
+      }
+     ],
+     "relations": []
+    },
+    {
+     "identifier": "d",
+     "observations": [
+      {
+       "category": "name",
+       "content": "D"
+      }
+     ],
+     "relations": []
+    }
+   ],
+   "result": {
+    "new_fields": [],
+    "dropped_fields": [
+     {
+      "name": "employer",
+      "source": "relation",
+      "count": 0,
+      "total": 4,
+      "percentage": 0.0,
+      "sample_values": [],
+      "is_array": false,
+      "target_type": null
+     }
+    ],
+    "cardinality_changes": [
+     "status: schema declares single-value but usage is typically array",
+     "tags: schema declares array but usage is typically single-value"
+    ]
+   }
+  },
+  {
+   "id": "empty",
+   "schema": {
+    "entity": "person",
+    "schema": {
+     "name": "string",
+     "status?": "string",
+     "tags?(array)": "string",
+     "employer?": "Organization"
+    }
+   },
+   "notes": [],
+   "result": {
+    "new_fields": [],
+    "dropped_fields": [],
+    "cardinality_changes": []
+   }
+  }
+ ],
+ "resolve": [
+  {
+   "id": "inline",
+   "frontmatter": {
+    "type": "person",
+    "schema": {
+     "name": "string"
+    }
+   },
+   "definition": {
+    "entity": "person",
+    "version": 1,
+    "fields": [
+     {
+      "name": "name",
+      "type": "string",
+      "required": true,
+      "is_array": false,
+      "is_enum": false,
+      "enum_values": [],
+      "description": null,
+      "is_entity_ref": false,
+      "children": []
+     }
+    ],
+    "validation_mode": "warn",
+    "frontmatter_fields": []
+   }
+  },
+  {
+   "id": "explicit-reference",
+   "frontmatter": {
+    "type": "person",
+    "schema": "person"
+   },
+   "definition": {
+    "entity": "person",
+    "version": 1,
+    "fields": [
+     {
+      "name": "name",
+      "type": "string",
+      "required": true,
+      "is_array": false,
+      "is_enum": false,
+      "enum_values": [],
+      "description": null,
+      "is_entity_ref": false,
+      "children": []
+     }
+    ],
+    "validation_mode": "warn",
+    "frontmatter_fields": []
+   }
+  },
+  {
+   "id": "implicit-by-type",
+   "frontmatter": {
+    "type": "person"
+   },
+   "definition": {
+    "entity": "person",
+    "version": 1,
+    "fields": [
+     {
+      "name": "name",
+      "type": "string",
+      "required": true,
+      "is_array": false,
+      "is_enum": false,
+      "enum_values": [],
+      "description": null,
+      "is_entity_ref": false,
+      "children": []
+     }
+    ],
+    "validation_mode": "warn",
+    "frontmatter_fields": []
+   }
+  },
+  {
+   "id": "no-schema",
+   "frontmatter": {
+    "type": "unrelated"
+   },
+   "definition": null
+  },
+  {
+   "id": "no-type",
+   "frontmatter": {},
+   "definition": null
+  }
+ ]
+}

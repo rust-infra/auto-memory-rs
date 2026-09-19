@@ -1,0 +1,41 @@
+{
+  "results": [
+    {
+      "title": "Alpha Project",
+      "type": "entity",
+      "score": 0.764142479926015,
+      "entity": "oracle/projects/alpha",
+      "external_id": "<uuid>",
+      "permalink": "oracle/projects/alpha",
+      "content": "# Alpha Project\n\nMain fixture project. Links back to [[notes/simple]], forming a cycle.\n\n- [decision] Alpha uses the Rust core\n- [requirement] Must stay offline",
+      "matched_chunk": "# Alpha Project\n\nMain fixture project. Links back to [[notes/simple]], forming a cycle.\n\n- [decision] Alpha uses the Rust core\n- [requirement] Must stay offline",
+      "file_path": "projects/alpha.md",
+      "updated_at": "<timestamp>",
+      "metadata": {
+        "note_type": "project"
+      },
+      "entity_id": "<entity_id>"
+    },
+    {
+      "title": "Frontmatter Demo",
+      "type": "entity",
+      "score": 0.7207226017983146,
+      "entity": "notes/frontmatter-note",
+      "external_id": "<uuid>",
+      "permalink": "notes/frontmatter-note",
+      "content": "# Frontmatter Demo\n\nThis note carries structured metadata and is tagged for search.\n\n- [decision] Keep Markdown as the source of truth\n- [constraint] No cloud functionality in the Rust port",
+      "matched_chunk": "# Frontmatter Demo\n\nThis note carries structured metadata and is tagged for search.\n\n- [decision] Keep Markdown as the source of truth\n- [constraint] No cloud functionality in the Rust port",
+      "file_path": "notes/frontmatter.md",
+      "updated_at": "<timestamp>",
+      "metadata": {
+        "note_type": "reference"
+      },
+      "entity_id": "<entity_id>"
+    }
+  ],
+  "current_page": 1,
+  "page_size": 10,
+  "total": 0,
+  "total_is_exact": false,
+  "has_more": false
+}

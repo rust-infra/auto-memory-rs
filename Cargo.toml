@@ -1,0 +1,76 @@
+[package]
+name = "basic-mem-rs"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+description = "Local-first Rust implementation of the Basic Memory core"
+license = "AGPL-3.0-or-later"
+publish = false
+
+[lib]
+name = "basic_mem"
+path = "src/lib.rs"
+
+[[bin]]
+name = "basic-mem"
+path = "src/main.rs"
+
+[dependencies]
+rusqlite = { version = "0.32", features = ["bundled"] }
+serde = { version = "1", features = ["derive"] }
+# `preserve_order` keeps JSON objects in insertion order. Schema maps are ordered
+# data (the reference walks a Python dict), so `serde_json::Map` must not sort them.
+serde_json = { version = "1", features = ["preserve_order"] }
+sha2 = "0.10"
+serde_yaml_ng = "0.10"
+thiserror = "2"
+chrono = { version = "0.4.45", features = ["clock", "std", "serde"] }
+fastembed = { version = "6.0.3", default-features = false, features = [
+    "ort-load-dynamic",
+] }
+ort = { version = "2.0.0-rc.13", default-features = false, features = [
+    "load-dynamic",
+] }
+notify = "8.2.0"
+# Diagnostics. `tracing` is the façade the library calls; `tracing-subscriber` is the
+# CLI's subscriber. stdout stays reserved for machine-readable output (the `--once`
+# report, MCP frames), so the subscriber writes to stderr.
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+base64 = "0.22"
+unicode-general-category = "1.1.0"
+strum = { version = "0.28.0", features = ["derive"] }
+walkdir = "2.5.0"
+# The event-loop surfaces (MCP stdio transport, `watch`) run on tokio; the core
+# (parser, storage, ranking, ONNX) stays synchronous and reaches the runtime only
+# through `block_in_place`/`spawn_blocking`. Features are the minimum that covers
+# that: `rt-multi-thread` for the blocking pool `block_in_place` needs, `io-std` /
+# `io-util` for the stdio frames, `sync` for the notify→runtime channel, `time` for
+# the debounce ticker, `signal` for Ctrl-C, `macros` for `select!` and `#[tokio::test]`.
+tokio = { version = "1.53", features = [
+    "rt-multi-thread",
+    "io-std",
+    "io-util",
+    "sync",
+    "time",
+    "signal",
+    "net",
+    "macros",
+] }
+# The Streamable HTTP MCP transport is served by the official Rust SDK rather than
+# hand-rolled: `rmcp` owns the protocol side (sessions, SSE framing, JSON-RPC over
+# HTTP) and `axum` owns the HTTP listener. Only the tool surface stays ours — the
+# HTTP handler reuses `McpServer::call_tool`, so stdio and HTTP cannot drift.
+# `transport-streamable-http-server` is the server half of the spec's Streamable
+# HTTP transport; the axum feature set mirrors what rmcp's own tests use.
+rmcp = { version = "0.17", default-features = false, features = [
+    "server",
+    "transport-streamable-http-server",
+] }
+axum = { version = "0.8", default-features = false, features = ["http1", "tokio"] }
+
+[profile.release]
+lto = "thin"
+
+[dev-dependencies]
+tempfile = "3.27.0"

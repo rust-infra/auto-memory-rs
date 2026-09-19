@@ -1,0 +1,201 @@
+{
+  "results": [
+    {
+      "primary_result": {
+        "type": "entity",
+        "external_id": "<uuid>",
+        "entity_id": "<entity_id>",
+        "permalink": "oracle/projects/alpha",
+        "title": "Alpha Project",
+        "content": "# Alpha Project\n\nMain fixture project. Links back to [[notes/simple]], forming a cycle.\n\n- [decision] Alpha uses the Rust core\n- [requirement] Must stay offline",
+        "file_path": "projects/alpha.md",
+        "created_at": "<timestamp>"
+      },
+      "observations": [
+        {
+          "type": "observation",
+          "observation_id": "<observation_id>",
+          "entity_id": "<entity_id>",
+          "entity_external_id": "<uuid>",
+          "title": "Alpha Project",
+          "file_path": "projects/alpha.md",
+          "permalink": "oracle/projects/alpha/observations/decision/alpha-uses-the-rust-core",
+          "category": "decision",
+          "content": "Alpha uses the Rust core",
+          "created_at": "<timestamp>"
+        },
+        {
+          "type": "observation",
+          "observation_id": "<observation_id>",
+          "entity_id": "<entity_id>",
+          "entity_external_id": "<uuid>",
+          "title": "Alpha Project",
+          "file_path": "projects/alpha.md",
+          "permalink": "oracle/projects/alpha/observations/requirement/must-stay-offline",
+          "category": "requirement",
+          "content": "Must stay offline",
+          "created_at": "<timestamp>"
+        }
+      ],
+      "related_results": [
+        {
+          "type": "relation",
+          "relation_id": "<relation_id>",
+          "entity_id": null,
+          "title": "depends_on: projects/alpha",
+          "file_path": "notes/relations.md",
+          "permalink": "",
+          "relation_type": "depends_on",
+          "from_entity": "Relations Demo",
+          "from_entity_id": "<from_entity_id>",
+          "from_entity_external_id": "<uuid>",
+          "to_entity": "Alpha Project",
+          "to_name": "projects/alpha",
+          "to_entity_id": "<to_entity_id>",
+          "to_entity_external_id": "<uuid>",
+          "created_at": "<timestamp>"
+        },
+        {
+          "type": "relation",
+          "relation_id": "<relation_id>",
+          "entity_id": null,
+          "title": "links_to: projects/alpha",
+          "file_path": "notes/simple.md",
+          "permalink": "",
+          "relation_type": "links_to",
+          "from_entity": "simple",
+          "from_entity_id": "<from_entity_id>",
+          "from_entity_external_id": "<uuid>",
+          "to_entity": "Alpha Project",
+          "to_name": "projects/alpha",
+          "to_entity_id": "<to_entity_id>",
+          "to_entity_external_id": "<uuid>",
+          "created_at": "<timestamp>"
+        },
+        {
+          "type": "relation",
+          "relation_id": "<relation_id>",
+          "entity_id": null,
+          "title": "links_to: projects/alpha",
+          "file_path": "notes/observations.md",
+          "permalink": "",
+          "relation_type": "links_to",
+          "from_entity": "Observations Demo",
+          "from_entity_id": "<from_entity_id>",
+          "from_entity_external_id": "<uuid>",
+          "to_entity": "Alpha Project",
+          "to_name": "projects/alpha",
+          "to_entity_id": "<to_entity_id>",
+          "to_entity_external_id": "<uuid>",
+          "created_at": "<timestamp>"
+        },
+        {
+          "type": "relation",
+          "relation_id": "<relation_id>",
+          "entity_id": null,
+          "title": "关联: projects/alpha",
+          "file_path": "notes/cjk.md",
+          "permalink": "",
+          "relation_type": "关联",
+          "from_entity": "中文测试文档",
+          "from_entity_id": "<from_entity_id>",
+          "from_entity_external_id": "<uuid>",
+          "to_entity": "Alpha Project",
+          "to_name": "projects/alpha",
+          "to_entity_id": "<to_entity_id>",
+          "to_entity_external_id": "<uuid>",
+          "created_at": "<timestamp>"
+        },
+        {
+          "type": "relation",
+          "relation_id": "<relation_id>",
+          "entity_id": null,
+          "title": "links_to: notes/simple",
+          "file_path": "projects/alpha.md",
+          "permalink": "",
+          "relation_type": "links_to",
+          "from_entity": "Alpha Project",
+          "from_entity_id": "<from_entity_id>",
+          "from_entity_external_id": "<uuid>",
+          "to_entity": "simple",
+          "to_name": "notes/simple",
+          "to_entity_id": "<to_entity_id>",
+          "to_entity_external_id": "<uuid>",
+          "created_at": "<timestamp>"
+        },
+        {
+          "type": "relation",
+          "relation_id": "<relation_id>",
+          "entity_id": null,
+          "title": "links_to: projects/alpha|Alpha Project",
+          "file_path": "notes/wikilinks.md",
+          "permalink": "",
+          "relation_type": "links_to",
+          "from_entity": "Wikilinks Demo",
+          "from_entity_id": "<from_entity_id>",
+          "from_entity_external_id": "<uuid>",
+          "to_entity": "Alpha Project",
+          "to_name": "projects/alpha|Alpha Project",
+          "to_entity_id": "<to_entity_id>",
+          "to_entity_external_id": "<uuid>",
+          "created_at": "<timestamp>"
+        },
+        {
+          "type": "entity",
+          "external_id": "<uuid>",
+          "entity_id": "<entity_id>",
+          "permalink": "oracle/notes/observations",
+          "title": "Observations Demo",
+          "content": null,
+          "file_path": "notes/observations.md",
+          "created_at": "<timestamp>"
+        },
+        {
+          "type": "entity",
+          "external_id": "<uuid>",
+          "entity_id": "<entity_id>",
+          "permalink": "oracle/notes/cjk",
+          "title": "中文测试文档",
+          "content": null,
+          "file_path": "notes/cjk.md",
+          "created_at": "<timestamp>"
+        },
+        {
+          "type": "entity",
+          "external_id": "<uuid>",
+          "entity_id": "<entity_id>",
+          "permalink": "oracle/notes/simple",
+          "title": "simple",
+          "content": null,
+          "file_path": "notes/simple.md",
+          "created_at": "<timestamp>"
+        },
+        {
+          "type": "entity",
+          "external_id": "<uuid>",
+          "entity_id": "<entity_id>",
+          "permalink": "oracle/notes/wikilinks",
+          "title": "Wikilinks Demo",
+          "content": null,
+          "file_path": "notes/wikilinks.md",
+          "created_at": "<timestamp>"
+        }
+      ]
+    }
+  ],
+  "metadata": {
+    "uri": "oracle/projects/alpha",
+    "types": null,
+    "depth": 1,
+    "timeframe": "<timestamp>",
+    "generated_at": "<timestamp>",
+    "primary_count": 1,
+    "related_count": 10,
+    "total_results": 11,
+    "total_relations": 6,
+    "total_observations": 8
+  },
+  "page": 1,
+  "page_size": 10,
+  "has_more": false
+}

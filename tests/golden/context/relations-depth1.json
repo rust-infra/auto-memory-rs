@@ -1,0 +1,159 @@
+{
+  "results": [
+    {
+      "primary_result": {
+        "type": "entity",
+        "external_id": "<uuid>",
+        "entity_id": "<entity_id>",
+        "permalink": "oracle/notes/relations",
+        "title": "Relations Demo",
+        "content": "# Relations\n\n- depends_on [[projects/alpha]]\n- \"implemented by\" [[people/ada-lovelace]]\n- relates_to [[notes/simple]] (primary source)\n\nProse with an inline [[notes/frontmatter]] link and an [[projects/beta|Beta]] display link.",
+        "file_path": "notes/relations.md",
+        "created_at": "<timestamp>"
+      },
+      "observations": [],
+      "related_results": [
+        {
+          "type": "relation",
+          "relation_id": "<relation_id>",
+          "entity_id": null,
+          "title": "depends_on: projects/alpha",
+          "file_path": "notes/relations.md",
+          "permalink": "",
+          "relation_type": "depends_on",
+          "from_entity": "Relations Demo",
+          "from_entity_id": "<from_entity_id>",
+          "from_entity_external_id": "<uuid>",
+          "to_entity": "Alpha Project",
+          "to_name": "projects/alpha",
+          "to_entity_id": "<to_entity_id>",
+          "to_entity_external_id": "<uuid>",
+          "created_at": "<timestamp>"
+        },
+        {
+          "type": "relation",
+          "relation_id": "<relation_id>",
+          "entity_id": null,
+          "title": "implemented by: people/ada-lovelace",
+          "file_path": "notes/relations.md",
+          "permalink": "",
+          "relation_type": "implemented by",
+          "from_entity": "Relations Demo",
+          "from_entity_id": "<from_entity_id>",
+          "from_entity_external_id": "<uuid>",
+          "to_entity": "Ada Lovelace",
+          "to_name": "people/ada-lovelace",
+          "to_entity_id": "<to_entity_id>",
+          "to_entity_external_id": "<uuid>",
+          "created_at": "<timestamp>"
+        },
+        {
+          "type": "relation",
+          "relation_id": "<relation_id>",
+          "entity_id": null,
+          "title": "links_to: notes/frontmatter",
+          "file_path": "notes/relations.md",
+          "permalink": "",
+          "relation_type": "links_to",
+          "from_entity": "Relations Demo",
+          "from_entity_id": "<from_entity_id>",
+          "from_entity_external_id": "<uuid>",
+          "to_entity": "Frontmatter Demo",
+          "to_name": "notes/frontmatter",
+          "to_entity_id": "<to_entity_id>",
+          "to_entity_external_id": "<uuid>",
+          "created_at": "<timestamp>"
+        },
+        {
+          "type": "relation",
+          "relation_id": "<relation_id>",
+          "entity_id": null,
+          "title": "links_to: projects/beta|Beta",
+          "file_path": "notes/relations.md",
+          "permalink": "",
+          "relation_type": "links_to",
+          "from_entity": "Relations Demo",
+          "from_entity_id": "<from_entity_id>",
+          "from_entity_external_id": "<uuid>",
+          "to_entity": "Beta Project",
+          "to_name": "projects/beta|Beta",
+          "to_entity_id": "<to_entity_id>",
+          "to_entity_external_id": "<uuid>",
+          "created_at": "<timestamp>"
+        },
+        {
+          "type": "relation",
+          "relation_id": "<relation_id>",
+          "entity_id": null,
+          "title": "relates_to: notes/simple",
+          "file_path": "notes/relations.md",
+          "permalink": "",
+          "relation_type": "relates_to",
+          "from_entity": "Relations Demo",
+          "from_entity_id": "<from_entity_id>",
+          "from_entity_external_id": "<uuid>",
+          "to_entity": "simple",
+          "to_name": "notes/simple",
+          "to_entity_id": "<to_entity_id>",
+          "to_entity_external_id": "<uuid>",
+          "created_at": "<timestamp>"
+        },
+        {
+          "type": "entity",
+          "external_id": "<uuid>",
+          "entity_id": "<entity_id>",
+          "permalink": "oracle/notes/simple",
+          "title": "simple",
+          "content": null,
+          "file_path": "notes/simple.md",
+          "created_at": "<timestamp>"
+        },
+        {
+          "type": "entity",
+          "external_id": "<uuid>",
+          "entity_id": "<entity_id>",
+          "permalink": "oracle/people/ada-lovelace",
+          "title": "Ada Lovelace",
+          "content": null,
+          "file_path": "people/ada-lovelace.md",
+          "created_at": "<timestamp>"
+        },
+        {
+          "type": "entity",
+          "external_id": "<uuid>",
+          "entity_id": "<entity_id>",
+          "permalink": "oracle/projects/beta",
+          "title": "Beta Project",
+          "content": null,
+          "file_path": "projects/beta.md",
+          "created_at": "<timestamp>"
+        },
+        {
+          "type": "entity",
+          "external_id": "<uuid>",
+          "entity_id": "<entity_id>",
+          "permalink": "oracle/projects/alpha",
+          "title": "Alpha Project",
+          "content": null,
+          "file_path": "projects/alpha.md",
+          "created_at": "<timestamp>"
+        }
+      ]
+    }
+  ],
+  "metadata": {
+    "uri": "oracle/notes/relations",
+    "types": null,
+    "depth": 1,
+    "timeframe": "<timestamp>",
+    "generated_at": "<timestamp>",
+    "primary_count": 1,
+    "related_count": 9,
+    "total_results": 10,
+    "total_relations": 5,
+    "total_observations": 5
+  },
+  "page": 1,
+  "page_size": 10,
+  "has_more": false
+}

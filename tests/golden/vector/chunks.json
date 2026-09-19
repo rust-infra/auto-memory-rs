@@ -1,0 +1,709 @@
+{
+  "model": "BAAI/bge-small-en-v1.5",
+  "dimensions": 384,
+  "duplicate_chunk_keys": 0,
+  "chunks": [
+    {
+      "chunk_key": "entity:1:0",
+      "chunk_text": "Same Title\n\noracle/duplicates/dup-a/same-title\n\n# Duplicate A\n\nFirst note with a duplicate title.",
+      "source_hash": "d4f4ac703d36967acf1c2e0ebd2cd74f2aea8fd236aa81020f5974f0191db8f2",
+      "permalink": "oracle/duplicates/dup-a/same-title",
+      "file_path": null,
+      "entity_id": 1,
+      "entity_fingerprint": "3b1efdc23a29932def41c85543cee82d4daaec953d976998aa7ba82dcf1485a1"
+    },
+    {
+      "chunk_key": "entity:1:1",
+      "chunk_text": "- [fact] Duplicate title in folder A",
+      "source_hash": "f23c43e75ddb3b9f76271407dfef3419ed92a33899f2f37233cccf5656ec7fa4",
+      "permalink": "oracle/duplicates/dup-a/same-title",
+      "file_path": null,
+      "entity_id": 1,
+      "entity_fingerprint": "3b1efdc23a29932def41c85543cee82d4daaec953d976998aa7ba82dcf1485a1"
+    },
+    {
+      "chunk_key": "entity:2:0",
+      "chunk_text": "Observations Demo\n\noracle/notes/observations\n\n# Observations",
+      "source_hash": "5037730eb5216860eec64b398333e820c7536aea3d424f2ab67764c8de00f497",
+      "permalink": "oracle/notes/observations",
+      "file_path": null,
+      "entity_id": 2,
+      "entity_fingerprint": "1868a49a3bdcdbbef37920c583e25fe3a7f93a915e55dcfced976b71b15e35d4"
+    },
+    {
+      "chunk_key": "entity:2:1",
+      "chunk_text": "- [decision] Use SQLite FTS5 for text search",
+      "source_hash": "186a47baa3f82ef3d379bd65a166154c4342ece587ee961c7797fa67b72ffeae",
+      "permalink": "oracle/notes/observations",
+      "file_path": null,
+      "entity_id": 2,
+      "entity_fingerprint": "1868a49a3bdcdbbef37920c583e25fe3a7f93a915e55dcfced976b71b15e35d4"
+    },
+    {
+      "chunk_key": "entity:2:2",
+      "chunk_text": "- [requirement] Must support CJK #cjk #search",
+      "source_hash": "f1693678e1ac5d9fd732f256db6f95021b4d778330bd6c7821dbb43f3e282ca9",
+      "permalink": "oracle/notes/observations",
+      "file_path": null,
+      "entity_id": 2,
+      "entity_fingerprint": "1868a49a3bdcdbbef37920c583e25fe3a7f93a915e55dcfced976b71b15e35d4"
+    },
+    {
+      "chunk_key": "entity:2:3",
+      "chunk_text": "- [fact] Parser preserves frontmatter checksums",
+      "source_hash": "0772c78a86ffa29453fc9fe15d21d6969639c64fda5c38ff423ef33a1b12e399",
+      "permalink": "oracle/notes/observations",
+      "file_path": null,
+      "entity_id": 2,
+      "entity_fingerprint": "1868a49a3bdcdbbef37920c583e25fe3a7f93a915e55dcfced976b71b15e35d4"
+    },
+    {
+      "chunk_key": "entity:2:4",
+      "chunk_text": "- With no category but a #tag",
+      "source_hash": "f4cc3d57ebe78cb93cfd8ee9f00a7892817d387f16a2b4605130d0ac731e2627",
+      "permalink": "oracle/notes/observations",
+      "file_path": null,
+      "entity_id": 2,
+      "entity_fingerprint": "1868a49a3bdcdbbef37920c583e25fe3a7f93a915e55dcfced976b71b15e35d4"
+    },
+    {
+      "chunk_key": "entity:2:5",
+      "chunk_text": "- [] Empty bracket content",
+      "source_hash": "447220499acb1bd4d306956008d6d2b55db418955ed0d29a5a9896558aaae88a",
+      "permalink": "oracle/notes/observations",
+      "file_path": null,
+      "entity_id": 2,
+      "entity_fingerprint": "1868a49a3bdcdbbef37920c583e25fe3a7f93a915e55dcfced976b71b15e35d4"
+    },
+    {
+      "chunk_key": "entity:2:6",
+      "chunk_text": "- [00:00:11] transcript line should not be a category",
+      "source_hash": "0989ba407d331751ac00e1d31e30c39134d59e3b080eaca221a981576d60ecc7",
+      "permalink": "oracle/notes/observations",
+      "file_path": null,
+      "entity_id": 2,
+      "entity_fingerprint": "1868a49a3bdcdbbef37920c583e25fe3a7f93a915e55dcfced976b71b15e35d4"
+    },
+    {
+      "chunk_key": "entity:2:7",
+      "chunk_text": "- [ ] unchecked task",
+      "source_hash": "c3459a9676b2db3ce495abdf59844786b1eb0ddc6bc413d2a0aedb70ccb2052f",
+      "permalink": "oracle/notes/observations",
+      "file_path": null,
+      "entity_id": 2,
+      "entity_fingerprint": "1868a49a3bdcdbbef37920c583e25fe3a7f93a915e55dcfced976b71b15e35d4"
+    },
+    {
+      "chunk_key": "entity:2:8",
+      "chunk_text": "- [x] checked task",
+      "source_hash": "de590f4f333e2d7865dd69347af72caf5566714220e8a0b8a5c68f61baa40de1",
+      "permalink": "oracle/notes/observations",
+      "file_path": null,
+      "entity_id": 2,
+      "entity_fingerprint": "1868a49a3bdcdbbef37920c583e25fe3a7f93a915e55dcfced976b71b15e35d4"
+    },
+    {
+      "chunk_key": "entity:2:9",
+      "chunk_text": "- [link](https://example.com) markdown link\n\n> [!info] Callout\n> - [note] callout bullet should not be an observation\n\nRegular prose with a [[projects/alpha]] link.",
+      "source_hash": "a807d59813f60ed453d52095aa596321d864e8b7310697f467489d578d0b2e58",
+      "permalink": "oracle/notes/observations",
+      "file_path": null,
+      "entity_id": 2,
+      "entity_fingerprint": "1868a49a3bdcdbbef37920c583e25fe3a7f93a915e55dcfced976b71b15e35d4"
+    },
+    {
+      "chunk_key": "entity:3:0",
+      "chunk_text": "Same Title\n\noracle/duplicates/dup-b/same-title\n\n# Duplicate B\n\nSecond note with a duplicate title. See [[duplicates/dup-a/same-title]].",
+      "source_hash": "430f276a42c32b051ae7c1e7b9da1e86c78da1072195e03857980d3ed212d803",
+      "permalink": "oracle/duplicates/dup-b/same-title",
+      "file_path": null,
+      "entity_id": 3,
+      "entity_fingerprint": "11e49bac0a52c07f068d815fd32acc8e587c04bd45fbacd85815f885f52ef298"
+    },
+    {
+      "chunk_key": "entity:3:1",
+      "chunk_text": "- [fact] Duplicate title in folder B",
+      "source_hash": "1d45980313477afd8995564b78390b0b8dc4d321fa92c44b508395184e3ca75e",
+      "permalink": "oracle/duplicates/dup-b/same-title",
+      "file_path": null,
+      "entity_id": 3,
+      "entity_fingerprint": "11e49bac0a52c07f068d815fd32acc8e587c04bd45fbacd85815f885f52ef298"
+    },
+    {
+      "chunk_key": "entity:4:0",
+      "chunk_text": "Relations Demo\n\noracle/notes/relations\n\n# Relations",
+      "source_hash": "52271d076835eff5c7461f54a646b0802afb89dea273c986f93b7f62c4375370",
+      "permalink": "oracle/notes/relations",
+      "file_path": null,
+      "entity_id": 4,
+      "entity_fingerprint": "352726a6cafb470a5f132567a2aafc20693385adf3c1338558a22116eb354be8"
+    },
+    {
+      "chunk_key": "entity:4:1",
+      "chunk_text": "- depends_on [[projects/alpha]]",
+      "source_hash": "d519d5c47fb2c675a3e34254089b0840aafb2c7616b56745cac367ec20c69804",
+      "permalink": "oracle/notes/relations",
+      "file_path": null,
+      "entity_id": 4,
+      "entity_fingerprint": "352726a6cafb470a5f132567a2aafc20693385adf3c1338558a22116eb354be8"
+    },
+    {
+      "chunk_key": "entity:4:2",
+      "chunk_text": "- \"implemented by\" [[people/ada-lovelace]]",
+      "source_hash": "979cddc1542a5567dfe6aa3e2c40be301c2fee3c37508846470b3d131d83d65d",
+      "permalink": "oracle/notes/relations",
+      "file_path": null,
+      "entity_id": 4,
+      "entity_fingerprint": "352726a6cafb470a5f132567a2aafc20693385adf3c1338558a22116eb354be8"
+    },
+    {
+      "chunk_key": "entity:4:3",
+      "chunk_text": "- relates_to [[notes/simple]] (primary source)\n\nProse with an inline [[notes/frontmatter]] link and an [[projects/beta|Beta]] display link.",
+      "source_hash": "2d79d0f33734623b60d2c8b4ab4bbc3be1f21fe5e043073c6c93c2b09ed15726",
+      "permalink": "oracle/notes/relations",
+      "file_path": null,
+      "entity_id": 4,
+      "entity_fingerprint": "352726a6cafb470a5f132567a2aafc20693385adf3c1338558a22116eb354be8"
+    },
+    {
+      "chunk_key": "entity:5:0",
+      "chunk_text": "Frontmatter Demo\n\nnotes/frontmatter-note\n\n# Frontmatter Demo\n\nThis note carries structured metadata and is tagged for search.",
+      "source_hash": "5dfde29eccb701373f8fcd9976baf16e82fab2954cc2022f55bad822f49511a5",
+      "permalink": "notes/frontmatter-note",
+      "file_path": null,
+      "entity_id": 5,
+      "entity_fingerprint": "5c87126f48b5d65aa9f6b5fe55a8de16e2384cc2f70fe06273307580b517d352"
+    },
+    {
+      "chunk_key": "entity:5:1",
+      "chunk_text": "- [decision] Keep Markdown as the source of truth",
+      "source_hash": "85ae1b9665a9168f0e8f4736a9a3f831cba62ccf33d9a6ac56d993f311372ec6",
+      "permalink": "notes/frontmatter-note",
+      "file_path": null,
+      "entity_id": 5,
+      "entity_fingerprint": "5c87126f48b5d65aa9f6b5fe55a8de16e2384cc2f70fe06273307580b517d352"
+    },
+    {
+      "chunk_key": "entity:5:2",
+      "chunk_text": "- [constraint] No cloud functionality in the Rust port",
+      "source_hash": "e04d798f5ddf552dffe14c9b09a7a0f94890bd2e04a1e9b53ed31861e52e5ecb",
+      "permalink": "notes/frontmatter-note",
+      "file_path": null,
+      "entity_id": 5,
+      "entity_fingerprint": "5c87126f48b5d65aa9f6b5fe55a8de16e2384cc2f70fe06273307580b517d352"
+    },
+    {
+      "chunk_key": "entity:6:0",
+      "chunk_text": "Deep Note\n\noracle/notes/nested/deep-note\n\n# Deep Note\n\nNested fixture linking back to [[notes/simple]].",
+      "source_hash": "976fc75ae38a7980e232f08a38a337361798e1a4589d53a17c5b1aedff78ceca",
+      "permalink": "oracle/notes/nested/deep-note",
+      "file_path": null,
+      "entity_id": 6,
+      "entity_fingerprint": "0e7bc74bb4711dc7ab6dc8aa607914a4ec6d456696d7ac4cd64bd9e66fc3a242"
+    },
+    {
+      "chunk_key": "entity:6:1",
+      "chunk_text": "- [fact] Nested paths must keep slash-separated permalinks",
+      "source_hash": "21ead0dda060a0956fea3b606700f6e096790ddf3e0c240579833461bbbbed30",
+      "permalink": "oracle/notes/nested/deep-note",
+      "file_path": null,
+      "entity_id": 6,
+      "entity_fingerprint": "0e7bc74bb4711dc7ab6dc8aa607914a4ec6d456696d7ac4cd64bd9e66fc3a242"
+    },
+    {
+      "chunk_key": "entity:7:0",
+      "chunk_text": "中文测试文档\n\noracle/notes/cjk\n\n# 中文测试\n\n这是一个中文笔记，包含 English 混合内容。",
+      "source_hash": "7466f559c034ed99beecdedb0b784f36dcd8d22f9b61377f562b7384c99e20e9",
+      "permalink": "oracle/notes/cjk",
+      "file_path": null,
+      "entity_id": 7,
+      "entity_fingerprint": "fd068dec2c6719590702def506bea273da96fa2c6784d14616ee31d2126d45a9"
+    },
+    {
+      "chunk_key": "entity:7:1",
+      "chunk_text": "- [decision] 使用 SQLite 作为本地索引",
+      "source_hash": "478b450a1c56c67c6fad0862a8a420c93844698a0101a98e963d1c7f5b1c004b",
+      "permalink": "oracle/notes/cjk",
+      "file_path": null,
+      "entity_id": 7,
+      "entity_fingerprint": "fd068dec2c6719590702def506bea273da96fa2c6784d14616ee31d2126d45a9"
+    },
+    {
+      "chunk_key": "entity:7:2",
+      "chunk_text": "- 关联 [[projects/alpha]]",
+      "source_hash": "a4cfd3f6cc0b6a7a6e4bf7db03326f921fb3c7dce25a54d54de9e8d22882f231",
+      "permalink": "oracle/notes/cjk",
+      "file_path": null,
+      "entity_id": 7,
+      "entity_fingerprint": "fd068dec2c6719590702def506bea273da96fa2c6784d14616ee31d2126d45a9"
+    },
+    {
+      "chunk_key": "entity:8:0",
+      "chunk_text": "task-markers\n\noracle/notes/task-markers\n\n# Task Markers",
+      "source_hash": "a954502d88510b5643adbb21c96ae2131cb7f55093ff5028b3d12f87c32ab946",
+      "permalink": "oracle/notes/task-markers",
+      "file_path": null,
+      "entity_id": 8,
+      "entity_fingerprint": "0a71b92a9661d2c93c6f25382ead9698749008a426a6778c8a985abdfd527500"
+    },
+    {
+      "chunk_key": "entity:8:1",
+      "chunk_text": "- [ ] unchecked task",
+      "source_hash": "c3459a9676b2db3ce495abdf59844786b1eb0ddc6bc413d2a0aedb70ccb2052f",
+      "permalink": "oracle/notes/task-markers",
+      "file_path": null,
+      "entity_id": 8,
+      "entity_fingerprint": "0a71b92a9661d2c93c6f25382ead9698749008a426a6778c8a985abdfd527500"
+    },
+    {
+      "chunk_key": "entity:8:2",
+      "chunk_text": "- [x] checked task",
+      "source_hash": "de590f4f333e2d7865dd69347af72caf5566714220e8a0b8a5c68f61baa40de1",
+      "permalink": "oracle/notes/task-markers",
+      "file_path": null,
+      "entity_id": 8,
+      "entity_fingerprint": "0a71b92a9661d2c93c6f25382ead9698749008a426a6778c8a985abdfd527500"
+    },
+    {
+      "chunk_key": "entity:8:3",
+      "chunk_text": "- [/] in progress task",
+      "source_hash": "970c03b4e473732f886ec2fa3f8c1fb6a5584ef2761ee6c7fcaf66be2b62e296",
+      "permalink": "oracle/notes/task-markers",
+      "file_path": null,
+      "entity_id": 8,
+      "entity_fingerprint": "0a71b92a9661d2c93c6f25382ead9698749008a426a6778c8a985abdfd527500"
+    },
+    {
+      "chunk_key": "entity:8:4",
+      "chunk_text": "- [00:01:02] transcript timestamp",
+      "source_hash": "5dff3595ba6b82540a766148f53880e86faff0734176797f045f78ccfda31ecc",
+      "permalink": "oracle/notes/task-markers",
+      "file_path": null,
+      "entity_id": 8,
+      "entity_fingerprint": "0a71b92a9661d2c93c6f25382ead9698749008a426a6778c8a985abdfd527500"
+    },
+    {
+      "chunk_key": "entity:8:5",
+      "chunk_text": "- [note] a genuine observation",
+      "source_hash": "918fe71aa4332573120796b9ee8cd386f6d4a58b6b2f38de2011c9683bd53bfc",
+      "permalink": "oracle/notes/task-markers",
+      "file_path": null,
+      "entity_id": 8,
+      "entity_fingerprint": "0a71b92a9661d2c93c6f25382ead9698749008a426a6778c8a985abdfd527500"
+    },
+    {
+      "chunk_key": "entity:9:0",
+      "chunk_text": "Wikilinks Demo\n\noracle/notes/wikilinks\n\n# Wikilinks",
+      "source_hash": "72c556df05d83af884ddbabe1ef0463b39dc5d2e8b72099e0bb6b3b19f6f9453",
+      "permalink": "oracle/notes/wikilinks",
+      "file_path": null,
+      "entity_id": 9,
+      "entity_fingerprint": "11dc729d9df6e7edfe439f138c691ffe439a000c2bd0156e6b61c7fff5e9e69a"
+    },
+    {
+      "chunk_key": "entity:9:1",
+      "chunk_text": "- links_to [[projects/alpha|Alpha Project]]",
+      "source_hash": "1fdb678ae5b1d57c0d5d119caf029aa3e9dca7303a9da270be67c9cd3f8321a5",
+      "permalink": "oracle/notes/wikilinks",
+      "file_path": null,
+      "entity_id": 9,
+      "entity_fingerprint": "11dc729d9df6e7edfe439f138c691ffe439a000c2bd0156e6b61c7fff5e9e69a"
+    },
+    {
+      "chunk_key": "entity:9:2",
+      "chunk_text": "- links_to [[notes/nested/deep-note]]\n\nSee also [[people/ada-lovelace]] and [[projects/beta]].",
+      "source_hash": "015b13202af3a5ace7f934e8752506a2bcb3f465a560a6276b2a9bc8ba285672",
+      "permalink": "oracle/notes/wikilinks",
+      "file_path": null,
+      "entity_id": 9,
+      "entity_fingerprint": "11dc729d9df6e7edfe439f138c691ffe439a000c2bd0156e6b61c7fff5e9e69a"
+    },
+    {
+      "chunk_key": "entity:10:0",
+      "chunk_text": "Ada Lovelace\n\noracle/people/ada-lovelace\n\n# Ada Lovelace\n\nMathematician referenced by several fixture notes.",
+      "source_hash": "d0d4c0c4db277fd38d9f39f5fdc881decd31c09dd35daa312d4aa2b02ca90a09",
+      "permalink": "oracle/people/ada-lovelace",
+      "file_path": null,
+      "entity_id": 10,
+      "entity_fingerprint": "e0d6d2abcfa287bd468fc29e0775a197c95c1115cc8494054d233b36e07284a4"
+    },
+    {
+      "chunk_key": "entity:10:1",
+      "chunk_text": "- [fact] First programmer",
+      "source_hash": "d03678c4b30c84ee0665cf132e0575efad9a7f774c857f126d5ce12fdebb7c85",
+      "permalink": "oracle/people/ada-lovelace",
+      "file_path": null,
+      "entity_id": 10,
+      "entity_fingerprint": "e0d6d2abcfa287bd468fc29e0775a197c95c1115cc8494054d233b36e07284a4"
+    },
+    {
+      "chunk_key": "entity:11:0",
+      "chunk_text": "Alpha Project\n\noracle/projects/alpha\n\n# Alpha Project\n\nMain fixture project. Links back to [[notes/simple]], forming a cycle.",
+      "source_hash": "d850be33143be27f5724d455e89c32e3b9af7b2b7b6943d46090506533d39f0d",
+      "permalink": "oracle/projects/alpha",
+      "file_path": null,
+      "entity_id": 11,
+      "entity_fingerprint": "888c0d7c6313f030238bb83e4dd3ec868e7efaf31f03dc8a903fc028fe303e96"
+    },
+    {
+      "chunk_key": "entity:11:1",
+      "chunk_text": "- [decision] Alpha uses the Rust core",
+      "source_hash": "3c7658b14542fa63127b0c67daef8227b55db094e6f7aa81953ccfff187a35f7",
+      "permalink": "oracle/projects/alpha",
+      "file_path": null,
+      "entity_id": 11,
+      "entity_fingerprint": "888c0d7c6313f030238bb83e4dd3ec868e7efaf31f03dc8a903fc028fe303e96"
+    },
+    {
+      "chunk_key": "entity:11:2",
+      "chunk_text": "- [requirement] Must stay offline",
+      "source_hash": "e13df97364d71c444617f337fbf17900a55ada892881edf96012da94c819e253",
+      "permalink": "oracle/projects/alpha",
+      "file_path": null,
+      "entity_id": 11,
+      "entity_fingerprint": "888c0d7c6313f030238bb83e4dd3ec868e7efaf31f03dc8a903fc028fe303e96"
+    },
+    {
+      "chunk_key": "entity:12:0",
+      "chunk_text": "Unresolved Links\n\noracle/notes/unresolved\n\n# Unresolved Links\n\nThis links to [[notes/does-not-exist]] before the target exists.",
+      "source_hash": "7401c84ada4aea5f1fd346df1b4a35fecbb2e1cf7b36136f116b31d8dcbd2ee2",
+      "permalink": "oracle/notes/unresolved",
+      "file_path": null,
+      "entity_id": 12,
+      "entity_fingerprint": "1c6914cd5b1b74da72a590a69839315c0bf45cf0913fd9c50db8a1facabcd703"
+    },
+    {
+      "chunk_key": "entity:13:0",
+      "chunk_text": "Beta Project\n\noracle/projects/beta\n\n# Beta Project\n\nSecondary fixture project.",
+      "source_hash": "43c15adbf0bb37f5a7b1021695adca2b9e1feb8cd631eec765e9d02364a9e6f6",
+      "permalink": "oracle/projects/beta",
+      "file_path": null,
+      "entity_id": 13,
+      "entity_fingerprint": "df2b2af9388b9547cc3990a0d08a06bd5b29658dfdf1428f39be6f50d85a0a03"
+    },
+    {
+      "chunk_key": "entity:13:1",
+      "chunk_text": "- [note] Beta is archived",
+      "source_hash": "6faa3bd0f4333e605cff62d4a93240026b10807d2e8adb69429065dcca91ec67",
+      "permalink": "oracle/projects/beta",
+      "file_path": null,
+      "entity_id": 13,
+      "entity_fingerprint": "df2b2af9388b9547cc3990a0d08a06bd5b29658dfdf1428f39be6f50d85a0a03"
+    },
+    {
+      "chunk_key": "entity:14:0",
+      "chunk_text": "simple\n\noracle/notes/simple\n\n# Simple Note\n\nA plain note without frontmatter. It links to [[projects/alpha]] and mentions rust.",
+      "source_hash": "c65f2d7a82e4a292f140bdc543a1115a8bdf553863e82c584de98f7e0d32ae5c",
+      "permalink": "oracle/notes/simple",
+      "file_path": null,
+      "entity_id": 14,
+      "entity_fingerprint": "d2d52f55a07bbfcb779cc357830f9eea88fea649904143fdd760b96227cf38fc"
+    },
+    {
+      "chunk_key": "entity:14:1",
+      "chunk_text": "- [note] Created as a baseline fixture",
+      "source_hash": "1efc148133a39c7d77e5f77d178b362e65d334905fde62e3a37e1742ecc81a61",
+      "permalink": "oracle/notes/simple",
+      "file_path": null,
+      "entity_id": 14,
+      "entity_fingerprint": "d2d52f55a07bbfcb779cc357830f9eea88fea649904143fdd760b96227cf38fc"
+    },
+    {
+      "chunk_key": "entity:15:0",
+      "chunk_text": "empty\n\noracle/notes/empty",
+      "source_hash": "0a6f7d9e2232ec711b6869c5ce001958606b70771d435cf0e56d015253665043",
+      "permalink": "oracle/notes/empty",
+      "file_path": null,
+      "entity_id": 15,
+      "entity_fingerprint": "e3b9439b9df59dd462831ccc0708840dc54ed2eca779adbafaf51201e5e3e44e"
+    },
+    {
+      "chunk_key": "observation:17:0",
+      "chunk_text": "fact: Duplicate title in folder B...\n\noracle/duplicates/dup-b/same-title/observations/fact/duplicate-title-in-folder-b\n\nfact\n\nDuplicate title in folder B",
+      "source_hash": "fe0eebb4e2d2bfba9a0c2fd9187da62f7608ee2f19f7345e874d30678ac2b5a3",
+      "permalink": "oracle/duplicates/dup-b/same-title/observations/fact/duplicate-title-in-folder-b",
+      "file_path": null,
+      "entity_id": 3,
+      "entity_fingerprint": "11e49bac0a52c07f068d815fd32acc8e587c04bd45fbacd85815f885f52ef298"
+    },
+    {
+      "chunk_key": "observation:18:0",
+      "chunk_text": "decision: Keep Markdown as the source of truth...\n\nnotes/frontmatter-note/observations/decision/keep-markdown-as-the-source-of-truth\n\ndecision\n\nKeep Markdown as the source of truth",
+      "source_hash": "f1716ed763b78d08201ddb51852c761e8f89bf45d2918881fb9a7686dcab3959",
+      "permalink": "notes/frontmatter-note/observations/decision/keep-markdown-as-the-source-of-truth",
+      "file_path": null,
+      "entity_id": 5,
+      "entity_fingerprint": "5c87126f48b5d65aa9f6b5fe55a8de16e2384cc2f70fe06273307580b517d352"
+    },
+    {
+      "chunk_key": "observation:19:0",
+      "chunk_text": "constraint: No cloud functionality in the Rust port...\n\nnotes/frontmatter-note/observations/constraint/no-cloud-functionality-in-the-rust-port\n\nconstraint\n\nNo cloud functionality in the Rust port",
+      "source_hash": "91b84c8acec02cd49572f532b59f5bb0cea4e6ce6fa078750bdfa82300267846",
+      "permalink": "notes/frontmatter-note/observations/constraint/no-cloud-functionality-in-the-rust-port",
+      "file_path": null,
+      "entity_id": 5,
+      "entity_fingerprint": "5c87126f48b5d65aa9f6b5fe55a8de16e2384cc2f70fe06273307580b517d352"
+    },
+    {
+      "chunk_key": "observation:20:0",
+      "chunk_text": "fact: Duplicate title in folder A...\n\noracle/duplicates/dup-a/same-title/observations/fact/duplicate-title-in-folder-a\n\nfact\n\nDuplicate title in folder A",
+      "source_hash": "06e125bda06e751c613b609cae3de76b9be619f72528474cd89275ac92d3750c",
+      "permalink": "oracle/duplicates/dup-a/same-title/observations/fact/duplicate-title-in-folder-a",
+      "file_path": null,
+      "entity_id": 1,
+      "entity_fingerprint": "3b1efdc23a29932def41c85543cee82d4daaec953d976998aa7ba82dcf1485a1"
+    },
+    {
+      "chunk_key": "observation:21:0",
+      "chunk_text": "note: Created as a baseline fixture...\n\noracle/notes/simple/observations/note/created-as-a-baseline-fixture\n\nnote\n\nCreated as a baseline fixture",
+      "source_hash": "9664e6a892081ac3253ab86565ffafb75abf97e932fbdd6f1184337ad60d253d",
+      "permalink": "oracle/notes/simple/observations/note/created-as-a-baseline-fixture",
+      "file_path": null,
+      "entity_id": 14,
+      "entity_fingerprint": "d2d52f55a07bbfcb779cc357830f9eea88fea649904143fdd760b96227cf38fc"
+    },
+    {
+      "chunk_key": "observation:22:0",
+      "chunk_text": "note: a genuine observation...\n\noracle/notes/task-markers/observations/note/a-genuine-observation\n\nnote\n\na genuine observation",
+      "source_hash": "5d1439f4de09c45c72fa090e2873b5b54b3ce1af491e031ebdf0d6ee87ee0a99",
+      "permalink": "oracle/notes/task-markers/observations/note/a-genuine-observation",
+      "file_path": null,
+      "entity_id": 8,
+      "entity_fingerprint": "0a71b92a9661d2c93c6f25382ead9698749008a426a6778c8a985abdfd527500"
+    },
+    {
+      "chunk_key": "observation:23:0",
+      "chunk_text": "decision: Use SQLite FTS5 for text search...\n\noracle/notes/observations/observations/decision/use-sqlite-fts5-for-text-search\n\ndecision\n\nUse SQLite FTS5 for text search",
+      "source_hash": "9a3ba4023417787757a04d21a1f722b837a50977b1cd2b988d50a3b097d320e2",
+      "permalink": "oracle/notes/observations/observations/decision/use-sqlite-fts5-for-text-search",
+      "file_path": null,
+      "entity_id": 2,
+      "entity_fingerprint": "1868a49a3bdcdbbef37920c583e25fe3a7f93a915e55dcfced976b71b15e35d4"
+    },
+    {
+      "chunk_key": "observation:24:0",
+      "chunk_text": "requirement: Must support CJK #cjk #search...\n\noracle/notes/observations/observations/requirement/must-support-cjk-cjk-search\n\nrequirement\n\nMust support CJK #cjk #search",
+      "source_hash": "f9727e2b5f30451f07353d6f92e29d8c5fccd6c6c0b24a77cbcfb62758845bc5",
+      "permalink": "oracle/notes/observations/observations/requirement/must-support-cjk-cjk-search",
+      "file_path": null,
+      "entity_id": 2,
+      "entity_fingerprint": "1868a49a3bdcdbbef37920c583e25fe3a7f93a915e55dcfced976b71b15e35d4"
+    },
+    {
+      "chunk_key": "observation:25:0",
+      "chunk_text": "fact: Parser preserves frontmatter checksums...\n\noracle/notes/observations/observations/fact/parser-preserves-frontmatter-checksums\n\nfact\n\nParser preserves frontmatter checksums",
+      "source_hash": "372e360887bc4a60b82189641f12e2131385b37b148fbc52e0cb6b5298b41dd6",
+      "permalink": "oracle/notes/observations/observations/fact/parser-preserves-frontmatter-checksums",
+      "file_path": null,
+      "entity_id": 2,
+      "entity_fingerprint": "1868a49a3bdcdbbef37920c583e25fe3a7f93a915e55dcfced976b71b15e35d4"
+    },
+    {
+      "chunk_key": "observation:26:0",
+      "chunk_text": "note: With no category but a #tag...\n\noracle/notes/observations/observations/note/with-no-category-but-a-tag\n\nnote\n\nWith no category but a #tag",
+      "source_hash": "d2c725d2df175b64706105084a90919895582e46e8c7f64edd77e3a96632ca7a",
+      "permalink": "oracle/notes/observations/observations/note/with-no-category-but-a-tag",
+      "file_path": null,
+      "entity_id": 2,
+      "entity_fingerprint": "1868a49a3bdcdbbef37920c583e25fe3a7f93a915e55dcfced976b71b15e35d4"
+    },
+    {
+      "chunk_key": "observation:27:0",
+      "chunk_text": "fact: First programmer...\n\noracle/people/ada-lovelace/observations/fact/first-programmer\n\nfact\n\nFirst programmer",
+      "source_hash": "671798da8e13fee93ce85e412de064af45ef3e148f77b6590f2c5d4953e5a192",
+      "permalink": "oracle/people/ada-lovelace/observations/fact/first-programmer",
+      "file_path": null,
+      "entity_id": 10,
+      "entity_fingerprint": "e0d6d2abcfa287bd468fc29e0775a197c95c1115cc8494054d233b36e07284a4"
+    },
+    {
+      "chunk_key": "observation:28:0",
+      "chunk_text": "decision: 使用 SQLite 作为本地索引...\n\noracle/notes/cjk/observations/decision/使用-sqlite-作为本地索引\n\ndecision\n\n使用 SQLite 作为本地索引",
+      "source_hash": "ea7b16f43e76563f923c7f08189ac416c14fadb81ec89ad8cd8958b8931de433",
+      "permalink": "oracle/notes/cjk/observations/decision/使用-sqlite-作为本地索引",
+      "file_path": null,
+      "entity_id": 7,
+      "entity_fingerprint": "fd068dec2c6719590702def506bea273da96fa2c6784d14616ee31d2126d45a9"
+    },
+    {
+      "chunk_key": "observation:29:0",
+      "chunk_text": "fact: Nested paths must keep slash-separated permalinks...\n\noracle/notes/nested/deep-note/observations/fact/nested-paths-must-keep-slash-separated-permalinks\n\nfact\n\nNested paths must keep slash-separated permalinks",
+      "source_hash": "a0705caa5102e9939d6a2b6a5ed56f4e3aa88020a04ba50e22ef6b9bc82bc6d5",
+      "permalink": "oracle/notes/nested/deep-note/observations/fact/nested-paths-must-keep-slash-separated-permalinks",
+      "file_path": null,
+      "entity_id": 6,
+      "entity_fingerprint": "0e7bc74bb4711dc7ab6dc8aa607914a4ec6d456696d7ac4cd64bd9e66fc3a242"
+    },
+    {
+      "chunk_key": "observation:30:0",
+      "chunk_text": "note: Beta is archived...\n\noracle/projects/beta/observations/note/beta-is-archived\n\nnote\n\nBeta is archived",
+      "source_hash": "f6d30a4de55bec3a7831f6f7e7e7a1f8b8bac5ffc02d2c80473b4fdf6b276916",
+      "permalink": "oracle/projects/beta/observations/note/beta-is-archived",
+      "file_path": null,
+      "entity_id": 13,
+      "entity_fingerprint": "df2b2af9388b9547cc3990a0d08a06bd5b29658dfdf1428f39be6f50d85a0a03"
+    },
+    {
+      "chunk_key": "observation:31:0",
+      "chunk_text": "decision: Alpha uses the Rust core...\n\noracle/projects/alpha/observations/decision/alpha-uses-the-rust-core\n\ndecision\n\nAlpha uses the Rust core",
+      "source_hash": "3a806ed4c3199e2a9e6859e4af3b00f1969c9e842e02eb3c72c7a939b46dabb8",
+      "permalink": "oracle/projects/alpha/observations/decision/alpha-uses-the-rust-core",
+      "file_path": null,
+      "entity_id": 11,
+      "entity_fingerprint": "888c0d7c6313f030238bb83e4dd3ec868e7efaf31f03dc8a903fc028fe303e96"
+    },
+    {
+      "chunk_key": "observation:32:0",
+      "chunk_text": "requirement: Must stay offline...\n\noracle/projects/alpha/observations/requirement/must-stay-offline\n\nrequirement\n\nMust stay offline",
+      "source_hash": "f19e81a1f0cbabf8be957179b6b522d68e7771899031e701072d2f1572d768a6",
+      "permalink": "oracle/projects/alpha/observations/requirement/must-stay-offline",
+      "file_path": null,
+      "entity_id": 11,
+      "entity_fingerprint": "888c0d7c6313f030238bb83e4dd3ec868e7efaf31f03dc8a903fc028fe303e96"
+    },
+    {
+      "chunk_key": "relation:1:0",
+      "chunk_text": "simple -> Alpha Project\n\noracle/notes/simple/links-to/oracle/projects/alpha\n\nlinks_to",
+      "source_hash": "353b61292afcb8614852ef962bd8853b48b1c7b459e96d3210eb1a8852561e72",
+      "permalink": "oracle/notes/simple/links-to/oracle/projects/alpha",
+      "file_path": null,
+      "entity_id": 14,
+      "entity_fingerprint": "d2d52f55a07bbfcb779cc357830f9eea88fea649904143fdd760b96227cf38fc"
+    },
+    {
+      "chunk_key": "relation:2:0",
+      "chunk_text": "Observations Demo -> Alpha Project\n\noracle/notes/observations/links-to/oracle/projects/alpha\n\nlinks_to",
+      "source_hash": "efe8964067054f5412ee124af319b76a0be979cf2d4eee9e91dfb8f67f88adf0",
+      "permalink": "oracle/notes/observations/links-to/oracle/projects/alpha",
+      "file_path": null,
+      "entity_id": 2,
+      "entity_fingerprint": "1868a49a3bdcdbbef37920c583e25fe3a7f93a915e55dcfced976b71b15e35d4"
+    },
+    {
+      "chunk_key": "relation:3:0",
+      "chunk_text": "Same Title -> Same Title\n\noracle/duplicates/dup-b/same-title/links-to/oracle/duplicates/dup-a/same-title\n\nlinks_to",
+      "source_hash": "f2fbd9f4fcc84072912508dac56d1567d7a36fa1664a58640733e7d26798cd55",
+      "permalink": "oracle/duplicates/dup-b/same-title/links-to/oracle/duplicates/dup-a/same-title",
+      "file_path": null,
+      "entity_id": 3,
+      "entity_fingerprint": "11e49bac0a52c07f068d815fd32acc8e587c04bd45fbacd85815f885f52ef298"
+    },
+    {
+      "chunk_key": "relation:4:0",
+      "chunk_text": "Unresolved Links\n\noracle/notes/unresolved/links-to/notes/does-not-exist\n\nlinks_to",
+      "source_hash": "dfe3b2b4e20319419dbeebd21152286a72e9ddefe9a9ab8833da75973e5311cc",
+      "permalink": "oracle/notes/unresolved/links-to/notes/does-not-exist",
+      "file_path": null,
+      "entity_id": 12,
+      "entity_fingerprint": "1c6914cd5b1b74da72a590a69839315c0bf45cf0913fd9c50db8a1facabcd703"
+    },
+    {
+      "chunk_key": "relation:5:0",
+      "chunk_text": "中文测试文档 -> Alpha Project\n\noracle/notes/cjk/关联/oracle/projects/alpha\n\n关联",
+      "source_hash": "7fe89b5d81764108e231d688b86afc41c3237fa884657d42e5f8e9f3d4b079c4",
+      "permalink": "oracle/notes/cjk/关联/oracle/projects/alpha",
+      "file_path": null,
+      "entity_id": 7,
+      "entity_fingerprint": "fd068dec2c6719590702def506bea273da96fa2c6784d14616ee31d2126d45a9"
+    },
+    {
+      "chunk_key": "relation:6:0",
+      "chunk_text": "Deep Note -> simple\n\noracle/notes/nested/deep-note/links-to/oracle/notes/simple\n\nlinks_to",
+      "source_hash": "92296334d09359b3c5af587da562e0e6958d5aa75e649ceabead2df54782ef51",
+      "permalink": "oracle/notes/nested/deep-note/links-to/oracle/notes/simple",
+      "file_path": null,
+      "entity_id": 6,
+      "entity_fingerprint": "0e7bc74bb4711dc7ab6dc8aa607914a4ec6d456696d7ac4cd64bd9e66fc3a242"
+    },
+    {
+      "chunk_key": "relation:7:0",
+      "chunk_text": "Relations Demo -> Alpha Project\n\noracle/notes/relations/depends-on/oracle/projects/alpha\n\ndepends_on",
+      "source_hash": "0a57ee2828c95987ca2d346571141d92d77014ed743bc27a81e3dc54538b64f3",
+      "permalink": "oracle/notes/relations/depends-on/oracle/projects/alpha",
+      "file_path": null,
+      "entity_id": 4,
+      "entity_fingerprint": "352726a6cafb470a5f132567a2aafc20693385adf3c1338558a22116eb354be8"
+    },
+    {
+      "chunk_key": "relation:8:0",
+      "chunk_text": "Relations Demo -> Ada Lovelace\n\noracle/notes/relations/implemented-by/oracle/people/ada-lovelace\n\nimplemented by",
+      "source_hash": "2df77e9a16b663efc0712fb8929128ae49759c777cb9ec548d4cf1c5aec0ac2e",
+      "permalink": "oracle/notes/relations/implemented-by/oracle/people/ada-lovelace",
+      "file_path": null,
+      "entity_id": 4,
+      "entity_fingerprint": "352726a6cafb470a5f132567a2aafc20693385adf3c1338558a22116eb354be8"
+    },
+    {
+      "chunk_key": "relation:9:0",
+      "chunk_text": "Relations Demo -> Frontmatter Demo\n\noracle/notes/relations/links-to/notes/frontmatter-note\n\nlinks_to",
+      "source_hash": "110e80fd3fa1121315a2320694367dcdfb1457edbd8324d940adeb571c85a640",
+      "permalink": "oracle/notes/relations/links-to/notes/frontmatter-note",
+      "file_path": null,
+      "entity_id": 4,
+      "entity_fingerprint": "352726a6cafb470a5f132567a2aafc20693385adf3c1338558a22116eb354be8"
+    },
+    {
+      "chunk_key": "relation:10:0",
+      "chunk_text": "Relations Demo -> Beta Project\n\noracle/notes/relations/links-to/oracle/projects/beta\n\nlinks_to",
+      "source_hash": "58d6c7cfd008f09d991f7e5ba07d24666d647c3791502c3235f4ec04edf72703",
+      "permalink": "oracle/notes/relations/links-to/oracle/projects/beta",
+      "file_path": null,
+      "entity_id": 4,
+      "entity_fingerprint": "352726a6cafb470a5f132567a2aafc20693385adf3c1338558a22116eb354be8"
+    },
+    {
+      "chunk_key": "relation:11:0",
+      "chunk_text": "Relations Demo -> simple\n\noracle/notes/relations/relates-to/oracle/notes/simple\n\nrelates_to",
+      "source_hash": "c0f9fd5dc7b446cbcb82f117351bb9d9a49c160c11ccd468ebbc24f4b0f73d8e",
+      "permalink": "oracle/notes/relations/relates-to/oracle/notes/simple",
+      "file_path": null,
+      "entity_id": 4,
+      "entity_fingerprint": "352726a6cafb470a5f132567a2aafc20693385adf3c1338558a22116eb354be8"
+    },
+    {
+      "chunk_key": "relation:12:0",
+      "chunk_text": "Wikilinks Demo -> Deep Note\n\noracle/notes/wikilinks/links-to/oracle/notes/nested/deep-note\n\nlinks_to",
+      "source_hash": "67f9b28123b841bc5b76178d6cd80777b64dd9a9dc7010c6de43d0d1b7b67fb3",
+      "permalink": "oracle/notes/wikilinks/links-to/oracle/notes/nested/deep-note",
+      "file_path": null,
+      "entity_id": 9,
+      "entity_fingerprint": "11dc729d9df6e7edfe439f138c691ffe439a000c2bd0156e6b61c7fff5e9e69a"
+    },
+    {
+      "chunk_key": "relation:13:0",
+      "chunk_text": "Wikilinks Demo -> Ada Lovelace\n\noracle/notes/wikilinks/links-to/oracle/people/ada-lovelace\n\nlinks_to",
+      "source_hash": "c91502bb2bb38116c550c158f36d949d1a600b8958eba071f7b195f170eaa162",
+      "permalink": "oracle/notes/wikilinks/links-to/oracle/people/ada-lovelace",
+      "file_path": null,
+      "entity_id": 9,
+      "entity_fingerprint": "11dc729d9df6e7edfe439f138c691ffe439a000c2bd0156e6b61c7fff5e9e69a"
+    },
+    {
+      "chunk_key": "relation:14:0",
+      "chunk_text": "Wikilinks Demo -> Alpha Project\n\noracle/notes/wikilinks/links-to/oracle/projects/alpha\n\nlinks_to",
+      "source_hash": "f7c15b99475f98aa350b8d60714c088ae7bd5b23892706adabbb2704bd91f4ca",
+      "permalink": "oracle/notes/wikilinks/links-to/oracle/projects/alpha",
+      "file_path": null,
+      "entity_id": 9,
+      "entity_fingerprint": "11dc729d9df6e7edfe439f138c691ffe439a000c2bd0156e6b61c7fff5e9e69a"
+    },
+    {
+      "chunk_key": "relation:15:0",
+      "chunk_text": "Wikilinks Demo -> Beta Project\n\noracle/notes/wikilinks/links-to/oracle/projects/beta\n\nlinks_to",
+      "source_hash": "87f4a9338da118c7053a967fcaf2a2ea0764abfe4a8ceefb1e8649bbb278546f",
+      "permalink": "oracle/notes/wikilinks/links-to/oracle/projects/beta",
+      "file_path": null,
+      "entity_id": 9,
+      "entity_fingerprint": "11dc729d9df6e7edfe439f138c691ffe439a000c2bd0156e6b61c7fff5e9e69a"
+    },
+    {
+      "chunk_key": "relation:16:0",
+      "chunk_text": "Alpha Project -> simple\n\noracle/projects/alpha/links-to/oracle/notes/simple\n\nlinks_to",
+      "source_hash": "51398c4789ce7884b763d6f95405458a42d7df6a7d84e76e9e864baaed44d6b1",
+      "permalink": "oracle/projects/alpha/links-to/oracle/notes/simple",
+      "file_path": null,
+      "entity_id": 11,
+      "entity_fingerprint": "888c0d7c6313f030238bb83e4dd3ec868e7efaf31f03dc8a903fc028fe303e96"
+    }
+  ]
+}

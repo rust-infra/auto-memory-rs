@@ -1,0 +1,593 @@
+{
+  "reference": "basic-memory",
+  "project": "oracle",
+  "protocolVersion": "2024-11-05",
+  "semantic_search_enabled": false,
+  "responses": [
+    {
+      "id": "initialize",
+      "request": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+          "protocolVersion": "2024-11-05",
+          "capabilities": {},
+          "clientInfo": {
+            "name": "oracle-harness",
+            "version": "0"
+          }
+        }
+      },
+      "frame": {
+        "jsonrpc": "2.0",
+        "id": "<id>",
+        "result": {
+          "protocolVersion": "2024-11-05",
+          "capabilities": {
+            "logging": {},
+            "prompts": {
+              "listChanged": false
+            },
+            "resources": {
+              "subscribe": false,
+              "listChanged": false
+            },
+            "tools": {
+              "listChanged": true
+            }
+          },
+          "serverInfo": {
+            "name": "Basic Memory",
+            "version": "4.0.0b1"
+          },
+          "instructions": "Basic Memory is the user's personal knowledge base: Markdown notes that persist across conversations and that both the user and their AI assistants can read and write.\n\nAt the start of a session, call `recent_activity` to orient yourself in the user's notes before answering from memory. If the knowledge base is empty, briefly explain that Basic Memory gives them persistent notes shared between the user and their AI, and offer to save something useful from this conversation as their first note with `write_note` — then wait for them to agree before writing anything. Do not create notes unprompted.\n\nFor a fuller guide, read the `memory://ai_assistant_guide` resource. If you have a web or fetch tool and need current documentation, fetch `https://docs.basicmemory.com/llms.txt` first, then fetch only the relevant linked `/raw/...md` page."
+        }
+      }
+    },
+    {
+      "id": "2-search-notes-text",
+      "request": {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "tools/call",
+        "params": {
+          "name": "search_notes",
+          "arguments": {
+            "query": "rust",
+            "search_type": "text",
+            "output_format": "json"
+          }
+        }
+      },
+      "frame": {
+        "jsonrpc": "2.0",
+        "id": "<id>",
+        "result": {
+          "_meta": {
+            "fastmcp": {
+              "wrap_result": true
+            }
+          },
+          "content": [
+            {
+              "text": "{\"results\":[{\"title\":\"Frontmatter Demo\",\"type\":\"entity\",\"score\":-2.198663472130728,\"entity\":\"notes/frontmatter-note\",\"external_id\":\"<uuid>\",\"permalink\":\"notes/frontmatter-note\",\"content\":\"# Frontmatter Demo\\n\\nThis note carries structured metadata and is tagged for search.\\n\\n- [decision] Keep Markdown as the source of truth\\n- [constraint] No cloud functionality in the Rust port\",\"file_path\":\"notes/frontmatter.md\",\"updated_at\":\"<timestamp>\",\"metadata\":{\"note_type\":\"reference\"},\"entity_id\":12},{\"title\":\"simple\",\"type\":\"entity\",\"score\":-1.7266700599847034,\"entity\":\"oracle/notes/simple\",\"external_id\":\"<uuid>\",\"permalink\":\"oracle/notes/simple\",\"content\":\"# Simple Note\\n\\nA plain note without frontmatter. It links to [[projects/alpha]] and mentions rust.\\n\\n- [note] Created as a baseline fixture\",\"file_path\":\"notes/simple.md\",\"updated_at\":\"<timestamp>\",\"metadata\":{\"note_type\":\"note\"},\"entity_id\":6},{\"title\":\"Alpha Project\",\"type\":\"entity\",\"score\":-1.591521856633015,\"entity\":\"oracle/projects/alpha\",\"external_id\":\"<uuid>\",\"permalink\":\"oracle/projects/alpha\",\"content\":\"# Alpha Project\\n\\nMain fixture project. Links back to [[notes/simple]], forming a cycle.\\n\\n- [decision] Alpha uses the Rust core\\n- [requirement] Must stay offline\",\"file_path\":\"projects/alpha.md\",\"updated_at\":\"<timestamp>\",\"metadata\":{\"note_type\":\"project\"},\"entity_id\":14}],\"current_page\":1,\"page_size\":10,\"total\":3,\"total_is_exact\":true,\"has_more\":false}",
+              "type": "text"
+            }
+          ],
+          "isError": false,
+          "structuredContent": {
+            "result": {
+              "results": [
+                {
+                  "title": "Frontmatter Demo",
+                  "type": "entity",
+                  "score": -2.198663472130728,
+                  "entity": "notes/frontmatter-note",
+                  "external_id": "<uuid>",
+                  "permalink": "notes/frontmatter-note",
+                  "content": "# Frontmatter Demo\n\nThis note carries structured metadata and is tagged for search.\n\n- [decision] Keep Markdown as the source of truth\n- [constraint] No cloud functionality in the Rust port",
+                  "file_path": "notes/frontmatter.md",
+                  "updated_at": "<timestamp>",
+                  "metadata": {
+                    "note_type": "reference"
+                  },
+                  "entity_id": "<entity_id>"
+                },
+                {
+                  "title": "simple",
+                  "type": "entity",
+                  "score": -1.7266700599847034,
+                  "entity": "oracle/notes/simple",
+                  "external_id": "<uuid>",
+                  "permalink": "oracle/notes/simple",
+                  "content": "# Simple Note\n\nA plain note without frontmatter. It links to [[projects/alpha]] and mentions rust.\n\n- [note] Created as a baseline fixture",
+                  "file_path": "notes/simple.md",
+                  "updated_at": "<timestamp>",
+                  "metadata": {
+                    "note_type": "note"
+                  },
+                  "entity_id": "<entity_id>"
+                },
+                {
+                  "title": "Alpha Project",
+                  "type": "entity",
+                  "score": -1.591521856633015,
+                  "entity": "oracle/projects/alpha",
+                  "external_id": "<uuid>",
+                  "permalink": "oracle/projects/alpha",
+                  "content": "# Alpha Project\n\nMain fixture project. Links back to [[notes/simple]], forming a cycle.\n\n- [decision] Alpha uses the Rust core\n- [requirement] Must stay offline",
+                  "file_path": "projects/alpha.md",
+                  "updated_at": "<timestamp>",
+                  "metadata": {
+                    "note_type": "project"
+                  },
+                  "entity_id": "<entity_id>"
+                }
+              ],
+              "current_page": 1,
+              "page_size": 10,
+              "total": 3,
+              "total_is_exact": true,
+              "has_more": false
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "3-search-notes-title",
+      "request": {
+        "jsonrpc": "2.0",
+        "id": 3,
+        "method": "tools/call",
+        "params": {
+          "name": "search_notes",
+          "arguments": {
+            "query": "Alpha",
+            "search_type": "title",
+            "output_format": "json"
+          }
+        }
+      },
+      "frame": {
+        "jsonrpc": "2.0",
+        "id": "<id>",
+        "result": {
+          "_meta": {
+            "fastmcp": {
+              "wrap_result": true
+            }
+          },
+          "content": [
+            {
+              "text": "{\"results\":[{\"title\":\"Alpha Project\",\"type\":\"entity\",\"score\":-1.1957176389503197,\"entity\":\"oracle/projects/alpha\",\"external_id\":\"<uuid>\",\"permalink\":\"oracle/projects/alpha\",\"content\":\"# Alpha Project\\n\\nMain fixture project. Links back to [[notes/simple]], forming a cycle.\\n\\n- [decision] Alpha uses the Rust core\\n- [requirement] Must stay offline\",\"file_path\":\"projects/alpha.md\",\"updated_at\":\"<timestamp>\",\"metadata\":{\"note_type\":\"project\"},\"entity_id\":14}],\"current_page\":1,\"page_size\":10,\"total\":1,\"total_is_exact\":true,\"has_more\":false}",
+              "type": "text"
+            }
+          ],
+          "isError": false,
+          "structuredContent": {
+            "result": {
+              "results": [
+                {
+                  "title": "Alpha Project",
+                  "type": "entity",
+                  "score": -1.1957176389503197,
+                  "entity": "oracle/projects/alpha",
+                  "external_id": "<uuid>",
+                  "permalink": "oracle/projects/alpha",
+                  "content": "# Alpha Project\n\nMain fixture project. Links back to [[notes/simple]], forming a cycle.\n\n- [decision] Alpha uses the Rust core\n- [requirement] Must stay offline",
+                  "file_path": "projects/alpha.md",
+                  "updated_at": "<timestamp>",
+                  "metadata": {
+                    "note_type": "project"
+                  },
+                  "entity_id": "<entity_id>"
+                }
+              ],
+              "current_page": 1,
+              "page_size": 10,
+              "total": 1,
+              "total_is_exact": true,
+              "has_more": false
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "4-search-notes-permalink",
+      "request": {
+        "jsonrpc": "2.0",
+        "id": 4,
+        "method": "tools/call",
+        "params": {
+          "name": "search_notes",
+          "arguments": {
+            "query": "projects/*",
+            "search_type": "permalink",
+            "output_format": "json"
+          }
+        }
+      },
+      "frame": {
+        "jsonrpc": "2.0",
+        "id": "<id>",
+        "result": {
+          "_meta": {
+            "fastmcp": {
+              "wrap_result": true
+            }
+          },
+          "content": [
+            {
+              "text": "{\"results\":[],\"current_page\":1,\"page_size\":10,\"total\":0,\"total_is_exact\":true,\"has_more\":false}",
+              "type": "text"
+            }
+          ],
+          "isError": false,
+          "structuredContent": {
+            "result": {
+              "results": [],
+              "current_page": 1,
+              "page_size": 10,
+              "total": 0,
+              "total_is_exact": true,
+              "has_more": false
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "5-search-notes-permalink",
+      "request": {
+        "jsonrpc": "2.0",
+        "id": 5,
+        "method": "tools/call",
+        "params": {
+          "name": "search_notes",
+          "arguments": {
+            "query": "projects/alpha",
+            "search_type": "permalink",
+            "output_format": "json"
+          }
+        }
+      },
+      "frame": {
+        "jsonrpc": "2.0",
+        "id": "<id>",
+        "result": {
+          "_meta": {
+            "fastmcp": {
+              "wrap_result": true
+            }
+          },
+          "content": [
+            {
+              "text": "{\"results\":[],\"current_page\":1,\"page_size\":10,\"total\":0,\"total_is_exact\":true,\"has_more\":false}",
+              "type": "text"
+            }
+          ],
+          "isError": false,
+          "structuredContent": {
+            "result": {
+              "results": [],
+              "current_page": 1,
+              "page_size": 10,
+              "total": 0,
+              "total_is_exact": true,
+              "has_more": false
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "6-search-notes-vector",
+      "request": {
+        "jsonrpc": "2.0",
+        "id": 6,
+        "method": "tools/call",
+        "params": {
+          "name": "search_notes",
+          "arguments": {
+            "query": "rust",
+            "search_type": "vector"
+          }
+        }
+      },
+      "frame": {
+        "jsonrpc": "2.0",
+        "id": "<id>",
+        "result": {
+          "_meta": {
+            "fastmcp": {
+              "wrap_result": true
+            }
+          },
+          "content": [
+            {
+              "text": "# Search Failed - Semantic Search Disabled\n\nYou requested `vector` search for query 'rust', but semantic search is disabled.\n\n## How to enable\n1. Set `BASIC_MEMORY_SEMANTIC_SEARCH_ENABLED=true`\n2. Restart the Basic Memory server/process\n\n## Alternative now\n- Run FTS search instead:\n  `search_notes(\"oracle\", \"rust\", search_type=\"text\")`",
+              "type": "text"
+            }
+          ],
+          "isError": false,
+          "structuredContent": {
+            "result": "# Search Failed - Semantic Search Disabled\n\nYou requested `vector` search for query 'rust', but semantic search is disabled.\n\n## How to enable\n1. Set `BASIC_MEMORY_SEMANTIC_SEARCH_ENABLED=true`\n2. Restart the Basic Memory server/process\n\n## Alternative now\n- Run FTS search instead:\n  `search_notes(\"oracle\", \"rust\", search_type=\"text\")`"
+          }
+        }
+      }
+    },
+    {
+      "id": "7-search-notes-hybrid",
+      "request": {
+        "jsonrpc": "2.0",
+        "id": 7,
+        "method": "tools/call",
+        "params": {
+          "name": "search_notes",
+          "arguments": {
+            "query": "rust",
+            "search_type": "hybrid"
+          }
+        }
+      },
+      "frame": {
+        "jsonrpc": "2.0",
+        "id": "<id>",
+        "result": {
+          "_meta": {
+            "fastmcp": {
+              "wrap_result": true
+            }
+          },
+          "content": [
+            {
+              "text": "# Search Failed - Semantic Search Disabled\n\nYou requested `hybrid` search for query 'rust', but semantic search is disabled.\n\n## How to enable\n1. Set `BASIC_MEMORY_SEMANTIC_SEARCH_ENABLED=true`\n2. Restart the Basic Memory server/process\n\n## Alternative now\n- Run FTS search instead:\n  `search_notes(\"oracle\", \"rust\", search_type=\"text\")`",
+              "type": "text"
+            }
+          ],
+          "isError": false,
+          "structuredContent": {
+            "result": "# Search Failed - Semantic Search Disabled\n\nYou requested `hybrid` search for query 'rust', but semantic search is disabled.\n\n## How to enable\n1. Set `BASIC_MEMORY_SEMANTIC_SEARCH_ENABLED=true`\n2. Restart the Basic Memory server/process\n\n## Alternative now\n- Run FTS search instead:\n  `search_notes(\"oracle\", \"rust\", search_type=\"text\")`"
+          }
+        }
+      }
+    },
+    {
+      "id": "8-search-notes-semantic",
+      "request": {
+        "jsonrpc": "2.0",
+        "id": 8,
+        "method": "tools/call",
+        "params": {
+          "name": "search_notes",
+          "arguments": {
+            "query": "rust",
+            "search_type": "semantic"
+          }
+        }
+      },
+      "frame": {
+        "jsonrpc": "2.0",
+        "id": "<id>",
+        "result": {
+          "_meta": {
+            "fastmcp": {
+              "wrap_result": true
+            }
+          },
+          "content": [
+            {
+              "text": "# Search Failed - Semantic Search Disabled\n\nYou requested `semantic` search for query 'rust', but semantic search is disabled.\n\n## How to enable\n1. Set `BASIC_MEMORY_SEMANTIC_SEARCH_ENABLED=true`\n2. Restart the Basic Memory server/process\n\n## Alternative now\n- Run FTS search instead:\n  `search_notes(\"oracle\", \"rust\", search_type=\"text\")`",
+              "type": "text"
+            }
+          ],
+          "isError": false,
+          "structuredContent": {
+            "result": "# Search Failed - Semantic Search Disabled\n\nYou requested `semantic` search for query 'rust', but semantic search is disabled.\n\n## How to enable\n1. Set `BASIC_MEMORY_SEMANTIC_SEARCH_ENABLED=true`\n2. Restart the Basic Memory server/process\n\n## Alternative now\n- Run FTS search instead:\n  `search_notes(\"oracle\", \"rust\", search_type=\"text\")`"
+          }
+        }
+      }
+    },
+    {
+      "id": "9-search-notes-nonsense",
+      "request": {
+        "jsonrpc": "2.0",
+        "id": 9,
+        "method": "tools/call",
+        "params": {
+          "name": "search_notes",
+          "arguments": {
+            "query": "rust",
+            "search_type": "nonsense"
+          }
+        }
+      },
+      "frame": {
+        "jsonrpc": "2.0",
+        "id": "<id>",
+        "result": {
+          "_meta": {
+            "fastmcp": {
+              "wrap_result": true
+            }
+          },
+          "content": [
+            {
+              "text": "# Search Failed\n\nError searching for 'rust': Invalid search_type 'nonsense'. Valid options: hybrid, permalink, semantic, text, title, vector\n\n## Troubleshooting steps:\n1. **Simplify your query**: Try basic words without special characters\n2. **Check search syntax**: Ensure boolean operators are correctly formatted\n3. **Verify project access**: Make sure you can access the current project\n4. **Test with simple search**: Try `search_notes(\"test\")` to verify search is working\n\n## Alternative search approaches:\n- **Different search types**: \n  - Title only: `search_notes(\"oracle\",\"rust\", search_type=\"title\")`\n  - Permalink patterns: `search_notes(\"oracle\",\"rust*\", search_type=\"permalink\")`\n- **With filters**: `search_notes(\"oracle\",\"rust\", note_types=[\"note\"])`\n- **Recent content**: `search_notes(\"oracle\",\"rust\", after_date=\"1 week\")`\n- **Boolean variations**: `search_notes(\"oracle\",\"rust\")`\n\n## Explore your content:\n- **Browse files**: `list_directory(\"oracle\",\"/\")` - See all available content\n- **Recent activity**: `recent_activity(timeframe=\"7d\")` - Check what's been updated\n- **All projects**: `list_projects()` \n\n## Search syntax reference:\n- **Basic**: `keyword` or `multiple words`\n- **Boolean**: `term1 AND term2`, `term1 OR term2`, `term1 NOT term2`\n- **Phrases**: `\"exact phrase\"`\n- **Grouping**: `(term1 OR term2) AND term3`\n- **Tags**: `tag:example`\n- **Observation categories**: `entity_types=[\"observation\"], categories=[\"requirement\"]`",
+              "type": "text"
+            }
+          ],
+          "isError": false,
+          "structuredContent": {
+            "result": "# Search Failed\n\nError searching for 'rust': Invalid search_type 'nonsense'. Valid options: hybrid, permalink, semantic, text, title, vector\n\n## Troubleshooting steps:\n1. **Simplify your query**: Try basic words without special characters\n2. **Check search syntax**: Ensure boolean operators are correctly formatted\n3. **Verify project access**: Make sure you can access the current project\n4. **Test with simple search**: Try `search_notes(\"test\")` to verify search is working\n\n## Alternative search approaches:\n- **Different search types**: \n  - Title only: `search_notes(\"oracle\",\"rust\", search_type=\"title\")`\n  - Permalink patterns: `search_notes(\"oracle\",\"rust*\", search_type=\"permalink\")`\n- **With filters**: `search_notes(\"oracle\",\"rust\", note_types=[\"note\"])`\n- **Recent content**: `search_notes(\"oracle\",\"rust\", after_date=\"1 week\")`\n- **Boolean variations**: `search_notes(\"oracle\",\"rust\")`\n\n## Explore your content:\n- **Browse files**: `list_directory(\"oracle\",\"/\")` - See all available content\n- **Recent activity**: `recent_activity(timeframe=\"7d\")` - Check what's been updated\n- **All projects**: `list_projects()` \n\n## Search syntax reference:\n- **Basic**: `keyword` or `multiple words`\n- **Boolean**: `term1 AND term2`, `term1 OR term2`, `term1 NOT term2`\n- **Phrases**: `\"exact phrase\"`\n- **Grouping**: `(term1 OR term2) AND term3`\n- **Tags**: `tag:example`\n- **Observation categories**: `entity_types=[\"observation\"], categories=[\"requirement\"]`"
+          }
+        }
+      }
+    },
+    {
+      "id": "10-search-notes-title",
+      "request": {
+        "jsonrpc": "2.0",
+        "id": 10,
+        "method": "tools/call",
+        "params": {
+          "name": "search_notes",
+          "arguments": {
+            "query": "rust",
+            "search_type": "title"
+          }
+        }
+      },
+      "frame": {
+        "jsonrpc": "2.0",
+        "id": "<id>",
+        "result": {
+          "_meta": {
+            "fastmcp": {
+              "wrap_result": true
+            }
+          },
+          "content": [
+            {
+              "text": "No results found for 'rust' in project 'oracle'. Try broader or different terms, or call recent_activity(project_id=\"<uuid>\") to orient — if the project is empty it will guide creating a first note.",
+              "type": "text"
+            }
+          ],
+          "isError": false,
+          "structuredContent": {
+            "result": "No results found for 'rust' in project 'oracle'. Try broader or different terms, or call recent_activity(project_id=\"<uuid>\") to orient — if the project is empty it will guide creating a first note."
+          }
+        }
+      }
+    },
+    {
+      "id": "11-search-notes-default",
+      "request": {
+        "jsonrpc": "2.0",
+        "id": 11,
+        "method": "tools/call",
+        "params": {
+          "name": "search_notes",
+          "arguments": {
+            "query": "rust",
+            "search_all_projects": true,
+            "output_format": "json"
+          }
+        }
+      },
+      "frame": {
+        "jsonrpc": "2.0",
+        "id": "<id>",
+        "result": {
+          "_meta": {
+            "fastmcp": {
+              "wrap_result": true
+            }
+          },
+          "content": [
+            {
+              "text": "{\"results\":[{\"title\":\"Alpha Project\",\"type\":\"entity\",\"score\":-1.591521856633015,\"entity\":\"oracle/projects/alpha\",\"external_id\":\"<uuid>\",\"permalink\":\"oracle/projects/alpha\",\"content\":\"# Alpha Project\\n\\nMain fixture project. Links back to [[notes/simple]], forming a cycle.\\n\\n- [decision] Alpha uses the Rust core\\n- [requirement] Must stay offline\",\"file_path\":\"projects/alpha.md\",\"updated_at\":\"<timestamp>\",\"metadata\":{\"note_type\":\"project\"},\"entity_id\":14},{\"title\":\"simple\",\"type\":\"entity\",\"score\":-1.7266700599847034,\"entity\":\"oracle/notes/simple\",\"external_id\":\"<uuid>\",\"permalink\":\"oracle/notes/simple\",\"content\":\"# Simple Note\\n\\nA plain note without frontmatter. It links to [[projects/alpha]] and mentions rust.\\n\\n- [note] Created as a baseline fixture\",\"file_path\":\"notes/simple.md\",\"updated_at\":\"<timestamp>\",\"metadata\":{\"note_type\":\"note\"},\"entity_id\":6},{\"title\":\"Frontmatter Demo\",\"type\":\"entity\",\"score\":-2.198663472130728,\"entity\":\"notes/frontmatter-note\",\"external_id\":\"<uuid>\",\"permalink\":\"notes/frontmatter-note\",\"content\":\"# Frontmatter Demo\\n\\nThis note carries structured metadata and is tagged for search.\\n\\n- [decision] Keep Markdown as the source of truth\\n- [constraint] No cloud functionality in the Rust port\",\"file_path\":\"notes/frontmatter.md\",\"updated_at\":\"<timestamp>\",\"metadata\":{\"note_type\":\"reference\"},\"entity_id\":12}],\"current_page\":1,\"page_size\":10,\"total\":3,\"total_is_exact\":true,\"has_more\":false}",
+              "type": "text"
+            }
+          ],
+          "isError": false,
+          "structuredContent": {
+            "result": {
+              "results": [
+                {
+                  "title": "Alpha Project",
+                  "type": "entity",
+                  "score": -1.591521856633015,
+                  "entity": "oracle/projects/alpha",
+                  "external_id": "<uuid>",
+                  "permalink": "oracle/projects/alpha",
+                  "content": "# Alpha Project\n\nMain fixture project. Links back to [[notes/simple]], forming a cycle.\n\n- [decision] Alpha uses the Rust core\n- [requirement] Must stay offline",
+                  "file_path": "projects/alpha.md",
+                  "updated_at": "<timestamp>",
+                  "metadata": {
+                    "note_type": "project"
+                  },
+                  "entity_id": "<entity_id>"
+                },
+                {
+                  "title": "simple",
+                  "type": "entity",
+                  "score": -1.7266700599847034,
+                  "entity": "oracle/notes/simple",
+                  "external_id": "<uuid>",
+                  "permalink": "oracle/notes/simple",
+                  "content": "# Simple Note\n\nA plain note without frontmatter. It links to [[projects/alpha]] and mentions rust.\n\n- [note] Created as a baseline fixture",
+                  "file_path": "notes/simple.md",
+                  "updated_at": "<timestamp>",
+                  "metadata": {
+                    "note_type": "note"
+                  },
+                  "entity_id": "<entity_id>"
+                },
+                {
+                  "title": "Frontmatter Demo",
+                  "type": "entity",
+                  "score": -2.198663472130728,
+                  "entity": "notes/frontmatter-note",
+                  "external_id": "<uuid>",
+                  "permalink": "notes/frontmatter-note",
+                  "content": "# Frontmatter Demo\n\nThis note carries structured metadata and is tagged for search.\n\n- [decision] Keep Markdown as the source of truth\n- [constraint] No cloud functionality in the Rust port",
+                  "file_path": "notes/frontmatter.md",
+                  "updated_at": "<timestamp>",
+                  "metadata": {
+                    "note_type": "reference"
+                  },
+                  "entity_id": "<entity_id>"
+                }
+              ],
+              "current_page": 1,
+              "page_size": 10,
+              "total": 3,
+              "total_is_exact": true,
+              "has_more": false
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "12-search-notes-default",
+      "request": {
+        "jsonrpc": "2.0",
+        "id": 12,
+        "method": "tools/call",
+        "params": {
+          "name": "search_notes",
+          "arguments": {
+            "query": "rust",
+            "search_all_projects": true
+          }
+        }
+      },
+      "frame": {
+        "jsonrpc": "2.0",
+        "id": "<id>",
+        "result": {
+          "_meta": {
+            "fastmcp": {
+              "wrap_result": true
+            }
+          },
+          "content": [
+            {
+              "text": "# Search Results: rust\n*project: all projects*\n\n### Alpha Project\n- permalink: oracle/projects/alpha\n- external_id: <uuid>\n- score: -1.5915\n\n### simple\n- permalink: oracle/notes/simple\n- external_id: <uuid>\n- score: -1.7267\n\n### Frontmatter Demo\n- permalink: notes/frontmatter-note\n- external_id: <uuid>\n- score: -2.1987\n\n---\n*3 results | page 1, page_size 10*",
+              "type": "text"
+            }
+          ],
+          "isError": false,
+          "structuredContent": {
+            "result": "# Search Results: rust\n*project: all projects*\n\n### Alpha Project\n- permalink: oracle/projects/alpha\n- external_id: <uuid>\n- score: -1.5915\n\n### simple\n- permalink: oracle/notes/simple\n- external_id: <uuid>\n- score: -1.7267\n\n### Frontmatter Demo\n- permalink: notes/frontmatter-note\n- external_id: <uuid>\n- score: -2.1987\n\n---\n*3 results | page 1, page_size 10*"
+          }
+        }
+      }
+    }
+  ]
+}

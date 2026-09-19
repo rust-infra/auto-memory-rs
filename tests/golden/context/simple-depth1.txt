@@ -1,0 +1,16 @@
+Context: oracle/notes/simple
+entity  simple
+  # Simple Note
+  
+  A plain note without frontmatter. It links to [[projects/alpha]] and mentions rust.
+  
+  - [note] Created as a baseline fixture
+  [note] Created as a baseline fixture
+  relates_to  relation  relates_to: notes/simple
+  links_to  relation  links_to: projects/alpha
+  links_to  relation  links_to: notes/simple
+  links_to  relation  links_to: notes/simple
+  entity  Deep Note
+  entity  Alpha Project
+  entity  Relations Demo
+

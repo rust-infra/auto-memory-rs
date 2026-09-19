@@ -1,0 +1,74 @@
+{
+  "results": [
+    {
+      "primary_result": {
+        "type": "entity",
+        "external_id": "<uuid>",
+        "entity_id": "<entity_id>",
+        "permalink": "oracle/notes/cjk",
+        "title": "中文测试文档",
+        "content": "# 中文测试\n\n这是一个中文笔记，包含 English 混合内容。\n\n- [decision] 使用 SQLite 作为本地索引\n- 关联 [[projects/alpha]]",
+        "file_path": "notes/cjk.md",
+        "created_at": "<timestamp>"
+      },
+      "observations": [
+        {
+          "type": "observation",
+          "observation_id": "<observation_id>",
+          "entity_id": "<entity_id>",
+          "entity_external_id": "<uuid>",
+          "title": "中文测试文档",
+          "file_path": "notes/cjk.md",
+          "permalink": "oracle/notes/cjk/observations/decision/使用-sqlite-作为本地索引",
+          "category": "decision",
+          "content": "使用 SQLite 作为本地索引",
+          "created_at": "<timestamp>"
+        }
+      ],
+      "related_results": [
+        {
+          "type": "relation",
+          "relation_id": "<relation_id>",
+          "entity_id": null,
+          "title": "关联: projects/alpha",
+          "file_path": "notes/cjk.md",
+          "permalink": "",
+          "relation_type": "关联",
+          "from_entity": "中文测试文档",
+          "from_entity_id": "<from_entity_id>",
+          "from_entity_external_id": "<uuid>",
+          "to_entity": "Alpha Project",
+          "to_name": "projects/alpha",
+          "to_entity_id": "<to_entity_id>",
+          "to_entity_external_id": "<uuid>",
+          "created_at": "<timestamp>"
+        },
+        {
+          "type": "entity",
+          "external_id": "<uuid>",
+          "entity_id": "<entity_id>",
+          "permalink": "oracle/projects/alpha",
+          "title": "Alpha Project",
+          "content": null,
+          "file_path": "projects/alpha.md",
+          "created_at": "<timestamp>"
+        }
+      ]
+    }
+  ],
+  "metadata": {
+    "uri": "oracle/notes/cjk",
+    "types": null,
+    "depth": 1,
+    "timeframe": "<timestamp>",
+    "generated_at": "<timestamp>",
+    "primary_count": 1,
+    "related_count": 2,
+    "total_results": 3,
+    "total_relations": 1,
+    "total_observations": 3
+  },
+  "page": 1,
+  "page_size": 10,
+  "has_more": false
+}

@@ -1,0 +1,782 @@
+{
+  "project": "oracle",
+  "fixtures": "tests/fixtures/vault",
+  "embeddings": true,
+  "cases": [
+    {
+      "id": "reindex-search",
+      "exit_code": 0,
+      "seconds": 2.242
+    },
+    {
+      "id": "reindex-embeddings",
+      "exit_code": 0,
+      "seconds": 4.61
+    },
+    {
+      "id": "text-rust",
+      "argv": [
+        "tool",
+        "search-notes",
+        "rust",
+        "--json",
+        "--project",
+        "oracle",
+        "--local"
+      ],
+      "exit_code": 0,
+      "seconds": 2.846,
+      "parsed": true
+    },
+    {
+      "id": "text-case-insensitive",
+      "argv": [
+        "tool",
+        "search-notes",
+        "RUST",
+        "--json",
+        "--project",
+        "oracle",
+        "--local"
+      ],
+      "exit_code": 0,
+      "seconds": 2.857,
+      "parsed": true
+    },
+    {
+      "id": "text-phrase",
+      "argv": [
+        "tool",
+        "search-notes",
+        "\"source of truth\"",
+        "--json",
+        "--project",
+        "oracle",
+        "--local"
+      ],
+      "exit_code": 0,
+      "seconds": 2.917,
+      "parsed": true
+    },
+    {
+      "id": "text-boolean",
+      "argv": [
+        "tool",
+        "search-notes",
+        "rust AND architecture",
+        "--json",
+        "--project",
+        "oracle",
+        "--local"
+      ],
+      "exit_code": 0,
+      "seconds": 2.856,
+      "parsed": true
+    },
+    {
+      "id": "text-prefix",
+      "argv": [
+        "tool",
+        "search-notes",
+        "arch*",
+        "--json",
+        "--project",
+        "oracle",
+        "--local"
+      ],
+      "exit_code": 0,
+      "seconds": 2.876,
+      "parsed": true
+    },
+    {
+      "id": "text-cjk",
+      "argv": [
+        "tool",
+        "search-notes",
+        "测试",
+        "--json",
+        "--project",
+        "oracle",
+        "--local"
+      ],
+      "exit_code": 0,
+      "seconds": 2.855,
+      "parsed": true
+    },
+    {
+      "id": "text-no-results",
+      "argv": [
+        "tool",
+        "search-notes",
+        "zzzz-not-present",
+        "--json",
+        "--project",
+        "oracle",
+        "--local"
+      ],
+      "exit_code": 0,
+      "seconds": 2.906,
+      "parsed": true
+    },
+    {
+      "id": "title-alpha",
+      "argv": [
+        "tool",
+        "search-notes",
+        "--title",
+        "Alpha",
+        "--json",
+        "--project",
+        "oracle",
+        "--local"
+      ],
+      "exit_code": 0,
+      "seconds": 2.892,
+      "parsed": true
+    },
+    {
+      "id": "permalink-glob",
+      "argv": [
+        "tool",
+        "search-notes",
+        "--permalink",
+        "projects/*",
+        "--json",
+        "--project",
+        "oracle",
+        "--local"
+      ],
+      "exit_code": 0,
+      "seconds": 2.897,
+      "parsed": true
+    },
+    {
+      "id": "tag-rust",
+      "argv": [
+        "tool",
+        "search-notes",
+        "--tag",
+        "rust",
+        "--json",
+        "--project",
+        "oracle",
+        "--local"
+      ],
+      "exit_code": 0,
+      "seconds": 2.842,
+      "parsed": true
+    },
+    {
+      "id": "type-project",
+      "argv": [
+        "tool",
+        "search-notes",
+        "--type",
+        "project",
+        "--json",
+        "--project",
+        "oracle",
+        "--local"
+      ],
+      "exit_code": 0,
+      "seconds": 2.866,
+      "parsed": true
+    },
+    {
+      "id": "entity-type-observation",
+      "argv": [
+        "tool",
+        "search-notes",
+        "--entity-type",
+        "observation",
+        "--category",
+        "decision",
+        "--json",
+        "--project",
+        "oracle",
+        "--local"
+      ],
+      "exit_code": 0,
+      "seconds": 2.844,
+      "parsed": true
+    },
+    {
+      "id": "category-decision-implicit",
+      "argv": [
+        "tool",
+        "search-notes",
+        "rust",
+        "--category",
+        "decision",
+        "--json",
+        "--project",
+        "oracle",
+        "--local"
+      ],
+      "exit_code": 0,
+      "seconds": 2.895,
+      "parsed": true
+    },
+    {
+      "id": "entity-type-relation",
+      "argv": [
+        "tool",
+        "search-notes",
+        "alpha",
+        "--entity-type",
+        "relation",
+        "--json",
+        "--project",
+        "oracle",
+        "--local"
+      ],
+      "exit_code": 0,
+      "seconds": 2.844,
+      "parsed": true
+    },
+    {
+      "id": "status-archived",
+      "argv": [
+        "tool",
+        "search-notes",
+        "--status",
+        "archived",
+        "--json",
+        "--project",
+        "oracle",
+        "--local"
+      ],
+      "exit_code": 0,
+      "seconds": 2.869,
+      "parsed": true
+    },
+    {
+      "id": "after-date-absolute-rust",
+      "argv": [
+        "tool",
+        "search-notes",
+        "rust",
+        "--after_date",
+        "2026-09-01",
+        "--json",
+        "--project",
+        "oracle",
+        "--local"
+      ],
+      "exit_code": 0,
+      "seconds": 2.902,
+      "parsed": true
+    },
+    {
+      "id": "after-date-future-rust",
+      "argv": [
+        "tool",
+        "search-notes",
+        "rust",
+        "--after_date",
+        "2030-01-01",
+        "--json",
+        "--project",
+        "oracle",
+        "--local"
+      ],
+      "exit_code": 0,
+      "seconds": 2.872,
+      "parsed": true
+    },
+    {
+      "id": "metadata-status-active",
+      "argv": [
+        "tool",
+        "search-notes",
+        "--meta",
+        "status=active",
+        "--json",
+        "--project",
+        "oracle",
+        "--local"
+      ],
+      "exit_code": 0,
+      "seconds": 2.897,
+      "parsed": true
+    },
+    {
+      "id": "pagination-note-page2",
+      "argv": [
+        "tool",
+        "search-notes",
+        "note",
+        "--page",
+        "2",
+        "--page-size",
+        "2",
+        "--json",
+        "--project",
+        "oracle",
+        "--local"
+      ],
+      "exit_code": 0,
+      "seconds": 2.894,
+      "parsed": true
+    },
+    {
+      "id": "hybrid-rust",
+      "argv": [
+        "tool",
+        "search-notes",
+        "rust",
+        "--hybrid",
+        "--json",
+        "--project",
+        "oracle",
+        "--local"
+      ],
+      "exit_code": 0,
+      "seconds": 3.217,
+      "parsed": true
+    },
+    {
+      "id": "vector-local-index",
+      "argv": [
+        "tool",
+        "search-notes",
+        "local index",
+        "--vector",
+        "--json",
+        "--project",
+        "oracle",
+        "--local"
+      ],
+      "exit_code": 0,
+      "seconds": 3.216,
+      "parsed": true
+    },
+    {
+      "id": "vector-rust-type-note",
+      "argv": [
+        "tool",
+        "search-notes",
+        "rust",
+        "--vector",
+        "--type",
+        "note",
+        "--json",
+        "--project",
+        "oracle",
+        "--local"
+      ],
+      "exit_code": 0,
+      "seconds": 3.133,
+      "parsed": true
+    },
+    {
+      "id": "vector-rust-type-project",
+      "argv": [
+        "tool",
+        "search-notes",
+        "rust",
+        "--vector",
+        "--type",
+        "project",
+        "--json",
+        "--project",
+        "oracle",
+        "--local"
+      ],
+      "exit_code": 0,
+      "seconds": 3.161,
+      "parsed": true
+    },
+    {
+      "id": "hybrid-rust-type-project",
+      "argv": [
+        "tool",
+        "search-notes",
+        "rust",
+        "--hybrid",
+        "--type",
+        "project",
+        "--json",
+        "--project",
+        "oracle",
+        "--local"
+      ],
+      "exit_code": 0,
+      "seconds": 3.211,
+      "parsed": true
+    },
+    {
+      "id": "vector-rust-entity-observation",
+      "argv": [
+        "tool",
+        "search-notes",
+        "rust",
+        "--vector",
+        "--entity-type",
+        "observation",
+        "--json",
+        "--project",
+        "oracle",
+        "--local"
+      ],
+      "exit_code": 0,
+      "seconds": 3.121,
+      "parsed": true
+    },
+    {
+      "id": "vector-rust-tag-rust",
+      "argv": [
+        "tool",
+        "search-notes",
+        "rust",
+        "--vector",
+        "--tag",
+        "rust",
+        "--json",
+        "--project",
+        "oracle",
+        "--local"
+      ],
+      "exit_code": 0,
+      "seconds": 3.142,
+      "parsed": true
+    },
+    {
+      "id": "vector-rust-status-active",
+      "argv": [
+        "tool",
+        "search-notes",
+        "rust",
+        "--vector",
+        "--status",
+        "active",
+        "--json",
+        "--project",
+        "oracle",
+        "--local"
+      ],
+      "exit_code": 0,
+      "seconds": 3.122,
+      "parsed": true
+    },
+    {
+      "id": "vector-local-index-entity-only",
+      "argv": [
+        "tool",
+        "search-notes",
+        "local index",
+        "--vector",
+        "--entity-type",
+        "entity",
+        "--json",
+        "--project",
+        "oracle",
+        "--local"
+      ],
+      "exit_code": 0,
+      "seconds": 3.118,
+      "parsed": true
+    },
+    {
+      "id": "hybrid-rust-category-decision",
+      "argv": [
+        "tool",
+        "search-notes",
+        "rust",
+        "--hybrid",
+        "--category",
+        "decision",
+        "--json",
+        "--project",
+        "oracle",
+        "--local"
+      ],
+      "exit_code": 0,
+      "seconds": 3.127,
+      "parsed": true
+    },
+    {
+      "id": "relations-depth1",
+      "argv": [
+        "tool",
+        "build-context",
+        "memory://notes/relations",
+        "--json",
+        "--project",
+        "oracle",
+        "--local"
+      ],
+      "exit_code": 0,
+      "seconds": 2.892,
+      "parsed": true
+    },
+    {
+      "id": "relations-depth1-markdown",
+      "argv": [
+        "/home/rg/.local/share/uv/tools/basic-memory/bin/python",
+        "/home/rg/Projects/basic-mem-rs/tools/dump_reference_context_text.py",
+        "--payload",
+        "/tmp/basic-memory-oracle-porgiwgg/raw-context/relations-depth1.json",
+        "--project",
+        "oracle"
+      ],
+      "exit_code": 0,
+      "seconds": 2.279
+    },
+    {
+      "id": "relations-depth2",
+      "argv": [
+        "tool",
+        "build-context",
+        "memory://notes/relations",
+        "--depth",
+        "2",
+        "--json",
+        "--project",
+        "oracle",
+        "--local"
+      ],
+      "exit_code": 0,
+      "seconds": 2.887,
+      "parsed": true
+    },
+    {
+      "id": "relations-depth2-markdown",
+      "argv": [
+        "/home/rg/.local/share/uv/tools/basic-memory/bin/python",
+        "/home/rg/Projects/basic-mem-rs/tools/dump_reference_context_text.py",
+        "--payload",
+        "/tmp/basic-memory-oracle-porgiwgg/raw-context/relations-depth2.json",
+        "--project",
+        "oracle"
+      ],
+      "exit_code": 0,
+      "seconds": 2.292
+    },
+    {
+      "id": "alpha-depth1",
+      "argv": [
+        "tool",
+        "build-context",
+        "memory://projects/alpha",
+        "--json",
+        "--project",
+        "oracle",
+        "--local"
+      ],
+      "exit_code": 0,
+      "seconds": 2.849,
+      "parsed": true
+    },
+    {
+      "id": "alpha-depth1-markdown",
+      "argv": [
+        "/home/rg/.local/share/uv/tools/basic-memory/bin/python",
+        "/home/rg/Projects/basic-mem-rs/tools/dump_reference_context_text.py",
+        "--payload",
+        "/tmp/basic-memory-oracle-porgiwgg/raw-context/alpha-depth1.json",
+        "--project",
+        "oracle"
+      ],
+      "exit_code": 0,
+      "seconds": 2.279
+    },
+    {
+      "id": "frontmatter-depth1",
+      "argv": [
+        "tool",
+        "build-context",
+        "memory://notes/frontmatter",
+        "--json",
+        "--project",
+        "oracle",
+        "--local"
+      ],
+      "exit_code": 0,
+      "seconds": 2.959,
+      "parsed": true
+    },
+    {
+      "id": "frontmatter-depth1-markdown",
+      "argv": [
+        "/home/rg/.local/share/uv/tools/basic-memory/bin/python",
+        "/home/rg/Projects/basic-mem-rs/tools/dump_reference_context_text.py",
+        "--payload",
+        "/tmp/basic-memory-oracle-porgiwgg/raw-context/frontmatter-depth1.json",
+        "--project",
+        "oracle"
+      ],
+      "exit_code": 0,
+      "seconds": 2.256
+    },
+    {
+      "id": "duplicates-dup-b",
+      "argv": [
+        "tool",
+        "build-context",
+        "memory://duplicates/dup-b/same-title",
+        "--json",
+        "--project",
+        "oracle",
+        "--local"
+      ],
+      "exit_code": 0,
+      "seconds": 2.904,
+      "parsed": true
+    },
+    {
+      "id": "duplicates-dup-b-markdown",
+      "argv": [
+        "/home/rg/.local/share/uv/tools/basic-memory/bin/python",
+        "/home/rg/Projects/basic-mem-rs/tools/dump_reference_context_text.py",
+        "--payload",
+        "/tmp/basic-memory-oracle-porgiwgg/raw-context/duplicates-dup-b.json",
+        "--project",
+        "oracle"
+      ],
+      "exit_code": 0,
+      "seconds": 2.281
+    },
+    {
+      "id": "cjk-depth1",
+      "argv": [
+        "tool",
+        "build-context",
+        "memory://notes/cjk",
+        "--json",
+        "--project",
+        "oracle",
+        "--local"
+      ],
+      "exit_code": 0,
+      "seconds": 2.886,
+      "parsed": true
+    },
+    {
+      "id": "cjk-depth1-markdown",
+      "argv": [
+        "/home/rg/.local/share/uv/tools/basic-memory/bin/python",
+        "/home/rg/Projects/basic-mem-rs/tools/dump_reference_context_text.py",
+        "--payload",
+        "/tmp/basic-memory-oracle-porgiwgg/raw-context/cjk-depth1.json",
+        "--project",
+        "oracle"
+      ],
+      "exit_code": 0,
+      "seconds": 2.255
+    },
+    {
+      "id": "simple-depth1-text",
+      "argv": [
+        "tool",
+        "build-context",
+        "memory://notes/simple",
+        "--plain",
+        "--project",
+        "oracle",
+        "--local"
+      ],
+      "exit_code": 0,
+      "seconds": 2.82
+    },
+    {
+      "id": "relations-depth2-text",
+      "argv": [
+        "tool",
+        "build-context",
+        "memory://notes/relations",
+        "--depth",
+        "2",
+        "--plain",
+        "--project",
+        "oracle",
+        "--local"
+      ],
+      "exit_code": 0,
+      "seconds": 2.858
+    },
+    {
+      "id": "cli-status",
+      "argv": [
+        "basic-memory",
+        "status",
+        "--json",
+        "--project",
+        "oracle"
+      ],
+      "exit_code": 0,
+      "seconds": 2.716,
+      "parsed": true
+    },
+    {
+      "id": "search-page-size-0",
+      "argv": [
+        "tool",
+        "search-notes",
+        "rust",
+        "--page-size",
+        "0",
+        "--json",
+        "--project",
+        "oracle",
+        "--local"
+      ],
+      "exit_code": 1,
+      "seconds": 2.325
+    },
+    {
+      "id": "context-page-size-0",
+      "argv": [
+        "tool",
+        "build-context",
+        "memory://notes/simple",
+        "--page-size",
+        "0",
+        "--json",
+        "--project",
+        "oracle",
+        "--local"
+      ],
+      "exit_code": 1,
+      "seconds": 2.345
+    },
+    {
+      "id": "context-depth-too-large",
+      "argv": [
+        "tool",
+        "build-context",
+        "memory://notes/simple",
+        "--depth",
+        "9",
+        "--json",
+        "--project",
+        "oracle",
+        "--local"
+      ],
+      "exit_code": 0,
+      "seconds": 2.87
+    },
+    {
+      "id": "reference-graph-dump",
+      "argv": [
+        "/home/rg/.local/share/uv/tools/basic-memory/bin/python",
+        "/home/rg/Projects/basic-mem-rs/tools/dump_reference_graph.py",
+        "--db",
+        "/tmp/basic-memory-oracle-porgiwgg/config/memory.db"
+      ],
+      "exit_code": 0,
+      "seconds": 0.806
+    },
+    {
+      "id": "reference-embeddings",
+      "argv": [
+        "/home/rg/.local/share/uv/tools/basic-memory/bin/python",
+        "/home/rg/Projects/basic-mem-rs/tools/dump_reference_embeddings.py",
+        "--model-cache",
+        "/tmp/basic-memory-oracle-porgiwgg/fastembed_cache"
+      ],
+      "exit_code": 0,
+      "seconds": 4.281
+    }
+  ]
+}

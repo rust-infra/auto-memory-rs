@@ -1,0 +1,146 @@
+[
+  {
+    "from_permalink": "oracle/duplicates/dup-b/same-title",
+    "from_file_path": "duplicates/dup-b/same-title.md",
+    "relation_type": "links_to",
+    "to_name": "duplicates/dup-a/same-title",
+    "to_permalink": "oracle/duplicates/dup-a/same-title",
+    "to_file_path": "duplicates/dup-a/same-title.md",
+    "context": null
+  },
+  {
+    "from_permalink": "oracle/notes/cjk",
+    "from_file_path": "notes/cjk.md",
+    "relation_type": "关联",
+    "to_name": "projects/alpha",
+    "to_permalink": "oracle/projects/alpha",
+    "to_file_path": "projects/alpha.md",
+    "context": null
+  },
+  {
+    "from_permalink": "oracle/notes/nested/deep-note",
+    "from_file_path": "notes/nested/deep-note.md",
+    "relation_type": "links_to",
+    "to_name": "notes/simple",
+    "to_permalink": "oracle/notes/simple",
+    "to_file_path": "notes/simple.md",
+    "context": null
+  },
+  {
+    "from_permalink": "oracle/notes/observations",
+    "from_file_path": "notes/observations.md",
+    "relation_type": "links_to",
+    "to_name": "projects/alpha",
+    "to_permalink": "oracle/projects/alpha",
+    "to_file_path": "projects/alpha.md",
+    "context": null
+  },
+  {
+    "from_permalink": "oracle/notes/relations",
+    "from_file_path": "notes/relations.md",
+    "relation_type": "depends_on",
+    "to_name": "projects/alpha",
+    "to_permalink": "oracle/projects/alpha",
+    "to_file_path": "projects/alpha.md",
+    "context": null
+  },
+  {
+    "from_permalink": "oracle/notes/relations",
+    "from_file_path": "notes/relations.md",
+    "relation_type": "implemented by",
+    "to_name": "people/ada-lovelace",
+    "to_permalink": "oracle/people/ada-lovelace",
+    "to_file_path": "people/ada-lovelace.md",
+    "context": null
+  },
+  {
+    "from_permalink": "oracle/notes/relations",
+    "from_file_path": "notes/relations.md",
+    "relation_type": "links_to",
+    "to_name": "notes/frontmatter",
+    "to_permalink": "notes/frontmatter-note",
+    "to_file_path": "notes/frontmatter.md",
+    "context": null
+  },
+  {
+    "from_permalink": "oracle/notes/relations",
+    "from_file_path": "notes/relations.md",
+    "relation_type": "links_to",
+    "to_name": "projects/beta|Beta",
+    "to_permalink": "oracle/projects/beta",
+    "to_file_path": "projects/beta.md",
+    "context": null
+  },
+  {
+    "from_permalink": "oracle/notes/relations",
+    "from_file_path": "notes/relations.md",
+    "relation_type": "relates_to",
+    "to_name": "notes/simple",
+    "to_permalink": "oracle/notes/simple",
+    "to_file_path": "notes/simple.md",
+    "context": "primary source"
+  },
+  {
+    "from_permalink": "oracle/notes/simple",
+    "from_file_path": "notes/simple.md",
+    "relation_type": "links_to",
+    "to_name": "projects/alpha",
+    "to_permalink": "oracle/projects/alpha",
+    "to_file_path": "projects/alpha.md",
+    "context": null
+  },
+  {
+    "from_permalink": "oracle/notes/unresolved",
+    "from_file_path": "notes/unresolved.md",
+    "relation_type": "links_to",
+    "to_name": "notes/does-not-exist",
+    "to_permalink": null,
+    "to_file_path": null,
+    "context": null
+  },
+  {
+    "from_permalink": "oracle/notes/wikilinks",
+    "from_file_path": "notes/wikilinks.md",
+    "relation_type": "links_to",
+    "to_name": "notes/nested/deep-note",
+    "to_permalink": "oracle/notes/nested/deep-note",
+    "to_file_path": "notes/nested/deep-note.md",
+    "context": null
+  },
+  {
+    "from_permalink": "oracle/notes/wikilinks",
+    "from_file_path": "notes/wikilinks.md",
+    "relation_type": "links_to",
+    "to_name": "people/ada-lovelace",
+    "to_permalink": "oracle/people/ada-lovelace",
+    "to_file_path": "people/ada-lovelace.md",
+    "context": null
+  },
+  {
+    "from_permalink": "oracle/notes/wikilinks",
+    "from_file_path": "notes/wikilinks.md",
+    "relation_type": "links_to",
+    "to_name": "projects/alpha|Alpha Project",
+    "to_permalink": "oracle/projects/alpha",
+    "to_file_path": "projects/alpha.md",
+    "context": null
+  },
+  {
+    "from_permalink": "oracle/notes/wikilinks",
+    "from_file_path": "notes/wikilinks.md",
+    "relation_type": "links_to",
+    "to_name": "projects/beta",
+    "to_permalink": "oracle/projects/beta",
+    "to_file_path": "projects/beta.md",
+    "context": null
+  },
+  {
+    "from_permalink": "oracle/projects/alpha",
+    "from_file_path": "projects/alpha.md",
+    "relation_type": "links_to",
+    "to_name": "notes/simple",
+    "to_permalink": "oracle/notes/simple",
+    "to_file_path": "notes/simple.md",
+    "context": null
+  }
+]

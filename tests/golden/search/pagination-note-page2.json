@@ -1,0 +1,39 @@
+{
+  "results": [
+    {
+      "title": "simple",
+      "type": "entity",
+      "score": -0.9941681094289189,
+      "entity": "oracle/notes/simple",
+      "external_id": "<uuid>",
+      "permalink": "oracle/notes/simple",
+      "content": "# Simple Note\n\nA plain note without frontmatter. It links to [[projects/alpha]] and mentions rust.\n\n- [note] Created as a baseline fixture",
+      "file_path": "notes/simple.md",
+      "updated_at": "<timestamp>",
+      "metadata": {
+        "note_type": "note"
+      },
+      "entity_id": "<entity_id>"
+    },
+    {
+      "title": "Unresolved Links",
+      "type": "entity",
+      "score": -0.9571957662885342,
+      "entity": "oracle/notes/unresolved",
+      "external_id": "<uuid>",
+      "permalink": "oracle/notes/unresolved",
+      "content": "# Unresolved Links\n\nThis links to [[notes/does-not-exist]] before the target exists.",
+      "file_path": "notes/unresolved.md",
+      "updated_at": "<timestamp>",
+      "metadata": {
+        "note_type": "note"
+      },
+      "entity_id": "<entity_id>"
+    }
+  ],
+  "current_page": 2,
+  "page_size": 2,
+  "total": 15,
+  "total_is_exact": true,
+  "has_more": true
+}

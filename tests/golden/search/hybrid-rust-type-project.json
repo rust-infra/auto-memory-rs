@@ -1,0 +1,41 @@
+{
+  "results": [
+    {
+      "title": "Alpha Project",
+      "type": "entity",
+      "score": 1.2292427439778044,
+      "entity": "oracle/projects/alpha",
+      "external_id": "<uuid>",
+      "permalink": "oracle/projects/alpha",
+      "content": "# Alpha Project\n\nMain fixture project. Links back to [[notes/simple]], forming a cycle.\n\n- [decision] Alpha uses the Rust core\n- [requirement] Must stay offline",
+      "matched_chunk": "# Alpha Project\n\nMain fixture project. Links back to [[notes/simple]], forming a cycle.\n\n- [decision] Alpha uses the Rust core\n- [requirement] Must stay offline",
+      "file_path": "projects/alpha.md",
+      "updated_at": "<timestamp>",
+      "metadata": {
+        "note_type": "project"
+      },
+      "entity_id": "<entity_id>"
+    },
+    {
+      "title": "Beta Project",
+      "type": "entity",
+      "score": 0.6175230378454284,
+      "entity": "oracle/projects/beta",
+      "external_id": "<uuid>",
+      "permalink": "oracle/projects/beta",
+      "content": "# Beta Project\n\nSecondary fixture project.\n\n- [note] Beta is archived",
+      "matched_chunk": "# Beta Project\n\nSecondary fixture project.\n\n- [note] Beta is archived",
+      "file_path": "projects/beta.md",
+      "updated_at": "<timestamp>",
+      "metadata": {
+        "note_type": "project"
+      },
+      "entity_id": "<entity_id>"
+    }
+  ],
+  "current_page": 1,
+  "page_size": 10,
+  "total": 0,
+  "total_is_exact": false,
+  "has_more": false
+}

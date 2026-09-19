@@ -1,0 +1,135 @@
+[
+  {
+    "entity_permalink": "oracle/duplicates/dup-a/same-title",
+    "entity_file_path": "duplicates/dup-a/same-title.md",
+    "category": "fact",
+    "content": "Duplicate title in folder A",
+    "context": null,
+    "tags": null
+  },
+  {
+    "entity_permalink": "oracle/duplicates/dup-b/same-title",
+    "entity_file_path": "duplicates/dup-b/same-title.md",
+    "category": "fact",
+    "content": "Duplicate title in folder B",
+    "context": null,
+    "tags": null
+  },
+  {
+    "entity_permalink": "oracle/notes/cjk",
+    "entity_file_path": "notes/cjk.md",
+    "category": "decision",
+    "content": "使用 SQLite 作为本地索引",
+    "context": null,
+    "tags": null
+  },
+  {
+    "entity_permalink": "notes/frontmatter-note",
+    "entity_file_path": "notes/frontmatter.md",
+    "category": "constraint",
+    "content": "No cloud functionality in the Rust port",
+    "context": null,
+    "tags": null
+  },
+  {
+    "entity_permalink": "notes/frontmatter-note",
+    "entity_file_path": "notes/frontmatter.md",
+    "category": "decision",
+    "content": "Keep Markdown as the source of truth",
+    "context": null,
+    "tags": null
+  },
+  {
+    "entity_permalink": "oracle/notes/nested/deep-note",
+    "entity_file_path": "notes/nested/deep-note.md",
+    "category": "fact",
+    "content": "Nested paths must keep slash-separated permalinks",
+    "context": null,
+    "tags": null
+  },
+  {
+    "entity_permalink": "oracle/notes/observations",
+    "entity_file_path": "notes/observations.md",
+    "category": "decision",
+    "content": "Use SQLite FTS5 for text search",
+    "context": null,
+    "tags": null
+  },
+  {
+    "entity_permalink": "oracle/notes/observations",
+    "entity_file_path": "notes/observations.md",
+    "category": "fact",
+    "content": "Parser preserves frontmatter checksums",
+    "context": null,
+    "tags": null
+  },
+  {
+    "entity_permalink": "oracle/notes/observations",
+    "entity_file_path": "notes/observations.md",
+    "category": "note",
+    "content": "With no category but a #tag",
+    "context": null,
+    "tags": [
+      "tag"
+    ]
+  },
+  {
+    "entity_permalink": "oracle/notes/observations",
+    "entity_file_path": "notes/observations.md",
+    "category": "requirement",
+    "content": "Must support CJK #cjk #search",
+    "context": null,
+    "tags": [
+      "cjk",
+      "search"
+    ]
+  },
+  {
+    "entity_permalink": "oracle/notes/simple",
+    "entity_file_path": "notes/simple.md",
+    "category": "note",
+    "content": "Created as a baseline fixture",
+    "context": null,
+    "tags": null
+  },
+  {
+    "entity_permalink": "oracle/notes/task-markers",
+    "entity_file_path": "notes/task-markers.md",
+    "category": "note",
+    "content": "a genuine observation",
+    "context": null,
+    "tags": null
+  },
+  {
+    "entity_permalink": "oracle/people/ada-lovelace",
+    "entity_file_path": "people/ada-lovelace.md",
+    "category": "fact",
+    "content": "First programmer",
+    "context": null,
+    "tags": null
+  },
+  {
+    "entity_permalink": "oracle/projects/alpha",
+    "entity_file_path": "projects/alpha.md",
+    "category": "decision",
+    "content": "Alpha uses the Rust core",
+    "context": null,
+    "tags": null
+  },
+  {
+    "entity_permalink": "oracle/projects/alpha",
+    "entity_file_path": "projects/alpha.md",
+    "category": "requirement",
+    "content": "Must stay offline",
+    "context": null,
+    "tags": null
+  },
+  {
+    "entity_permalink": "oracle/projects/beta",
+    "entity_file_path": "projects/beta.md",
+    "category": "note",
+    "content": "Beta is archived",
+    "context": null,
+    "tags": null
+  }
+]

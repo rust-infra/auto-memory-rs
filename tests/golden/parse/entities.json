@@ -1,0 +1,218 @@
+[
+  {
+    "file_path": "duplicates/dup-a/same-title.md",
+    "title": "Same Title",
+    "note_type": "note",
+    "permalink": "oracle/duplicates/dup-a/same-title",
+    "content_type": "text/markdown",
+    "checksum": "9eec510ec091adcdbd766966e46ae49b3ff80212353a37bec509ccefbb081633",
+    "metadata": {
+      "title": "Same Title",
+      "type": "note",
+      "permalink": "oracle/duplicates/dup-a/same-title"
+    }
+  },
+  {
+    "file_path": "duplicates/dup-b/same-title.md",
+    "title": "Same Title",
+    "note_type": "note",
+    "permalink": "oracle/duplicates/dup-b/same-title",
+    "content_type": "text/markdown",
+    "checksum": "b88d016c5363192bc71e0bed2e7a52da2df3b26641f7de8051a5e994177f83ca",
+    "metadata": {
+      "title": "Same Title",
+      "type": "note",
+      "permalink": "oracle/duplicates/dup-b/same-title"
+    }
+  },
+  {
+    "file_path": "notes/cjk.md",
+    "title": "中文测试文档",
+    "note_type": "note",
+    "permalink": "oracle/notes/cjk",
+    "content_type": "text/markdown",
+    "checksum": "94d81ac2d6b1f6f4438fbb86363e943df25d1eaf116dd37321920fdaaf2648da",
+    "metadata": {
+      "title": "中文测试文档",
+      "type": "note",
+      "tags": [
+        "中文",
+        "测试"
+      ],
+      "permalink": "oracle/notes/cjk"
+    }
+  },
+  {
+    "file_path": "notes/empty.md",
+    "title": "empty",
+    "note_type": "note",
+    "permalink": "oracle/notes/empty",
+    "content_type": "text/markdown",
+    "checksum": "b3a560228ff095527cbb12a803961ef013c97acac1a8baa57e5032cf1f9e442a",
+    "metadata": {
+      "title": "empty",
+      "type": "note",
+      "permalink": "oracle/notes/empty"
+    }
+  },
+  {
+    "file_path": "notes/frontmatter.md",
+    "title": "Frontmatter Demo",
+    "note_type": "reference",
+    "permalink": "notes/frontmatter-note",
+    "content_type": "text/markdown",
+    "checksum": "45c5f0e0d9dc70635f91b7f446cf06016eb080fe2af7df5af1e4f4dd4629ca48",
+    "metadata": {
+      "title": "Frontmatter Demo",
+      "type": "reference",
+      "permalink": "notes/frontmatter-note",
+      "tags": [
+        "rust",
+        "architecture"
+      ],
+      "status": "active",
+      "priority": "3",
+      "created": "2026-01-02",
+      "modified": "2026-02-03"
+    }
+  },
+  {
+    "file_path": "notes/nested/deep-note.md",
+    "title": "Deep Note",
+    "note_type": "note",
+    "permalink": "oracle/notes/nested/deep-note",
+    "content_type": "text/markdown",
+    "checksum": "8b1ea67e582d2c20ad5e3994663b5fb2b513a9454afda22dd4a8138aed225a65",
+    "metadata": {
+      "title": "Deep Note",
+      "type": "note",
+      "permalink": "oracle/notes/nested/deep-note"
+    }
+  },
+  {
+    "file_path": "notes/observations.md",
+    "title": "Observations Demo",
+    "note_type": "note",
+    "permalink": "oracle/notes/observations",
+    "content_type": "text/markdown",
+    "checksum": "bc6e092c687a518fcace54fb8f91785392c8f6677e3f2a81b81572dd1449ad6e",
+    "metadata": {
+      "title": "Observations Demo",
+      "type": "note",
+      "tags": [
+        "demo"
+      ],
+      "permalink": "oracle/notes/observations"
+    }
+  },
+  {
+    "file_path": "notes/relations.md",
+    "title": "Relations Demo",
+    "note_type": "note",
+    "permalink": "oracle/notes/relations",
+    "content_type": "text/markdown",
+    "checksum": "f672cd06f39a15e4b5167527e94720f501a702e989b52103d9aa3ae02270c3d9",
+    "metadata": {
+      "title": "Relations Demo",
+      "type": "note",
+      "permalink": "oracle/notes/relations"
+    }
+  },
+  {
+    "file_path": "notes/simple.md",
+    "title": "simple",
+    "note_type": "note",
+    "permalink": "oracle/notes/simple",
+    "content_type": "text/markdown",
+    "checksum": "86ac9f31a80ac9934ac80d500b71d1771edd5b4e67800727e8760c363bf03c98",
+    "metadata": {
+      "title": "simple",
+      "type": "note",
+      "permalink": "oracle/notes/simple"
+    }
+  },
+  {
+    "file_path": "notes/task-markers.md",
+    "title": "task-markers",
+    "note_type": "note",
+    "permalink": "oracle/notes/task-markers",
+    "content_type": "text/markdown",
+    "checksum": "a8042b0f6d36555b5037de8e5a6f8bf35dd7f6ed58bf608a8402138285350e2a",
+    "metadata": {
+      "title": "task-markers",
+      "type": "note",
+      "permalink": "oracle/notes/task-markers"
+    }
+  },
+  {
+    "file_path": "notes/unresolved.md",
+    "title": "Unresolved Links",
+    "note_type": "note",
+    "permalink": "oracle/notes/unresolved",
+    "content_type": "text/markdown",
+    "checksum": "38b57da771d4465e2b5aabdd177a1249709193d6c7d74f55627d72960e3ae0a7",
+    "metadata": {
+      "title": "Unresolved Links",
+      "type": "note",
+      "permalink": "oracle/notes/unresolved"
+    }
+  },
+  {
+    "file_path": "notes/wikilinks.md",
+    "title": "Wikilinks Demo",
+    "note_type": "note",
+    "permalink": "oracle/notes/wikilinks",
+    "content_type": "text/markdown",
+    "checksum": "04aba4f50b4ba566cab839d115c5471f32357aab38c09394c3709de2636edfa6",
+    "metadata": {
+      "title": "Wikilinks Demo",
+      "type": "note",
+      "permalink": "oracle/notes/wikilinks"
+    }
+  },
+  {
+    "file_path": "people/ada-lovelace.md",
+    "title": "Ada Lovelace",
+    "note_type": "person",
+    "permalink": "oracle/people/ada-lovelace",
+    "content_type": "text/markdown",
+    "checksum": "2b945791d7004bae8bc4a2612966fc56ed6763a0bb8923235db41066a7734268",
+    "metadata": {
+      "title": "Ada Lovelace",
+      "type": "person",
+      "tags": [
+        "person",
+        "history"
+      ],
+      "permalink": "oracle/people/ada-lovelace"
+    }
+  },
+  {
+    "file_path": "projects/alpha.md",
+    "title": "Alpha Project",
+    "note_type": "project",
+    "permalink": "oracle/projects/alpha",
+    "content_type": "text/markdown",
+    "checksum": "02b9e958c7763ec117b755c33b963ce976ca726399234ff40da9bb6d8213ff6f",
+    "metadata": {
+      "title": "Alpha Project",
+      "type": "project",
+      "status": "active",
+      "permalink": "oracle/projects/alpha"
+    }
+  },
+  {
+    "file_path": "projects/beta.md",
+    "title": "Beta Project",
+    "note_type": "project",
+    "permalink": "oracle/projects/beta",
+    "content_type": "text/markdown",
+    "checksum": "6906b2ff2fbe9c6e87336f221d58fea764fb2a1fdf140754b4a8c101de5bee74",
+    "metadata": {
+      "title": "Beta Project",
+      "type": "project",
+      "status": "archived",
+      "permalink": "oracle/projects/beta"
+    }
+  }
+]

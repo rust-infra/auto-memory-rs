@@ -1,0 +1,24 @@
+{
+  "results": [
+    {
+      "title": "Frontmatter Demo",
+      "type": "entity",
+      "score": -2.064402272255904,
+      "entity": "notes/frontmatter-note",
+      "external_id": "<uuid>",
+      "permalink": "notes/frontmatter-note",
+      "content": "# Frontmatter Demo\n\nThis note carries structured metadata and is tagged for search.\n\n- [decision] Keep Markdown as the source of truth\n- [constraint] No cloud functionality in the Rust port",
+      "file_path": "notes/frontmatter.md",
+      "updated_at": "<timestamp>",
+      "metadata": {
+        "note_type": "reference"
+      },
+      "entity_id": "<entity_id>"
+    }
+  ],
+  "current_page": 1,
+  "page_size": 10,
+  "total": 1,
+  "total_is_exact": true,
+  "has_more": false
+}

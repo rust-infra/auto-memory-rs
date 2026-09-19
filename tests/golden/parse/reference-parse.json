@@ -1,0 +1,444 @@
+{
+  "duplicates/dup-a/same-title.md": {
+    "content": "# Duplicate A\n\nFirst note with a duplicate title.\n\n- [fact] Duplicate title in folder A",
+    "metadata": {
+      "title": "Same Title",
+      "type": "note"
+    },
+    "observations": [
+      {
+        "category": "fact",
+        "content": "Duplicate title in folder A",
+        "context": null,
+        "tags": null
+      }
+    ],
+    "permalink": null,
+    "relations": [],
+    "tags": [],
+    "title": "Same Title",
+    "type": "note"
+  },
+  "duplicates/dup-b/same-title.md": {
+    "content": "# Duplicate B\n\nSecond note with a duplicate title. See [[duplicates/dup-a/same-title]].\n\n- [fact] Duplicate title in folder B",
+    "metadata": {
+      "title": "Same Title",
+      "type": "note"
+    },
+    "observations": [
+      {
+        "category": "fact",
+        "content": "Duplicate title in folder B",
+        "context": null,
+        "tags": null
+      }
+    ],
+    "permalink": null,
+    "relations": [
+      {
+        "context": null,
+        "target": "duplicates/dup-a/same-title",
+        "type": "links_to"
+      }
+    ],
+    "tags": [],
+    "title": "Same Title",
+    "type": "note"
+  },
+  "notes/cjk.md": {
+    "content": "# 中文测试\n\n这是一个中文笔记，包含 English 混合内容。\n\n- [decision] 使用 SQLite 作为本地索引\n- 关联 [[projects/alpha]]",
+    "metadata": {
+      "tags": [
+        "中文",
+        "测试"
+      ],
+      "title": "中文测试文档",
+      "type": "note"
+    },
+    "observations": [
+      {
+        "category": "decision",
+        "content": "使用 SQLite 作为本地索引",
+        "context": null,
+        "tags": null
+      }
+    ],
+    "permalink": null,
+    "relations": [
+      {
+        "context": null,
+        "target": "projects/alpha",
+        "type": "关联"
+      }
+    ],
+    "tags": [
+      "中文",
+      "测试"
+    ],
+    "title": "中文测试文档",
+    "type": "note"
+  },
+  "notes/empty.md": {
+    "content": "",
+    "metadata": {
+      "title": "empty",
+      "type": "note"
+    },
+    "observations": [],
+    "permalink": null,
+    "relations": [],
+    "tags": [],
+    "title": "empty",
+    "type": "note"
+  },
+  "notes/frontmatter.md": {
+    "content": "# Frontmatter Demo\n\nThis note carries structured metadata and is tagged for search.\n\n- [decision] Keep Markdown as the source of truth\n- [constraint] No cloud functionality in the Rust port",
+    "metadata": {
+      "created": "2026-01-02",
+      "modified": "2026-02-03",
+      "permalink": "notes/frontmatter-note",
+      "priority": "3",
+      "status": "active",
+      "tags": [
+        "rust",
+        "architecture"
+      ],
+      "title": "Frontmatter Demo",
+      "type": "reference"
+    },
+    "observations": [
+      {
+        "category": "decision",
+        "content": "Keep Markdown as the source of truth",
+        "context": null,
+        "tags": null
+      },
+      {
+        "category": "constraint",
+        "content": "No cloud functionality in the Rust port",
+        "context": null,
+        "tags": null
+      }
+    ],
+    "permalink": "notes/frontmatter-note",
+    "relations": [],
+    "tags": [
+      "rust",
+      "architecture"
+    ],
+    "title": "Frontmatter Demo",
+    "type": "reference"
+  },
+  "notes/malformed-frontmatter.md": {
+    "content": "---\ntitle: \"Unterminated\ntags: [a, b\n---\n\n# Malformed Frontmatter\n\nThis file has broken YAML and must be treated as plain markdown.\n",
+    "metadata": {
+      "title": "malformed-frontmatter",
+      "type": "note"
+    },
+    "observations": [],
+    "permalink": null,
+    "relations": [],
+    "tags": [],
+    "title": "malformed-frontmatter",
+    "type": "note"
+  },
+  "notes/nested/deep-note.md": {
+    "content": "# Deep Note\n\nNested fixture linking back to [[notes/simple]].\n\n- [fact] Nested paths must keep slash-separated permalinks",
+    "metadata": {
+      "title": "Deep Note",
+      "type": "note"
+    },
+    "observations": [
+      {
+        "category": "fact",
+        "content": "Nested paths must keep slash-separated permalinks",
+        "context": null,
+        "tags": null
+      }
+    ],
+    "permalink": null,
+    "relations": [
+      {
+        "context": null,
+        "target": "notes/simple",
+        "type": "links_to"
+      }
+    ],
+    "tags": [],
+    "title": "Deep Note",
+    "type": "note"
+  },
+  "notes/observations.md": {
+    "content": "# Observations\n\n- [decision] Use SQLite FTS5 for text search\n- [requirement] Must support CJK #cjk #search\n- [fact] Parser preserves frontmatter checksums\n- With no category but a #tag\n- [] Empty bracket content\n- [00:00:11] transcript line should not be a category\n- [ ] unchecked task\n- [x] checked task\n- [link](https://example.com) markdown link\n\n> [!info] Callout\n> - [note] callout bullet should not be an observation\n\nRegular prose with a [[projects/alpha]] link.",
+    "metadata": {
+      "tags": [
+        "demo"
+      ],
+      "title": "Observations Demo",
+      "type": "note"
+    },
+    "observations": [
+      {
+        "category": "decision",
+        "content": "Use SQLite FTS5 for text search",
+        "context": null,
+        "tags": null
+      },
+      {
+        "category": "requirement",
+        "content": "Must support CJK #cjk #search",
+        "context": null,
+        "tags": [
+          "cjk",
+          "search"
+        ]
+      },
+      {
+        "category": "fact",
+        "content": "Parser preserves frontmatter checksums",
+        "context": null,
+        "tags": null
+      },
+      {
+        "category": null,
+        "content": "With no category but a #tag",
+        "context": null,
+        "tags": [
+          "tag"
+        ]
+      }
+    ],
+    "permalink": null,
+    "relations": [
+      {
+        "context": null,
+        "target": "projects/alpha",
+        "type": "links_to"
+      }
+    ],
+    "tags": [
+      "demo"
+    ],
+    "title": "Observations Demo",
+    "type": "note"
+  },
+  "notes/relations.md": {
+    "content": "# Relations\n\n- depends_on [[projects/alpha]]\n- \"implemented by\" [[people/ada-lovelace]]\n- relates_to [[notes/simple]] (primary source)\n\nProse with an inline [[notes/frontmatter]] link and an [[projects/beta|Beta]] display link.",
+    "metadata": {
+      "title": "Relations Demo",
+      "type": "note"
+    },
+    "observations": [],
+    "permalink": null,
+    "relations": [
+      {
+        "context": null,
+        "target": "projects/alpha",
+        "type": "depends_on"
+      },
+      {
+        "context": null,
+        "target": "people/ada-lovelace",
+        "type": "implemented by"
+      },
+      {
+        "context": "primary source",
+        "target": "notes/simple",
+        "type": "relates_to"
+      },
+      {
+        "context": null,
+        "target": "notes/frontmatter",
+        "type": "links_to"
+      },
+      {
+        "context": null,
+        "target": "projects/beta|Beta",
+        "type": "links_to"
+      }
+    ],
+    "tags": [],
+    "title": "Relations Demo",
+    "type": "note"
+  },
+  "notes/simple.md": {
+    "content": "# Simple Note\n\nA plain note without frontmatter. It links to [[projects/alpha]] and mentions rust.\n\n- [note] Created as a baseline fixture",
+    "metadata": {
+      "title": "simple",
+      "type": "note"
+    },
+    "observations": [
+      {
+        "category": "note",
+        "content": "Created as a baseline fixture",
+        "context": null,
+        "tags": null
+      }
+    ],
+    "permalink": null,
+    "relations": [
+      {
+        "context": null,
+        "target": "projects/alpha",
+        "type": "links_to"
+      }
+    ],
+    "tags": [],
+    "title": "simple",
+    "type": "note"
+  },
+  "notes/task-markers.md": {
+    "content": "# Task Markers\n\n- [ ] unchecked task\n- [x] checked task\n- [/] in progress task\n- [00:01:02] transcript timestamp\n\n- [note] a genuine observation",
+    "metadata": {
+      "title": "task-markers",
+      "type": "note"
+    },
+    "observations": [
+      {
+        "category": "note",
+        "content": "a genuine observation",
+        "context": null,
+        "tags": null
+      }
+    ],
+    "permalink": null,
+    "relations": [],
+    "tags": [],
+    "title": "task-markers",
+    "type": "note"
+  },
+  "notes/unresolved.md": {
+    "content": "# Unresolved Links\n\nThis links to [[notes/does-not-exist]] before the target exists.",
+    "metadata": {
+      "title": "Unresolved Links",
+      "type": "note"
+    },
+    "observations": [],
+    "permalink": null,
+    "relations": [
+      {
+        "context": null,
+        "target": "notes/does-not-exist",
+        "type": "links_to"
+      }
+    ],
+    "tags": [],
+    "title": "Unresolved Links",
+    "type": "note"
+  },
+  "notes/wikilinks.md": {
+    "content": "# Wikilinks\n\n- links_to [[projects/alpha|Alpha Project]]\n- links_to [[notes/nested/deep-note]]\n\nSee also [[people/ada-lovelace]] and [[projects/beta]].",
+    "metadata": {
+      "title": "Wikilinks Demo",
+      "type": "note"
+    },
+    "observations": [],
+    "permalink": null,
+    "relations": [
+      {
+        "context": null,
+        "target": "projects/alpha|Alpha Project",
+        "type": "links_to"
+      },
+      {
+        "context": null,
+        "target": "notes/nested/deep-note",
+        "type": "links_to"
+      },
+      {
+        "context": null,
+        "target": "people/ada-lovelace",
+        "type": "links_to"
+      },
+      {
+        "context": null,
+        "target": "projects/beta",
+        "type": "links_to"
+      }
+    ],
+    "tags": [],
+    "title": "Wikilinks Demo",
+    "type": "note"
+  },
+  "people/ada-lovelace.md": {
+    "content": "# Ada Lovelace\n\nMathematician referenced by several fixture notes.\n\n- [fact] First programmer",
+    "metadata": {
+      "tags": [
+        "person",
+        "history"
+      ],
+      "title": "Ada Lovelace",
+      "type": "person"
+    },
+    "observations": [
+      {
+        "category": "fact",
+        "content": "First programmer",
+        "context": null,
+        "tags": null
+      }
+    ],
+    "permalink": null,
+    "relations": [],
+    "tags": [
+      "person",
+      "history"
+    ],
+    "title": "Ada Lovelace",
+    "type": "person"
+  },
+  "projects/alpha.md": {
+    "content": "# Alpha Project\n\nMain fixture project. Links back to [[notes/simple]], forming a cycle.\n\n- [decision] Alpha uses the Rust core\n- [requirement] Must stay offline",
+    "metadata": {
+      "status": "active",
+      "title": "Alpha Project",
+      "type": "project"
+    },
+    "observations": [
+      {
+        "category": "decision",
+        "content": "Alpha uses the Rust core",
+        "context": null,
+        "tags": null
+      },
+      {
+        "category": "requirement",
+        "content": "Must stay offline",
+        "context": null,
+        "tags": null
+      }
+    ],
+    "permalink": null,
+    "relations": [
+      {
+        "context": null,
+        "target": "notes/simple",
+        "type": "links_to"
+      }
+    ],
+    "tags": [],
+    "title": "Alpha Project",
+    "type": "project"
+  },
+  "projects/beta.md": {
+    "content": "# Beta Project\n\nSecondary fixture project.\n\n- [note] Beta is archived",
+    "metadata": {
+      "status": "archived",
+      "title": "Beta Project",
+      "type": "project"
+    },
+    "observations": [
+      {
+        "category": "note",
+        "content": "Beta is archived",
+        "context": null,
+        "tags": null
+      }
+    ],
+    "permalink": null,
+    "relations": [],
+    "tags": [],
+    "title": "Beta Project",
+    "type": "project"
+  }
+}

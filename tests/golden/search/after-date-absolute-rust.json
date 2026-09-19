@@ -1,0 +1,39 @@
+{
+  "results": [
+    {
+      "title": "simple",
+      "type": "entity",
+      "score": -1.7266700599847034,
+      "entity": "oracle/notes/simple",
+      "external_id": "<uuid>",
+      "permalink": "oracle/notes/simple",
+      "content": "# Simple Note\n\nA plain note without frontmatter. It links to [[projects/alpha]] and mentions rust.\n\n- [note] Created as a baseline fixture",
+      "file_path": "notes/simple.md",
+      "updated_at": "<timestamp>",
+      "metadata": {
+        "note_type": "note"
+      },
+      "entity_id": "<entity_id>"
+    },
+    {
+      "title": "Alpha Project",
+      "type": "entity",
+      "score": -1.591521856633015,
+      "entity": "oracle/projects/alpha",
+      "external_id": "<uuid>",
+      "permalink": "oracle/projects/alpha",
+      "content": "# Alpha Project\n\nMain fixture project. Links back to [[notes/simple]], forming a cycle.\n\n- [decision] Alpha uses the Rust core\n- [requirement] Must stay offline",
+      "file_path": "projects/alpha.md",
+      "updated_at": "<timestamp>",
+      "metadata": {
+        "note_type": "project"
+      },
+      "entity_id": "<entity_id>"
+    }
+  ],
+  "current_page": 1,
+  "page_size": 10,
+  "total": 2,
+  "total_is_exact": true,
+  "has_more": false
+}

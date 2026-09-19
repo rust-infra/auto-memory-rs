@@ -1,0 +1,169 @@
+{
+  "results": [
+    {
+      "title": "Frontmatter Demo",
+      "type": "entity",
+      "score": 1.2162213242147117,
+      "entity": "notes/frontmatter-note",
+      "external_id": "<uuid>",
+      "permalink": "notes/frontmatter-note",
+      "content": "# Frontmatter Demo\n\nThis note carries structured metadata and is tagged for search.\n\n- [decision] Keep Markdown as the source of truth\n- [constraint] No cloud functionality in the Rust port",
+      "matched_chunk": "# Frontmatter Demo\n\nThis note carries structured metadata and is tagged for search.\n\n- [decision] Keep Markdown as the source of truth\n- [constraint] No cloud functionality in the Rust port",
+      "file_path": "notes/frontmatter.md",
+      "updated_at": "<timestamp>",
+      "metadata": {
+        "note_type": "reference"
+      },
+      "entity_id": "<entity_id>"
+    },
+    {
+      "title": "simple",
+      "type": "entity",
+      "score": 0.9816961831591233,
+      "entity": "oracle/notes/simple",
+      "external_id": "<uuid>",
+      "permalink": "oracle/notes/simple",
+      "content": "# Simple Note\n\nA plain note without frontmatter. It links to [[projects/alpha]] and mentions rust.\n\n- [note] Created as a baseline fixture",
+      "matched_chunk": "# Simple Note\n\nA plain note without frontmatter. It links to [[projects/alpha]] and mentions rust.\n\n- [note] Created as a baseline fixture",
+      "file_path": "notes/simple.md",
+      "updated_at": "<timestamp>",
+      "metadata": {
+        "note_type": "note"
+      },
+      "entity_id": "<entity_id>"
+    },
+    {
+      "title": "Alpha Project",
+      "type": "entity",
+      "score": 0.981383372928923,
+      "entity": "oracle/projects/alpha",
+      "external_id": "<uuid>",
+      "permalink": "oracle/projects/alpha",
+      "content": "# Alpha Project\n\nMain fixture project. Links back to [[notes/simple]], forming a cycle.\n\n- [decision] Alpha uses the Rust core\n- [requirement] Must stay offline",
+      "matched_chunk": "# Alpha Project\n\nMain fixture project. Links back to [[notes/simple]], forming a cycle.\n\n- [decision] Alpha uses the Rust core\n- [requirement] Must stay offline",
+      "file_path": "projects/alpha.md",
+      "updated_at": "<timestamp>",
+      "metadata": {
+        "note_type": "project"
+      },
+      "entity_id": "<entity_id>"
+    },
+    {
+      "title": "Observations Demo",
+      "type": "entity",
+      "score": 0.6522586923724418,
+      "entity": "oracle/notes/observations",
+      "external_id": "<uuid>",
+      "permalink": "oracle/notes/observations",
+      "content": "# Observations\n\n- [decision] Use SQLite FTS5 for text search\n- [requirement] Must support CJK #cjk #search\n- [fact] Parser preserves frontmatter checksums\n- With no category but a #tag\n- [] Empty bracket content\n- [00:00:11] transcript line should not be a category\n- [ ] unchecked task\n- [x] checked task\n- [link](https://example.com) markdown link\n\n> [!info] Callout\n> - [note] callout bullet should not be an observation\n\nRegular prose with a [[projects/alpha]] link.",
+      "matched_chunk": "# Observations\n\n- [decision] Use SQLite FTS5 for text search\n- [requirement] Must support CJK #cjk #search\n- [fact] Parser preserves frontmatter checksums\n- With no category but a #tag\n- [] Empty bracket content\n- [00:00:11] transcript line should not be a category\n- [ ] unchecked task\n- [x] checked task\n- [link](https://example.com) markdown link\n\n> [!info] Callout\n> - [note] callout bullet should not be an observation\n\nRegular prose with a [[projects/alpha]] link.",
+      "file_path": "notes/observations.md",
+      "updated_at": "<timestamp>",
+      "metadata": {
+        "note_type": "note"
+      },
+      "entity_id": "<entity_id>"
+    },
+    {
+      "title": "Beta Project",
+      "type": "entity",
+      "score": 0.6176361020665979,
+      "entity": "oracle/projects/beta",
+      "external_id": "<uuid>",
+      "permalink": "oracle/projects/beta",
+      "content": "# Beta Project\n\nSecondary fixture project.\n\n- [note] Beta is archived",
+      "matched_chunk": "# Beta Project\n\nSecondary fixture project.\n\n- [note] Beta is archived",
+      "file_path": "projects/beta.md",
+      "updated_at": "<timestamp>",
+      "metadata": {
+        "note_type": "project"
+      },
+      "entity_id": "<entity_id>"
+    },
+    {
+      "title": "task-markers",
+      "type": "entity",
+      "score": 0.5875483545885842,
+      "entity": "oracle/notes/task-markers",
+      "external_id": "<uuid>",
+      "permalink": "oracle/notes/task-markers",
+      "content": "# Task Markers\n\n- [ ] unchecked task\n- [x] checked task\n- [/] in progress task\n- [00:01:02] transcript timestamp\n\n- [note] a genuine observation",
+      "matched_chunk": "# Task Markers\n\n- [ ] unchecked task\n- [x] checked task\n- [/] in progress task\n- [00:01:02] transcript timestamp\n\n- [note] a genuine observation",
+      "file_path": "notes/task-markers.md",
+      "updated_at": "<timestamp>",
+      "metadata": {
+        "note_type": "note"
+      },
+      "entity_id": "<entity_id>"
+    },
+    {
+      "title": "中文测试文档",
+      "type": "entity",
+      "score": 0.5804804547627764,
+      "entity": "oracle/notes/cjk",
+      "external_id": "<uuid>",
+      "permalink": "oracle/notes/cjk",
+      "content": "# 中文测试\n\n这是一个中文笔记，包含 English 混合内容。\n\n- [decision] 使用 SQLite 作为本地索引\n- 关联 [[projects/alpha]]",
+      "matched_chunk": "# 中文测试\n\n这是一个中文笔记，包含 English 混合内容。\n\n- [decision] 使用 SQLite 作为本地索引\n- 关联 [[projects/alpha]]",
+      "file_path": "notes/cjk.md",
+      "updated_at": "<timestamp>",
+      "metadata": {
+        "note_type": "note"
+      },
+      "entity_id": "<entity_id>"
+    },
+    {
+      "title": "Deep Note",
+      "type": "entity",
+      "score": 0.5792863275380551,
+      "entity": "oracle/notes/nested/deep-note",
+      "external_id": "<uuid>",
+      "permalink": "oracle/notes/nested/deep-note",
+      "content": "# Deep Note\n\nNested fixture linking back to [[notes/simple]].\n\n- [fact] Nested paths must keep slash-separated permalinks",
+      "matched_chunk": "# Deep Note\n\nNested fixture linking back to [[notes/simple]].\n\n- [fact] Nested paths must keep slash-separated permalinks",
+      "file_path": "notes/nested/deep-note.md",
+      "updated_at": "<timestamp>",
+      "metadata": {
+        "note_type": "note"
+      },
+      "entity_id": "<entity_id>"
+    },
+    {
+      "title": "Relations Demo",
+      "type": "entity",
+      "score": 0.5789108455728051,
+      "entity": "oracle/notes/relations",
+      "external_id": "<uuid>",
+      "permalink": "oracle/notes/relations",
+      "content": "# Relations\n\n- depends_on [[projects/alpha]]\n- \"implemented by\" [[people/ada-lovelace]]\n- relates_to [[notes/simple]] (primary source)\n\nProse with an inline [[notes/frontmatter]] link and an [[projects/beta|Beta]] display link.",
+      "matched_chunk": "# Relations\n\n- depends_on [[projects/alpha]]\n- \"implemented by\" [[people/ada-lovelace]]\n- relates_to [[notes/simple]] (primary source)\n\nProse with an inline [[notes/frontmatter]] link and an [[projects/beta|Beta]] display link.",
+      "file_path": "notes/relations.md",
+      "updated_at": "<timestamp>",
+      "metadata": {
+        "note_type": "note"
+      },
+      "entity_id": "<entity_id>"
+    },
+    {
+      "title": "Same Title",
+      "type": "entity",
+      "score": 0.569322893698553,
+      "entity": "oracle/duplicates/dup-a/same-title",
+      "external_id": "<uuid>",
+      "permalink": "oracle/duplicates/dup-a/same-title",
+      "content": "# Duplicate A\n\nFirst note with a duplicate title.\n\n- [fact] Duplicate title in folder A",
+      "matched_chunk": "# Duplicate A\n\nFirst note with a duplicate title.\n\n- [fact] Duplicate title in folder A",
+      "file_path": "duplicates/dup-a/same-title.md",
+      "updated_at": "<timestamp>",
+      "metadata": {
+        "note_type": "note"
+      },
+      "entity_id": "<entity_id>"
+    }
+  ],
+  "current_page": 1,
+  "page_size": 10,
+  "total": 0,
+  "total_is_exact": false,
+  "has_more": true
+}

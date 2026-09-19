@@ -1,0 +1,2020 @@
+{
+  "reference": "basic-memory",
+  "project": "oracle",
+  "protocolVersion": "2024-11-05",
+  "suites": [
+    {
+      "name": "schema-vault",
+      "fixture": "schema-vault",
+      "overrides": [],
+      "responses": [
+        {
+          "id": "initialize",
+          "request": {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+              "protocolVersion": "2024-11-05",
+              "capabilities": {},
+              "clientInfo": {
+                "name": "oracle-harness",
+                "version": "0"
+              }
+            }
+          },
+          "frame": {
+            "jsonrpc": "2.0",
+            "id": "<id>",
+            "result": {
+              "protocolVersion": "2024-11-05",
+              "capabilities": {
+                "logging": {},
+                "prompts": {
+                  "listChanged": false
+                },
+                "resources": {
+                  "subscribe": false,
+                  "listChanged": false
+                },
+                "tools": {
+                  "listChanged": true
+                }
+              },
+              "serverInfo": {
+                "name": "Basic Memory",
+                "version": "4.0.0b1"
+              },
+              "instructions": "Basic Memory is the user's personal knowledge base: Markdown notes that persist across conversations and that both the user and their AI assistants can read and write.\n\nAt the start of a session, call `recent_activity` to orient yourself in the user's notes before answering from memory. If the knowledge base is empty, briefly explain that Basic Memory gives them persistent notes shared between the user and their AI, and offer to save something useful from this conversation as their first note with `write_note` — then wait for them to agree before writing anything. Do not create notes unprompted.\n\nFor a fuller guide, read the `memory://ai_assistant_guide` resource. If you have a web or fetch tool and need current documentation, fetch `https://docs.basicmemory.com/llms.txt` first, then fetch only the relevant linked `/raw/...md` page."
+            }
+          }
+        },
+        {
+          "id": "2-schema_validate-note_type",
+          "request": {
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/call",
+            "params": {
+              "name": "schema_validate",
+              "arguments": {
+                "note_type": "person"
+              }
+            }
+          },
+          "frame": {
+            "jsonrpc": "2.0",
+            "id": "<id>",
+            "result": {
+              "_meta": {
+                "fastmcp": {
+                  "wrap_result": true
+                }
+              },
+              "content": [
+                {
+                  "text": "# Schema Validation: person\n\nNotes: 2 | Valid: 2 | Warnings: 1 | Errors: 0\n\n- **Ada Lovelace** — valid\n- **Grace Hopper** — valid\n  - warning: Field 'status' has invalid value(s): retired (allowed: active, inactive)",
+                  "type": "text"
+                }
+              ],
+              "isError": false,
+              "structuredContent": {
+                "result": "# Schema Validation: person\n\nNotes: 2 | Valid: 2 | Warnings: 1 | Errors: 0\n\n- **Ada Lovelace** — valid\n- **Grace Hopper** — valid\n  - warning: Field 'status' has invalid value(s): retired (allowed: active, inactive)"
+              }
+            }
+          }
+        },
+        {
+          "id": "3-schema_validate-note_type-output_format",
+          "request": {
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "tools/call",
+            "params": {
+              "name": "schema_validate",
+              "arguments": {
+                "note_type": "person",
+                "output_format": "json"
+              }
+            }
+          },
+          "frame": {
+            "jsonrpc": "2.0",
+            "id": "<id>",
+            "result": {
+              "_meta": {
+                "fastmcp": {
+                  "wrap_result": true
+                }
+              },
+              "content": [
+                {
+                  "text": "{\"note_type\":\"person\",\"total_notes\":2,\"total_entities\":2,\"valid_count\":2,\"warning_count\":1,\"error_count\":0,\"results\":[{\"note_identifier\":\"Ada Lovelace\",\"schema_entity\":\"person\",\"passed\":true,\"field_results\":[{\"field_name\":\"name\",\"field_type\":\"string\",\"required\":true,\"status\":\"present\",\"values\":[\"Ada Lovelace\"]},{\"field_name\":\"role\",\"field_type\":\"string\",\"required\":false,\"status\":\"present\",\"values\":[\"Mathematician\"]},{\"field_name\":\"email\",\"field_type\":\"string\",\"required\":false,\"status\":\"missing\",\"values\":[],\"message\":\"Missing optional field: email (expected [email] observation)\"},{\"field_name\":\"works_at\",\"field_type\":\"Organization\",\"required\":false,\"status\":\"present\",\"values\":[\"organizations/analytical-engine\"]},{\"field_name\":\"tags\",\"field_type\":\"string\",\"required\":false,\"status\":\"present\",\"values\":[\"pioneer\",\"history\"]},{\"field_name\":\"status\",\"field_type\":\"enum\",\"required\":false,\"status\":\"present\",\"values\":[\"active\"]}],\"unmatched_observations\":{},\"unmatched_relations\":[],\"warnings\":[],\"errors\":[]},{\"note_identifier\":\"Grace Hopper\",\"schema_entity\":\"person\",\"passed\":true,\"field_results\":[{\"field_name\":\"name\",\"field_type\":\"string\",\"required\":true,\"status\":\"present\",\"values\":[\"Grace Hopper\"]},{\"field_name\":\"role\",\"field_type\":\"string\",\"required\":false,\"status\":\"missing\",\"values\":[],\"message\":\"Missing optional field: role (expected [role] observation)\"},{\"field_name\":\"email\",\"field_type\":\"string\",\"required\":false,\"status\":\"missing\",\"values\":[],\"message\":\"Missing optional field: email (expected [email] observation)\"},{\"field_name\":\"works_at\",\"field_type\":\"Organization\",\"required\":false,\"status\":\"missing\",\"values\":[],\"message\":\"Missing relation: works_at (no 'works_at [[...]]' relation found)\"},{\"field_name\":\"tags\",\"field_type\":\"string\",\"required\":false,\"status\":\"missing\",\"values\":[],\"message\":\"Missing optional field: tags (expected [tags] observation)\"},{\"field_name\":\"status\",\"field_type\":\"enum\",\"required\":false,\"status\":\"enum_mismatch\",\"values\":[\"retired\"],\"message\":\"Field 'status' has invalid value(s): retired (allowed: active, inactive)\"}],\"unmatched_observations\":{\"hobby\":1},\"unmatched_relations\":[],\"warnings\":[\"Field 'status' has invalid value(s): retired (allowed: active, inactive)\"],\"errors\":[]}],\"type_summaries\":[]}",
+                  "type": "text"
+                }
+              ],
+              "isError": false,
+              "structuredContent": {
+                "result": {
+                  "note_type": "person",
+                  "total_notes": 2,
+                  "total_entities": 2,
+                  "valid_count": 2,
+                  "warning_count": 1,
+                  "error_count": 0,
+                  "results": [
+                    {
+                      "note_identifier": "Ada Lovelace",
+                      "schema_entity": "person",
+                      "passed": true,
+                      "field_results": [
+                        {
+                          "field_name": "name",
+                          "field_type": "string",
+                          "required": true,
+                          "status": "present",
+                          "values": [
+                            "Ada Lovelace"
+                          ]
+                        },
+                        {
+                          "field_name": "role",
+                          "field_type": "string",
+                          "required": false,
+                          "status": "present",
+                          "values": [
+                            "Mathematician"
+                          ]
+                        },
+                        {
+                          "field_name": "email",
+                          "field_type": "string",
+                          "required": false,
+                          "status": "missing",
+                          "values": [],
+                          "message": "Missing optional field: email (expected [email] observation)"
+                        },
+                        {
+                          "field_name": "works_at",
+                          "field_type": "Organization",
+                          "required": false,
+                          "status": "present",
+                          "values": [
+                            "organizations/analytical-engine"
+                          ]
+                        },
+                        {
+                          "field_name": "tags",
+                          "field_type": "string",
+                          "required": false,
+                          "status": "present",
+                          "values": [
+                            "pioneer",
+                            "history"
+                          ]
+                        },
+                        {
+                          "field_name": "status",
+                          "field_type": "enum",
+                          "required": false,
+                          "status": "present",
+                          "values": [
+                            "active"
+                          ]
+                        }
+                      ],
+                      "unmatched_observations": {},
+                      "unmatched_relations": [],
+                      "warnings": [],
+                      "errors": []
+                    },
+                    {
+                      "note_identifier": "Grace Hopper",
+                      "schema_entity": "person",
+                      "passed": true,
+                      "field_results": [
+                        {
+                          "field_name": "name",
+                          "field_type": "string",
+                          "required": true,
+                          "status": "present",
+                          "values": [
+                            "Grace Hopper"
+                          ]
+                        },
+                        {
+                          "field_name": "role",
+                          "field_type": "string",
+                          "required": false,
+                          "status": "missing",
+                          "values": [],
+                          "message": "Missing optional field: role (expected [role] observation)"
+                        },
+                        {
+                          "field_name": "email",
+                          "field_type": "string",
+                          "required": false,
+                          "status": "missing",
+                          "values": [],
+                          "message": "Missing optional field: email (expected [email] observation)"
+                        },
+                        {
+                          "field_name": "works_at",
+                          "field_type": "Organization",
+                          "required": false,
+                          "status": "missing",
+                          "values": [],
+                          "message": "Missing relation: works_at (no 'works_at [[...]]' relation found)"
+                        },
+                        {
+                          "field_name": "tags",
+                          "field_type": "string",
+                          "required": false,
+                          "status": "missing",
+                          "values": [],
+                          "message": "Missing optional field: tags (expected [tags] observation)"
+                        },
+                        {
+                          "field_name": "status",
+                          "field_type": "enum",
+                          "required": false,
+                          "status": "enum_mismatch",
+                          "values": [
+                            "retired"
+                          ],
+                          "message": "Field 'status' has invalid value(s): retired (allowed: active, inactive)"
+                        }
+                      ],
+                      "unmatched_observations": {
+                        "hobby": 1
+                      },
+                      "unmatched_relations": [],
+                      "warnings": [
+                        "Field 'status' has invalid value(s): retired (allowed: active, inactive)"
+                      ],
+                      "errors": []
+                    }
+                  ],
+                  "type_summaries": []
+                }
+              }
+            }
+          }
+        },
+        {
+          "id": "4-schema_validate-note_type",
+          "request": {
+            "jsonrpc": "2.0",
+            "id": 4,
+            "method": "tools/call",
+            "params": {
+              "name": "schema_validate",
+              "arguments": {
+                "note_type": "Person"
+              }
+            }
+          },
+          "frame": {
+            "jsonrpc": "2.0",
+            "id": "<id>",
+            "result": {
+              "_meta": {
+                "fastmcp": {
+                  "wrap_result": true
+                }
+              },
+              "content": [
+                {
+                  "text": "# Schema Validation: person\n\nNotes: 2 | Valid: 2 | Warnings: 1 | Errors: 0\n\n- **Ada Lovelace** — valid\n- **Grace Hopper** — valid\n  - warning: Field 'status' has invalid value(s): retired (allowed: active, inactive)",
+                  "type": "text"
+                }
+              ],
+              "isError": false,
+              "structuredContent": {
+                "result": "# Schema Validation: person\n\nNotes: 2 | Valid: 2 | Warnings: 1 | Errors: 0\n\n- **Ada Lovelace** — valid\n- **Grace Hopper** — valid\n  - warning: Field 'status' has invalid value(s): retired (allowed: active, inactive)"
+              }
+            }
+          }
+        },
+        {
+          "id": "5-schema_validate-identifier",
+          "request": {
+            "jsonrpc": "2.0",
+            "id": 5,
+            "method": "tools/call",
+            "params": {
+              "name": "schema_validate",
+              "arguments": {
+                "identifier": "people/ada-lovelace"
+              }
+            }
+          },
+          "frame": {
+            "jsonrpc": "2.0",
+            "id": "<id>",
+            "result": {
+              "_meta": {
+                "fastmcp": {
+                  "wrap_result": true
+                }
+              },
+              "content": [
+                {
+                  "text": "# Schema Validation: person\n\nNotes: 1 | Valid: 1 | Warnings: 0 | Errors: 0\n\n- **Ada Lovelace** — valid",
+                  "type": "text"
+                }
+              ],
+              "isError": false,
+              "structuredContent": {
+                "result": "# Schema Validation: person\n\nNotes: 1 | Valid: 1 | Warnings: 0 | Errors: 0\n\n- **Ada Lovelace** — valid"
+              }
+            }
+          }
+        },
+        {
+          "id": "6-schema_validate-identifier-output_format",
+          "request": {
+            "jsonrpc": "2.0",
+            "id": 6,
+            "method": "tools/call",
+            "params": {
+              "name": "schema_validate",
+              "arguments": {
+                "identifier": "people/ada-lovelace",
+                "output_format": "json"
+              }
+            }
+          },
+          "frame": {
+            "jsonrpc": "2.0",
+            "id": "<id>",
+            "result": {
+              "_meta": {
+                "fastmcp": {
+                  "wrap_result": true
+                }
+              },
+              "content": [
+                {
+                  "text": "{\"note_type\":\"person\",\"total_notes\":1,\"total_entities\":1,\"valid_count\":1,\"warning_count\":0,\"error_count\":0,\"results\":[{\"note_identifier\":\"Ada Lovelace\",\"schema_entity\":\"person\",\"passed\":true,\"field_results\":[{\"field_name\":\"name\",\"field_type\":\"string\",\"required\":true,\"status\":\"present\",\"values\":[\"Ada Lovelace\"]},{\"field_name\":\"role\",\"field_type\":\"string\",\"required\":false,\"status\":\"present\",\"values\":[\"Mathematician\"]},{\"field_name\":\"email\",\"field_type\":\"string\",\"required\":false,\"status\":\"missing\",\"values\":[],\"message\":\"Missing optional field: email (expected [email] observation)\"},{\"field_name\":\"works_at\",\"field_type\":\"Organization\",\"required\":false,\"status\":\"present\",\"values\":[\"organizations/analytical-engine\"]},{\"field_name\":\"tags\",\"field_type\":\"string\",\"required\":false,\"status\":\"present\",\"values\":[\"pioneer\",\"history\"]},{\"field_name\":\"status\",\"field_type\":\"enum\",\"required\":false,\"status\":\"present\",\"values\":[\"active\"]}],\"unmatched_observations\":{},\"unmatched_relations\":[],\"warnings\":[],\"errors\":[]}],\"type_summaries\":[]}",
+                  "type": "text"
+                }
+              ],
+              "isError": false,
+              "structuredContent": {
+                "result": {
+                  "note_type": "person",
+                  "total_notes": 1,
+                  "total_entities": 1,
+                  "valid_count": 1,
+                  "warning_count": 0,
+                  "error_count": 0,
+                  "results": [
+                    {
+                      "note_identifier": "Ada Lovelace",
+                      "schema_entity": "person",
+                      "passed": true,
+                      "field_results": [
+                        {
+                          "field_name": "name",
+                          "field_type": "string",
+                          "required": true,
+                          "status": "present",
+                          "values": [
+                            "Ada Lovelace"
+                          ]
+                        },
+                        {
+                          "field_name": "role",
+                          "field_type": "string",
+                          "required": false,
+                          "status": "present",
+                          "values": [
+                            "Mathematician"
+                          ]
+                        },
+                        {
+                          "field_name": "email",
+                          "field_type": "string",
+                          "required": false,
+                          "status": "missing",
+                          "values": [],
+                          "message": "Missing optional field: email (expected [email] observation)"
+                        },
+                        {
+                          "field_name": "works_at",
+                          "field_type": "Organization",
+                          "required": false,
+                          "status": "present",
+                          "values": [
+                            "organizations/analytical-engine"
+                          ]
+                        },
+                        {
+                          "field_name": "tags",
+                          "field_type": "string",
+                          "required": false,
+                          "status": "present",
+                          "values": [
+                            "pioneer",
+                            "history"
+                          ]
+                        },
+                        {
+                          "field_name": "status",
+                          "field_type": "enum",
+                          "required": false,
+                          "status": "present",
+                          "values": [
+                            "active"
+                          ]
+                        }
+                      ],
+                      "unmatched_observations": {},
+                      "unmatched_relations": [],
+                      "warnings": [],
+                      "errors": []
+                    }
+                  ],
+                  "type_summaries": []
+                }
+              }
+            }
+          }
+        },
+        {
+          "id": "7-schema_validate-default",
+          "request": {
+            "jsonrpc": "2.0",
+            "id": 7,
+            "method": "tools/call",
+            "params": {
+              "name": "schema_validate",
+              "arguments": {}
+            }
+          },
+          "frame": {
+            "jsonrpc": "2.0",
+            "id": "<id>",
+            "result": {
+              "_meta": {
+                "fastmcp": {
+                  "wrap_result": true
+                }
+              },
+              "content": [
+                {
+                  "text": "# Schema Validation: all\n\nNotes: 3 | Valid: 2 | Warnings: 1 | Errors: 1\n\n## By Type\n\n- **person**: 2/2 valid\n- **project**: 0/1 valid\n\n- **Ada Lovelace** — valid\n- **Grace Hopper** — valid\n  - warning: Field 'status' has invalid value(s): retired (allowed: active, inactive)\n- **Alpha Project** — INVALID\n  - error: Field 'status' has invalid value(s): paused (allowed: active, archived)",
+                  "type": "text"
+                }
+              ],
+              "isError": false,
+              "structuredContent": {
+                "result": "# Schema Validation: all\n\nNotes: 3 | Valid: 2 | Warnings: 1 | Errors: 1\n\n## By Type\n\n- **person**: 2/2 valid\n- **project**: 0/1 valid\n\n- **Ada Lovelace** — valid\n- **Grace Hopper** — valid\n  - warning: Field 'status' has invalid value(s): retired (allowed: active, inactive)\n- **Alpha Project** — INVALID\n  - error: Field 'status' has invalid value(s): paused (allowed: active, archived)"
+              }
+            }
+          }
+        },
+        {
+          "id": "8-schema_validate-output_format",
+          "request": {
+            "jsonrpc": "2.0",
+            "id": 8,
+            "method": "tools/call",
+            "params": {
+              "name": "schema_validate",
+              "arguments": {
+                "output_format": "json"
+              }
+            }
+          },
+          "frame": {
+            "jsonrpc": "2.0",
+            "id": "<id>",
+            "result": {
+              "_meta": {
+                "fastmcp": {
+                  "wrap_result": true
+                }
+              },
+              "content": [
+                {
+                  "text": "{\"total_notes\":3,\"total_entities\":3,\"valid_count\":2,\"warning_count\":1,\"error_count\":1,\"results\":[{\"note_identifier\":\"Ada Lovelace\",\"schema_entity\":\"person\",\"passed\":true,\"field_results\":[{\"field_name\":\"name\",\"field_type\":\"string\",\"required\":true,\"status\":\"present\",\"values\":[\"Ada Lovelace\"]},{\"field_name\":\"role\",\"field_type\":\"string\",\"required\":false,\"status\":\"present\",\"values\":[\"Mathematician\"]},{\"field_name\":\"email\",\"field_type\":\"string\",\"required\":false,\"status\":\"missing\",\"values\":[],\"message\":\"Missing optional field: email (expected [email] observation)\"},{\"field_name\":\"works_at\",\"field_type\":\"Organization\",\"required\":false,\"status\":\"present\",\"values\":[\"organizations/analytical-engine\"]},{\"field_name\":\"tags\",\"field_type\":\"string\",\"required\":false,\"status\":\"present\",\"values\":[\"pioneer\",\"history\"]},{\"field_name\":\"status\",\"field_type\":\"enum\",\"required\":false,\"status\":\"present\",\"values\":[\"active\"]}],\"unmatched_observations\":{},\"unmatched_relations\":[],\"warnings\":[],\"errors\":[]},{\"note_identifier\":\"Grace Hopper\",\"schema_entity\":\"person\",\"passed\":true,\"field_results\":[{\"field_name\":\"name\",\"field_type\":\"string\",\"required\":true,\"status\":\"present\",\"values\":[\"Grace Hopper\"]},{\"field_name\":\"role\",\"field_type\":\"string\",\"required\":false,\"status\":\"missing\",\"values\":[],\"message\":\"Missing optional field: role (expected [role] observation)\"},{\"field_name\":\"email\",\"field_type\":\"string\",\"required\":false,\"status\":\"missing\",\"values\":[],\"message\":\"Missing optional field: email (expected [email] observation)\"},{\"field_name\":\"works_at\",\"field_type\":\"Organization\",\"required\":false,\"status\":\"missing\",\"values\":[],\"message\":\"Missing relation: works_at (no 'works_at [[...]]' relation found)\"},{\"field_name\":\"tags\",\"field_type\":\"string\",\"required\":false,\"status\":\"missing\",\"values\":[],\"message\":\"Missing optional field: tags (expected [tags] observation)\"},{\"field_name\":\"status\",\"field_type\":\"enum\",\"required\":false,\"status\":\"enum_mismatch\",\"values\":[\"retired\"],\"message\":\"Field 'status' has invalid value(s): retired (allowed: active, inactive)\"}],\"unmatched_observations\":{\"hobby\":1},\"unmatched_relations\":[],\"warnings\":[\"Field 'status' has invalid value(s): retired (allowed: active, inactive)\"],\"errors\":[]},{\"note_identifier\":\"Alpha Project\",\"schema_entity\":\"project\",\"passed\":false,\"field_results\":[{\"field_name\":\"status\",\"field_type\":\"enum\",\"required\":false,\"status\":\"enum_mismatch\",\"values\":[\"paused\"],\"message\":\"Field 'status' has invalid value(s): paused (allowed: active, archived)\"},{\"field_name\":\"owner\",\"field_type\":\"string\",\"required\":false,\"status\":\"missing\",\"values\":[],\"message\":\"Missing optional field: owner (expected [owner] observation)\"}],\"unmatched_observations\":{\"budget\":1},\"unmatched_relations\":[],\"warnings\":[],\"errors\":[\"Field 'status' has invalid value(s): paused (allowed: active, archived)\"]}],\"type_summaries\":[{\"note_type\":\"person\",\"total_notes\":2,\"total_entities\":2,\"valid_count\":2,\"warning_count\":1,\"error_count\":0},{\"note_type\":\"project\",\"total_notes\":1,\"total_entities\":1,\"valid_count\":0,\"warning_count\":0,\"error_count\":1}]}",
+                  "type": "text"
+                }
+              ],
+              "isError": false,
+              "structuredContent": {
+                "result": {
+                  "total_notes": 3,
+                  "total_entities": 3,
+                  "valid_count": 2,
+                  "warning_count": 1,
+                  "error_count": 1,
+                  "results": [
+                    {
+                      "note_identifier": "Ada Lovelace",
+                      "schema_entity": "person",
+                      "passed": true,
+                      "field_results": [
+                        {
+                          "field_name": "name",
+                          "field_type": "string",
+                          "required": true,
+                          "status": "present",
+                          "values": [
+                            "Ada Lovelace"
+                          ]
+                        },
+                        {
+                          "field_name": "role",
+                          "field_type": "string",
+                          "required": false,
+                          "status": "present",
+                          "values": [
+                            "Mathematician"
+                          ]
+                        },
+                        {
+                          "field_name": "email",
+                          "field_type": "string",
+                          "required": false,
+                          "status": "missing",
+                          "values": [],
+                          "message": "Missing optional field: email (expected [email] observation)"
+                        },
+                        {
+                          "field_name": "works_at",
+                          "field_type": "Organization",
+                          "required": false,
+                          "status": "present",
+                          "values": [
+                            "organizations/analytical-engine"
+                          ]
+                        },
+                        {
+                          "field_name": "tags",
+                          "field_type": "string",
+                          "required": false,
+                          "status": "present",
+                          "values": [
+                            "pioneer",
+                            "history"
+                          ]
+                        },
+                        {
+                          "field_name": "status",
+                          "field_type": "enum",
+                          "required": false,
+                          "status": "present",
+                          "values": [
+                            "active"
+                          ]
+                        }
+                      ],
+                      "unmatched_observations": {},
+                      "unmatched_relations": [],
+                      "warnings": [],
+                      "errors": []
+                    },
+                    {
+                      "note_identifier": "Grace Hopper",
+                      "schema_entity": "person",
+                      "passed": true,
+                      "field_results": [
+                        {
+                          "field_name": "name",
+                          "field_type": "string",
+                          "required": true,
+                          "status": "present",
+                          "values": [
+                            "Grace Hopper"
+                          ]
+                        },
+                        {
+                          "field_name": "role",
+                          "field_type": "string",
+                          "required": false,
+                          "status": "missing",
+                          "values": [],
+                          "message": "Missing optional field: role (expected [role] observation)"
+                        },
+                        {
+                          "field_name": "email",
+                          "field_type": "string",
+                          "required": false,
+                          "status": "missing",
+                          "values": [],
+                          "message": "Missing optional field: email (expected [email] observation)"
+                        },
+                        {
+                          "field_name": "works_at",
+                          "field_type": "Organization",
+                          "required": false,
+                          "status": "missing",
+                          "values": [],
+                          "message": "Missing relation: works_at (no 'works_at [[...]]' relation found)"
+                        },
+                        {
+                          "field_name": "tags",
+                          "field_type": "string",
+                          "required": false,
+                          "status": "missing",
+                          "values": [],
+                          "message": "Missing optional field: tags (expected [tags] observation)"
+                        },
+                        {
+                          "field_name": "status",
+                          "field_type": "enum",
+                          "required": false,
+                          "status": "enum_mismatch",
+                          "values": [
+                            "retired"
+                          ],
+                          "message": "Field 'status' has invalid value(s): retired (allowed: active, inactive)"
+                        }
+                      ],
+                      "unmatched_observations": {
+                        "hobby": 1
+                      },
+                      "unmatched_relations": [],
+                      "warnings": [
+                        "Field 'status' has invalid value(s): retired (allowed: active, inactive)"
+                      ],
+                      "errors": []
+                    },
+                    {
+                      "note_identifier": "Alpha Project",
+                      "schema_entity": "project",
+                      "passed": false,
+                      "field_results": [
+                        {
+                          "field_name": "status",
+                          "field_type": "enum",
+                          "required": false,
+                          "status": "enum_mismatch",
+                          "values": [
+                            "paused"
+                          ],
+                          "message": "Field 'status' has invalid value(s): paused (allowed: active, archived)"
+                        },
+                        {
+                          "field_name": "owner",
+                          "field_type": "string",
+                          "required": false,
+                          "status": "missing",
+                          "values": [],
+                          "message": "Missing optional field: owner (expected [owner] observation)"
+                        }
+                      ],
+                      "unmatched_observations": {
+                        "budget": 1
+                      },
+                      "unmatched_relations": [],
+                      "warnings": [],
+                      "errors": [
+                        "Field 'status' has invalid value(s): paused (allowed: active, archived)"
+                      ]
+                    }
+                  ],
+                  "type_summaries": [
+                    {
+                      "note_type": "person",
+                      "total_notes": 2,
+                      "total_entities": 2,
+                      "valid_count": 2,
+                      "warning_count": 1,
+                      "error_count": 0
+                    },
+                    {
+                      "note_type": "project",
+                      "total_notes": 1,
+                      "total_entities": 1,
+                      "valid_count": 0,
+                      "warning_count": 0,
+                      "error_count": 1
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "id": "9-schema_validate-note_type",
+          "request": {
+            "jsonrpc": "2.0",
+            "id": 9,
+            "method": "tools/call",
+            "params": {
+              "name": "schema_validate",
+              "arguments": {
+                "note_type": "ghost"
+              }
+            }
+          },
+          "frame": {
+            "jsonrpc": "2.0",
+            "id": "<id>",
+            "result": {
+              "_meta": {
+                "fastmcp": {
+                  "wrap_result": true
+                }
+              },
+              "content": [
+                {
+                  "text": "# No Notes Found of Type 'ghost'\n\n`schema_validate` found no notes with type 'ghost' in the project.\n\n## Next Steps\n\n1. **Create notes of this type** — use `write_note` with `note_type=\"ghost\"` to create notes\n2. **Check existing types** — use `search_notes` with `note_types` filter to see what types exist\n3. **Browse content** — use `list_directory` or `recent_activity` to see what's in the project\n",
+                  "type": "text"
+                }
+              ],
+              "isError": false,
+              "structuredContent": {
+                "result": "# No Notes Found of Type 'ghost'\n\n`schema_validate` found no notes with type 'ghost' in the project.\n\n## Next Steps\n\n1. **Create notes of this type** — use `write_note` with `note_type=\"ghost\"` to create notes\n2. **Check existing types** — use `search_notes` with `note_types` filter to see what types exist\n3. **Browse content** — use `list_directory` or `recent_activity` to see what's in the project\n"
+              }
+            }
+          }
+        },
+        {
+          "id": "10-schema_validate-note_type-output_format",
+          "request": {
+            "jsonrpc": "2.0",
+            "id": 10,
+            "method": "tools/call",
+            "params": {
+              "name": "schema_validate",
+              "arguments": {
+                "note_type": "ghost",
+                "output_format": "json"
+              }
+            }
+          },
+          "frame": {
+            "jsonrpc": "2.0",
+            "id": "<id>",
+            "result": {
+              "_meta": {
+                "fastmcp": {
+                  "wrap_result": true
+                }
+              },
+              "content": [
+                {
+                  "text": "{\"error\":\"No notes found of type 'ghost'\"}",
+                  "type": "text"
+                }
+              ],
+              "isError": false,
+              "structuredContent": {
+                "result": {
+                  "error": "No notes found of type 'ghost'"
+                }
+              }
+            }
+          }
+        },
+        {
+          "id": "11-schema_validate-note_type",
+          "request": {
+            "jsonrpc": "2.0",
+            "id": 11,
+            "method": "tools/call",
+            "params": {
+              "name": "schema_validate",
+              "arguments": {
+                "note_type": "meeting"
+              }
+            }
+          },
+          "frame": {
+            "jsonrpc": "2.0",
+            "id": "<id>",
+            "result": {
+              "_meta": {
+                "fastmcp": {
+                  "wrap_result": true
+                }
+              },
+              "content": [
+                {
+                  "text": "# No Schema Found for 'meeting'\n\n`schema_validate` requires a schema note to exist for type 'meeting'.\n\n## How to Create a Schema\n\n1. **Infer from existing notes** — run `schema_infer(\"meeting\")` to analyze your notes and get a suggested schema\n2. **Create a schema note** — write a markdown file with this frontmatter:\n\n```yaml\n---\ntitle: Meeting\ntype: schema\nentity: meeting\nversion: 1\nschema:\n  name: string, full name\n  role?: string, job title\nsettings:\n  validation: warn\n---\n```\n\nSchema fields use Picoschema notation:\n- `field_name: type, description` — required field\n- `field_name?: type, description` — optional field\n- Supported types: `string`, `number`, `boolean`, `string[]`\n\n3. **Index** — run `basic-memory db reindex --search` or wait for the file watcher to pick up the new schema note\n4. **Re-run** — call `schema_validate(\"meeting\")` again\n",
+                  "type": "text"
+                }
+              ],
+              "isError": false,
+              "structuredContent": {
+                "result": "# No Schema Found for 'meeting'\n\n`schema_validate` requires a schema note to exist for type 'meeting'.\n\n## How to Create a Schema\n\n1. **Infer from existing notes** — run `schema_infer(\"meeting\")` to analyze your notes and get a suggested schema\n2. **Create a schema note** — write a markdown file with this frontmatter:\n\n```yaml\n---\ntitle: Meeting\ntype: schema\nentity: meeting\nversion: 1\nschema:\n  name: string, full name\n  role?: string, job title\nsettings:\n  validation: warn\n---\n```\n\nSchema fields use Picoschema notation:\n- `field_name: type, description` — required field\n- `field_name?: type, description` — optional field\n- Supported types: `string`, `number`, `boolean`, `string[]`\n\n3. **Index** — run `basic-memory db reindex --search` or wait for the file watcher to pick up the new schema note\n4. **Re-run** — call `schema_validate(\"meeting\")` again\n"
+              }
+            }
+          }
+        },
+        {
+          "id": "12-schema_validate-note_type-output_format",
+          "request": {
+            "jsonrpc": "2.0",
+            "id": 12,
+            "method": "tools/call",
+            "params": {
+              "name": "schema_validate",
+              "arguments": {
+                "note_type": "meeting",
+                "output_format": "json"
+              }
+            }
+          },
+          "frame": {
+            "jsonrpc": "2.0",
+            "id": "<id>",
+            "result": {
+              "_meta": {
+                "fastmcp": {
+                  "wrap_result": true
+                }
+              },
+              "content": [
+                {
+                  "text": "{\"error\":\"No schema found for type 'meeting'\"}",
+                  "type": "text"
+                }
+              ],
+              "isError": false,
+              "structuredContent": {
+                "result": {
+                  "error": "No schema found for type 'meeting'"
+                }
+              }
+            }
+          }
+        },
+        {
+          "id": "13-schema_validate-identifier",
+          "request": {
+            "jsonrpc": "2.0",
+            "id": 13,
+            "method": "tools/call",
+            "params": {
+              "name": "schema_validate",
+              "arguments": {
+                "identifier": "no-such-note"
+              }
+            }
+          },
+          "frame": {
+            "jsonrpc": "2.0",
+            "id": "<id>",
+            "result": {
+              "_meta": {
+                "fastmcp": {
+                  "wrap_result": true
+                }
+              },
+              "content": [
+                {
+                  "text": "# No Schema Found for 'meeting'\n\n`schema_validate` requires a schema note to exist for type 'meeting'.\n\n## How to Create a Schema\n\n1. **Infer from existing notes** — run `schema_infer(\"meeting\")` to analyze your notes and get a suggested schema\n2. **Create a schema note** — write a markdown file with this frontmatter:\n\n```yaml\n---\ntitle: Meeting\ntype: schema\nentity: meeting\nversion: 1\nschema:\n  name: string, full name\n  role?: string, job title\nsettings:\n  validation: warn\n---\n```\n\nSchema fields use Picoschema notation:\n- `field_name: type, description` — required field\n- `field_name?: type, description` — optional field\n- Supported types: `string`, `number`, `boolean`, `string[]`\n\n3. **Index** — run `basic-memory db reindex --search` or wait for the file watcher to pick up the new schema note\n4. **Re-run** — call `schema_validate(\"meeting\")` again\n",
+                  "type": "text"
+                }
+              ],
+              "isError": false,
+              "structuredContent": {
+                "result": "# No Schema Found for 'meeting'\n\n`schema_validate` requires a schema note to exist for type 'meeting'.\n\n## How to Create a Schema\n\n1. **Infer from existing notes** — run `schema_infer(\"meeting\")` to analyze your notes and get a suggested schema\n2. **Create a schema note** — write a markdown file with this frontmatter:\n\n```yaml\n---\ntitle: Meeting\ntype: schema\nentity: meeting\nversion: 1\nschema:\n  name: string, full name\n  role?: string, job title\nsettings:\n  validation: warn\n---\n```\n\nSchema fields use Picoschema notation:\n- `field_name: type, description` — required field\n- `field_name?: type, description` — optional field\n- Supported types: `string`, `number`, `boolean`, `string[]`\n\n3. **Index** — run `basic-memory db reindex --search` or wait for the file watcher to pick up the new schema note\n4. **Re-run** — call `schema_validate(\"meeting\")` again\n"
+              }
+            }
+          }
+        },
+        {
+          "id": "14-schema_validate-identifier-output_format",
+          "request": {
+            "jsonrpc": "2.0",
+            "id": 14,
+            "method": "tools/call",
+            "params": {
+              "name": "schema_validate",
+              "arguments": {
+                "identifier": "no-such-note",
+                "output_format": "json"
+              }
+            }
+          },
+          "frame": {
+            "jsonrpc": "2.0",
+            "id": "<id>",
+            "result": {
+              "_meta": {
+                "fastmcp": {
+                  "wrap_result": true
+                }
+              },
+              "content": [
+                {
+                  "text": "{\"error\":\"No schema found for type 'meeting'\"}",
+                  "type": "text"
+                }
+              ],
+              "isError": false,
+              "structuredContent": {
+                "result": {
+                  "error": "No schema found for type 'meeting'"
+                }
+              }
+            }
+          }
+        },
+        {
+          "id": "15-schema_validate-note_type-output_format",
+          "request": {
+            "jsonrpc": "2.0",
+            "id": 15,
+            "method": "tools/call",
+            "params": {
+              "name": "schema_validate",
+              "arguments": {
+                "note_type": "project",
+                "output_format": "json"
+              }
+            }
+          },
+          "frame": {
+            "jsonrpc": "2.0",
+            "id": "<id>",
+            "result": {
+              "_meta": {
+                "fastmcp": {
+                  "wrap_result": true
+                }
+              },
+              "content": [
+                {
+                  "text": "{\"note_type\":\"project\",\"total_notes\":1,\"total_entities\":1,\"valid_count\":0,\"warning_count\":0,\"error_count\":1,\"results\":[{\"note_identifier\":\"Alpha Project\",\"schema_entity\":\"project\",\"passed\":false,\"field_results\":[{\"field_name\":\"status\",\"field_type\":\"enum\",\"required\":false,\"status\":\"enum_mismatch\",\"values\":[\"paused\"],\"message\":\"Field 'status' has invalid value(s): paused (allowed: active, archived)\"},{\"field_name\":\"owner\",\"field_type\":\"string\",\"required\":false,\"status\":\"missing\",\"values\":[],\"message\":\"Missing optional field: owner (expected [owner] observation)\"}],\"unmatched_observations\":{\"budget\":1},\"unmatched_relations\":[],\"warnings\":[],\"errors\":[\"Field 'status' has invalid value(s): paused (allowed: active, archived)\"]}],\"type_summaries\":[]}",
+                  "type": "text"
+                }
+              ],
+              "isError": false,
+              "structuredContent": {
+                "result": {
+                  "note_type": "project",
+                  "total_notes": 1,
+                  "total_entities": 1,
+                  "valid_count": 0,
+                  "warning_count": 0,
+                  "error_count": 1,
+                  "results": [
+                    {
+                      "note_identifier": "Alpha Project",
+                      "schema_entity": "project",
+                      "passed": false,
+                      "field_results": [
+                        {
+                          "field_name": "status",
+                          "field_type": "enum",
+                          "required": false,
+                          "status": "enum_mismatch",
+                          "values": [
+                            "paused"
+                          ],
+                          "message": "Field 'status' has invalid value(s): paused (allowed: active, archived)"
+                        },
+                        {
+                          "field_name": "owner",
+                          "field_type": "string",
+                          "required": false,
+                          "status": "missing",
+                          "values": [],
+                          "message": "Missing optional field: owner (expected [owner] observation)"
+                        }
+                      ],
+                      "unmatched_observations": {
+                        "budget": 1
+                      },
+                      "unmatched_relations": [],
+                      "warnings": [],
+                      "errors": [
+                        "Field 'status' has invalid value(s): paused (allowed: active, archived)"
+                      ]
+                    }
+                  ],
+                  "type_summaries": []
+                }
+              }
+            }
+          }
+        },
+        {
+          "id": "16-schema_infer-note_type",
+          "request": {
+            "jsonrpc": "2.0",
+            "id": 16,
+            "method": "tools/call",
+            "params": {
+              "name": "schema_infer",
+              "arguments": {
+                "note_type": "person"
+              }
+            }
+          },
+          "frame": {
+            "jsonrpc": "2.0",
+            "id": "<id>",
+            "result": {
+              "_meta": {
+                "fastmcp": {
+                  "wrap_result": true
+                }
+              },
+              "content": [
+                {
+                  "text": "# Schema Inference: person\n\nNotes analyzed: 2\n\n## Suggested Schema\n\n```yaml\n---\ntitle: Person\ntype: schema\nentity: person\nversion: 1\nschema:\n  name: string\n  status: string\n  role?: string\n  tags?(array): string\n  hobby?: string\n  works_at?: Organization\n---\n```\n\n## Field Frequencies\n\n- **name** (observation) — 100% (2/2) [required] (e.g. Ada Lovelace, Grace Hopper)\n- **status** (observation) — 100% (2/2) [required] (e.g. active, retired)\n- **role** (observation) — 50% (1/2) [optional] (e.g. Mathematician)\n- **tags** (observation) — 50% (1/2) [optional] (e.g. pioneer, history)\n- **hobby** (observation) — 50% (1/2) [optional] (e.g. sailing)\n- **works_at** (relation) — 50% (1/2) [optional] (e.g. organizations/analytical-engine)\n",
+                  "type": "text"
+                }
+              ],
+              "isError": false,
+              "structuredContent": {
+                "result": "# Schema Inference: person\n\nNotes analyzed: 2\n\n## Suggested Schema\n\n```yaml\n---\ntitle: Person\ntype: schema\nentity: person\nversion: 1\nschema:\n  name: string\n  status: string\n  role?: string\n  tags?(array): string\n  hobby?: string\n  works_at?: Organization\n---\n```\n\n## Field Frequencies\n\n- **name** (observation) — 100% (2/2) [required] (e.g. Ada Lovelace, Grace Hopper)\n- **status** (observation) — 100% (2/2) [required] (e.g. active, retired)\n- **role** (observation) — 50% (1/2) [optional] (e.g. Mathematician)\n- **tags** (observation) — 50% (1/2) [optional] (e.g. pioneer, history)\n- **hobby** (observation) — 50% (1/2) [optional] (e.g. sailing)\n- **works_at** (relation) — 50% (1/2) [optional] (e.g. organizations/analytical-engine)\n"
+              }
+            }
+          }
+        },
+        {
+          "id": "17-schema_infer-note_type-output_format",
+          "request": {
+            "jsonrpc": "2.0",
+            "id": 17,
+            "method": "tools/call",
+            "params": {
+              "name": "schema_infer",
+              "arguments": {
+                "note_type": "person",
+                "output_format": "json"
+              }
+            }
+          },
+          "frame": {
+            "jsonrpc": "2.0",
+            "id": "<id>",
+            "result": {
+              "_meta": {
+                "fastmcp": {
+                  "wrap_result": true
+                }
+              },
+              "content": [
+                {
+                  "text": "{\"note_type\":\"person\",\"notes_analyzed\":2,\"field_frequencies\":[{\"name\":\"name\",\"source\":\"observation\",\"count\":2,\"total\":2,\"percentage\":1.0,\"sample_values\":[\"Ada Lovelace\",\"Grace Hopper\"],\"is_array\":false},{\"name\":\"status\",\"source\":\"observation\",\"count\":2,\"total\":2,\"percentage\":1.0,\"sample_values\":[\"active\",\"retired\"],\"is_array\":false},{\"name\":\"role\",\"source\":\"observation\",\"count\":1,\"total\":2,\"percentage\":0.5,\"sample_values\":[\"Mathematician\"],\"is_array\":false},{\"name\":\"tags\",\"source\":\"observation\",\"count\":1,\"total\":2,\"percentage\":0.5,\"sample_values\":[\"pioneer\",\"history\"],\"is_array\":true},{\"name\":\"hobby\",\"source\":\"observation\",\"count\":1,\"total\":2,\"percentage\":0.5,\"sample_values\":[\"sailing\"],\"is_array\":false},{\"name\":\"works_at\",\"source\":\"relation\",\"count\":1,\"total\":2,\"percentage\":0.5,\"sample_values\":[\"organizations/analytical-engine\"],\"is_array\":false,\"target_type\":\"organization\"}],\"suggested_schema\":{\"name\":\"string\",\"status\":\"string\",\"role?\":\"string\",\"tags?(array)\":\"string\",\"hobby?\":\"string\",\"works_at?\":\"Organization\"},\"suggested_required\":[\"name\",\"status\"],\"suggested_optional\":[\"role\",\"tags\",\"hobby\",\"works_at\"],\"excluded\":[]}",
+                  "type": "text"
+                }
+              ],
+              "isError": false,
+              "structuredContent": {
+                "result": {
+                  "note_type": "person",
+                  "notes_analyzed": 2,
+                  "field_frequencies": [
+                    {
+                      "name": "name",
+                      "source": "observation",
+                      "count": 2,
+                      "total": 2,
+                      "percentage": 1.0,
+                      "sample_values": [
+                        "Ada Lovelace",
+                        "Grace Hopper"
+                      ],
+                      "is_array": false
+                    },
+                    {
+                      "name": "status",
+                      "source": "observation",
+                      "count": 2,
+                      "total": 2,
+                      "percentage": 1.0,
+                      "sample_values": [
+                        "active",
+                        "retired"
+                      ],
+                      "is_array": false
+                    },
+                    {
+                      "name": "role",
+                      "source": "observation",
+                      "count": 1,
+                      "total": 2,
+                      "percentage": 0.5,
+                      "sample_values": [
+                        "Mathematician"
+                      ],
+                      "is_array": false
+                    },
+                    {
+                      "name": "tags",
+                      "source": "observation",
+                      "count": 1,
+                      "total": 2,
+                      "percentage": 0.5,
+                      "sample_values": [
+                        "pioneer",
+                        "history"
+                      ],
+                      "is_array": true
+                    },
+                    {
+                      "name": "hobby",
+                      "source": "observation",
+                      "count": 1,
+                      "total": 2,
+                      "percentage": 0.5,
+                      "sample_values": [
+                        "sailing"
+                      ],
+                      "is_array": false
+                    },
+                    {
+                      "name": "works_at",
+                      "source": "relation",
+                      "count": 1,
+                      "total": 2,
+                      "percentage": 0.5,
+                      "sample_values": [
+                        "organizations/analytical-engine"
+                      ],
+                      "is_array": false,
+                      "target_type": "organization"
+                    }
+                  ],
+                  "suggested_schema": {
+                    "name": "string",
+                    "status": "string",
+                    "role?": "string",
+                    "tags?(array)": "string",
+                    "hobby?": "string",
+                    "works_at?": "Organization"
+                  },
+                  "suggested_required": [
+                    "name",
+                    "status"
+                  ],
+                  "suggested_optional": [
+                    "role",
+                    "tags",
+                    "hobby",
+                    "works_at"
+                  ],
+                  "excluded": []
+                }
+              }
+            }
+          }
+        },
+        {
+          "id": "18-schema_infer-note_type-threshold",
+          "request": {
+            "jsonrpc": "2.0",
+            "id": 18,
+            "method": "tools/call",
+            "params": {
+              "name": "schema_infer",
+              "arguments": {
+                "note_type": "person",
+                "threshold": 0.5
+              }
+            }
+          },
+          "frame": {
+            "jsonrpc": "2.0",
+            "id": "<id>",
+            "result": {
+              "_meta": {
+                "fastmcp": {
+                  "wrap_result": true
+                }
+              },
+              "content": [
+                {
+                  "text": "# Schema Inference: person\n\nNotes analyzed: 2\n\n## Suggested Schema\n\n```yaml\n---\ntitle: Person\ntype: schema\nentity: person\nversion: 1\nschema:\n  name: string\n  status: string\n  role?: string\n  tags?(array): string\n  hobby?: string\n  works_at?: Organization\n---\n```\n\n## Field Frequencies\n\n- **name** (observation) — 100% (2/2) [required] (e.g. Ada Lovelace, Grace Hopper)\n- **status** (observation) — 100% (2/2) [required] (e.g. active, retired)\n- **role** (observation) — 50% (1/2) [optional] (e.g. Mathematician)\n- **tags** (observation) — 50% (1/2) [optional] (e.g. pioneer, history)\n- **hobby** (observation) — 50% (1/2) [optional] (e.g. sailing)\n- **works_at** (relation) — 50% (1/2) [optional] (e.g. organizations/analytical-engine)\n",
+                  "type": "text"
+                }
+              ],
+              "isError": false,
+              "structuredContent": {
+                "result": "# Schema Inference: person\n\nNotes analyzed: 2\n\n## Suggested Schema\n\n```yaml\n---\ntitle: Person\ntype: schema\nentity: person\nversion: 1\nschema:\n  name: string\n  status: string\n  role?: string\n  tags?(array): string\n  hobby?: string\n  works_at?: Organization\n---\n```\n\n## Field Frequencies\n\n- **name** (observation) — 100% (2/2) [required] (e.g. Ada Lovelace, Grace Hopper)\n- **status** (observation) — 100% (2/2) [required] (e.g. active, retired)\n- **role** (observation) — 50% (1/2) [optional] (e.g. Mathematician)\n- **tags** (observation) — 50% (1/2) [optional] (e.g. pioneer, history)\n- **hobby** (observation) — 50% (1/2) [optional] (e.g. sailing)\n- **works_at** (relation) — 50% (1/2) [optional] (e.g. organizations/analytical-engine)\n"
+              }
+            }
+          }
+        },
+        {
+          "id": "19-schema_infer-note_type",
+          "request": {
+            "jsonrpc": "2.0",
+            "id": 19,
+            "method": "tools/call",
+            "params": {
+              "name": "schema_infer",
+              "arguments": {
+                "note_type": "meeting"
+              }
+            }
+          },
+          "frame": {
+            "jsonrpc": "2.0",
+            "id": "<id>",
+            "result": {
+              "_meta": {
+                "fastmcp": {
+                  "wrap_result": true
+                }
+              },
+              "content": [
+                {
+                  "text": "# Schema Inference: meeting\n\nNotes analyzed: 1\n\n## Suggested Schema\n\n```yaml\n---\ntitle: Meeting\ntype: schema\nentity: meeting\nversion: 1\nschema:\n  decision: string\n---\n```\n\n## Field Frequencies\n\n- **decision** (observation) — 100% (1/1) [required] (e.g. Ship the local core first)\n",
+                  "type": "text"
+                }
+              ],
+              "isError": false,
+              "structuredContent": {
+                "result": "# Schema Inference: meeting\n\nNotes analyzed: 1\n\n## Suggested Schema\n\n```yaml\n---\ntitle: Meeting\ntype: schema\nentity: meeting\nversion: 1\nschema:\n  decision: string\n---\n```\n\n## Field Frequencies\n\n- **decision** (observation) — 100% (1/1) [required] (e.g. Ship the local core first)\n"
+              }
+            }
+          }
+        },
+        {
+          "id": "20-schema_infer-note_type-output_format",
+          "request": {
+            "jsonrpc": "2.0",
+            "id": 20,
+            "method": "tools/call",
+            "params": {
+              "name": "schema_infer",
+              "arguments": {
+                "note_type": "meeting",
+                "output_format": "json"
+              }
+            }
+          },
+          "frame": {
+            "jsonrpc": "2.0",
+            "id": "<id>",
+            "result": {
+              "_meta": {
+                "fastmcp": {
+                  "wrap_result": true
+                }
+              },
+              "content": [
+                {
+                  "text": "{\"note_type\":\"meeting\",\"notes_analyzed\":1,\"field_frequencies\":[{\"name\":\"decision\",\"source\":\"observation\",\"count\":1,\"total\":1,\"percentage\":1.0,\"sample_values\":[\"Ship the local core first\"],\"is_array\":false}],\"suggested_schema\":{\"decision\":\"string\"},\"suggested_required\":[\"decision\"],\"suggested_optional\":[],\"excluded\":[]}",
+                  "type": "text"
+                }
+              ],
+              "isError": false,
+              "structuredContent": {
+                "result": {
+                  "note_type": "meeting",
+                  "notes_analyzed": 1,
+                  "field_frequencies": [
+                    {
+                      "name": "decision",
+                      "source": "observation",
+                      "count": 1,
+                      "total": 1,
+                      "percentage": 1.0,
+                      "sample_values": [
+                        "Ship the local core first"
+                      ],
+                      "is_array": false
+                    }
+                  ],
+                  "suggested_schema": {
+                    "decision": "string"
+                  },
+                  "suggested_required": [
+                    "decision"
+                  ],
+                  "suggested_optional": [],
+                  "excluded": []
+                }
+              }
+            }
+          }
+        },
+        {
+          "id": "21-schema_infer-note_type-output_format",
+          "request": {
+            "jsonrpc": "2.0",
+            "id": 21,
+            "method": "tools/call",
+            "params": {
+              "name": "schema_infer",
+              "arguments": {
+                "note_type": "ghost",
+                "output_format": "json"
+              }
+            }
+          },
+          "frame": {
+            "jsonrpc": "2.0",
+            "id": "<id>",
+            "result": {
+              "_meta": {
+                "fastmcp": {
+                  "wrap_result": true
+                }
+              },
+              "content": [
+                {
+                  "text": "{\"note_type\":\"ghost\",\"notes_analyzed\":0,\"field_frequencies\":[],\"suggested_schema\":{},\"suggested_required\":[],\"suggested_optional\":[],\"excluded\":[]}",
+                  "type": "text"
+                }
+              ],
+              "isError": false,
+              "structuredContent": {
+                "result": {
+                  "note_type": "ghost",
+                  "notes_analyzed": 0,
+                  "field_frequencies": [],
+                  "suggested_schema": {},
+                  "suggested_required": [],
+                  "suggested_optional": [],
+                  "excluded": []
+                }
+              }
+            }
+          }
+        },
+        {
+          "id": "22-schema_diff-note_type",
+          "request": {
+            "jsonrpc": "2.0",
+            "id": 22,
+            "method": "tools/call",
+            "params": {
+              "name": "schema_diff",
+              "arguments": {
+                "note_type": "person"
+              }
+            }
+          },
+          "frame": {
+            "jsonrpc": "2.0",
+            "id": "<id>",
+            "result": {
+              "_meta": {
+                "fastmcp": {
+                  "wrap_result": true
+                }
+              },
+              "content": [
+                {
+                  "text": "# Schema Drift: person\n\n## New Fields (in notes but not in schema)\n\n- **hobby** (observation) — 50% (1/2)\n\n## Dropped Fields (in schema but rare in notes)\n\n- **email** (observation) — 0% (0/2)\n\n## Cardinality Changes\n\n- tags: schema declares single-value but usage is typically array\n",
+                  "type": "text"
+                }
+              ],
+              "isError": false,
+              "structuredContent": {
+                "result": "# Schema Drift: person\n\n## New Fields (in notes but not in schema)\n\n- **hobby** (observation) — 50% (1/2)\n\n## Dropped Fields (in schema but rare in notes)\n\n- **email** (observation) — 0% (0/2)\n\n## Cardinality Changes\n\n- tags: schema declares single-value but usage is typically array\n"
+              }
+            }
+          }
+        },
+        {
+          "id": "23-schema_diff-note_type-output_format",
+          "request": {
+            "jsonrpc": "2.0",
+            "id": 23,
+            "method": "tools/call",
+            "params": {
+              "name": "schema_diff",
+              "arguments": {
+                "note_type": "person",
+                "output_format": "json"
+              }
+            }
+          },
+          "frame": {
+            "jsonrpc": "2.0",
+            "id": "<id>",
+            "result": {
+              "_meta": {
+                "fastmcp": {
+                  "wrap_result": true
+                }
+              },
+              "content": [
+                {
+                  "text": "{\"note_type\":\"person\",\"schema_found\":true,\"new_fields\":[{\"name\":\"hobby\",\"source\":\"observation\",\"count\":1,\"total\":2,\"percentage\":0.5}],\"dropped_fields\":[{\"name\":\"email\",\"source\":\"observation\",\"count\":0,\"total\":2,\"percentage\":0.0}],\"cardinality_changes\":[\"tags: schema declares single-value but usage is typically array\"]}",
+                  "type": "text"
+                }
+              ],
+              "isError": false,
+              "structuredContent": {
+                "result": {
+                  "note_type": "person",
+                  "schema_found": true,
+                  "new_fields": [
+                    {
+                      "name": "hobby",
+                      "source": "observation",
+                      "count": 1,
+                      "total": 2,
+                      "percentage": 0.5
+                    }
+                  ],
+                  "dropped_fields": [
+                    {
+                      "name": "email",
+                      "source": "observation",
+                      "count": 0,
+                      "total": 2,
+                      "percentage": 0.0
+                    }
+                  ],
+                  "cardinality_changes": [
+                    "tags: schema declares single-value but usage is typically array"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "id": "24-schema_diff-note_type-output_format",
+          "request": {
+            "jsonrpc": "2.0",
+            "id": 24,
+            "method": "tools/call",
+            "params": {
+              "name": "schema_diff",
+              "arguments": {
+                "note_type": "project",
+                "output_format": "json"
+              }
+            }
+          },
+          "frame": {
+            "jsonrpc": "2.0",
+            "id": "<id>",
+            "result": {
+              "_meta": {
+                "fastmcp": {
+                  "wrap_result": true
+                }
+              },
+              "content": [
+                {
+                  "text": "{\"note_type\":\"project\",\"schema_found\":true,\"new_fields\":[{\"name\":\"budget\",\"source\":\"observation\",\"count\":1,\"total\":1,\"percentage\":1.0}],\"dropped_fields\":[{\"name\":\"owner\",\"source\":\"observation\",\"count\":0,\"total\":1,\"percentage\":0.0}],\"cardinality_changes\":[]}",
+                  "type": "text"
+                }
+              ],
+              "isError": false,
+              "structuredContent": {
+                "result": {
+                  "note_type": "project",
+                  "schema_found": true,
+                  "new_fields": [
+                    {
+                      "name": "budget",
+                      "source": "observation",
+                      "count": 1,
+                      "total": 1,
+                      "percentage": 1.0
+                    }
+                  ],
+                  "dropped_fields": [
+                    {
+                      "name": "owner",
+                      "source": "observation",
+                      "count": 0,
+                      "total": 1,
+                      "percentage": 0.0
+                    }
+                  ],
+                  "cardinality_changes": []
+                }
+              }
+            }
+          }
+        },
+        {
+          "id": "25-schema_diff-note_type",
+          "request": {
+            "jsonrpc": "2.0",
+            "id": 25,
+            "method": "tools/call",
+            "params": {
+              "name": "schema_diff",
+              "arguments": {
+                "note_type": "meeting"
+              }
+            }
+          },
+          "frame": {
+            "jsonrpc": "2.0",
+            "id": "<id>",
+            "result": {
+              "_meta": {
+                "fastmcp": {
+                  "wrap_result": true
+                }
+              },
+              "content": [
+                {
+                  "text": "# No Schema Found for 'meeting'\n\n`schema_diff` requires a schema note to exist for type 'meeting'.\n\n## How to Create a Schema\n\n1. **Infer from existing notes** — run `schema_infer(\"meeting\")` to analyze your notes and get a suggested schema\n2. **Create a schema note** — write a markdown file with this frontmatter:\n\n```yaml\n---\ntitle: Meeting\ntype: schema\nentity: meeting\nversion: 1\nschema:\n  name: string, full name\n  role?: string, job title\nsettings:\n  validation: warn\n---\n```\n\nSchema fields use Picoschema notation:\n- `field_name: type, description` — required field\n- `field_name?: type, description` — optional field\n- Supported types: `string`, `number`, `boolean`, `string[]`\n\n3. **Index** — run `basic-memory db reindex --search` or wait for the file watcher to pick up the new schema note\n4. **Re-run** — call `schema_diff(\"meeting\")` again\n",
+                  "type": "text"
+                }
+              ],
+              "isError": false,
+              "structuredContent": {
+                "result": "# No Schema Found for 'meeting'\n\n`schema_diff` requires a schema note to exist for type 'meeting'.\n\n## How to Create a Schema\n\n1. **Infer from existing notes** — run `schema_infer(\"meeting\")` to analyze your notes and get a suggested schema\n2. **Create a schema note** — write a markdown file with this frontmatter:\n\n```yaml\n---\ntitle: Meeting\ntype: schema\nentity: meeting\nversion: 1\nschema:\n  name: string, full name\n  role?: string, job title\nsettings:\n  validation: warn\n---\n```\n\nSchema fields use Picoschema notation:\n- `field_name: type, description` — required field\n- `field_name?: type, description` — optional field\n- Supported types: `string`, `number`, `boolean`, `string[]`\n\n3. **Index** — run `basic-memory db reindex --search` or wait for the file watcher to pick up the new schema note\n4. **Re-run** — call `schema_diff(\"meeting\")` again\n"
+              }
+            }
+          }
+        },
+        {
+          "id": "26-schema_diff-note_type-output_format",
+          "request": {
+            "jsonrpc": "2.0",
+            "id": 26,
+            "method": "tools/call",
+            "params": {
+              "name": "schema_diff",
+              "arguments": {
+                "note_type": "meeting",
+                "output_format": "json"
+              }
+            }
+          },
+          "frame": {
+            "jsonrpc": "2.0",
+            "id": "<id>",
+            "result": {
+              "_meta": {
+                "fastmcp": {
+                  "wrap_result": true
+                }
+              },
+              "content": [
+                {
+                  "text": "{\"error\":\"No schema found for type 'meeting'\"}",
+                  "type": "text"
+                }
+              ],
+              "isError": false,
+              "structuredContent": {
+                "result": {
+                  "error": "No schema found for type 'meeting'"
+                }
+              }
+            }
+          }
+        }
+      ],
+      "cli": [
+        {
+          "id": "tool schema-validate person",
+          "argv": [
+            "tool",
+            "schema-validate",
+            "person",
+            "--project",
+            "oracle"
+          ],
+          "exit_code": 0,
+          "stdout": "{\n  \"note_type\": \"person\",\n  \"total_notes\": 2,\n  \"total_entities\": 2,\n  \"valid_count\": 2,\n  \"warning_count\": 1,\n  \"error_count\": 0,\n  \"results\": [\n    {\n      \"note_identifier\": \"Ada Lovelace\",\n      \"schema_entity\": \"person\",\n      \"passed\": true,\n      \"field_results\": [\n        {\n          \"field_name\": \"name\",\n          \"field_type\": \"string\",\n          \"required\": true,\n          \"status\": \"present\",\n          \"values\": [\n            \"Ada Lovelace\"\n          ]\n        },\n        {\n          \"field_name\": \"role\",\n          \"field_type\": \"string\",\n          \"required\": false,\n          \"status\": \"present\",\n          \"values\": [\n            \"Mathematician\"\n          ]\n        },\n        {\n          \"field_name\": \"email\",\n          \"field_type\": \"string\",\n          \"required\": false,\n          \"status\": \"missing\",\n          \"values\": [],\n          \"message\": \"Missing optional field: email (expected [email] observation)\"\n        },\n        {\n          \"field_name\": \"works_at\",\n          \"field_type\": \"Organization\",\n          \"required\": false,\n          \"status\": \"present\",\n          \"values\": [\n            \"organizations/analytical-engine\"\n          ]\n        },\n        {\n          \"field_name\": \"tags\",\n          \"field_type\": \"string\",\n          \"required\": false,\n          \"status\": \"present\",\n          \"values\": [\n            \"pioneer\",\n            \"history\"\n          ]\n        },\n        {\n          \"field_name\": \"status\",\n          \"field_type\": \"enum\",\n          \"required\": false,\n          \"status\": \"present\",\n          \"values\": [\n            \"active\"\n          ]\n        }\n      ],\n      \"unmatched_observations\": {},\n      \"unmatched_relations\": [],\n      \"warnings\": [],\n      \"errors\": []\n    },\n    {\n      \"note_identifier\": \"Grace Hopper\",\n      \"schema_entity\": \"person\",\n      \"passed\": true,\n      \"field_results\": [\n        {\n          \"field_name\": \"name\",\n          \"field_type\": \"string\",\n          \"required\": true,\n          \"status\": \"present\",\n          \"values\": [\n            \"Grace Hopper\"\n          ]\n        },\n        {\n          \"field_name\": \"role\",\n          \"field_type\": \"string\",\n          \"required\": false,\n          \"status\": \"missing\",\n          \"values\": [],\n          \"message\": \"Missing optional field: role (expected [role] observation)\"\n        },\n        {\n          \"field_name\": \"email\",\n          \"field_type\": \"string\",\n          \"required\": false,\n          \"status\": \"missing\",\n          \"values\": [],\n          \"message\": \"Missing optional field: email (expected [email] observation)\"\n        },\n        {\n          \"field_name\": \"works_at\",\n          \"field_type\": \"Organization\",\n          \"required\": false,\n          \"status\": \"missing\",\n          \"values\": [],\n          \"message\": \"Missing relation: works_at (no 'works_at [[...]]' relation found)\"\n        },\n        {\n          \"field_name\": \"tags\",\n          \"field_type\": \"string\",\n          \"required\": false,\n          \"status\": \"missing\",\n          \"values\": [],\n          \"message\": \"Missing optional field: tags (expected [tags] observation)\"\n        },\n        {\n          \"field_name\": \"status\",\n          \"field_type\": \"enum\",\n          \"required\": false,\n          \"status\": \"enum_mismatch\",\n          \"values\": [\n            \"retired\"\n          ],\n          \"message\": \"Field 'status' has invalid value(s): retired (allowed: active, inactive)\"\n        }\n      ],\n      \"unmatched_observations\": {\n        \"hobby\": 1\n      },\n      \"unmatched_relations\": [],\n      \"warnings\": [\n        \"Field 'status' has invalid value(s): retired (allowed: active, inactive)\"\n      ],\n      \"errors\": []\n    }\n  ],\n  \"type_summaries\": []\n}\n"
+        },
+        {
+          "id": "tool schema-validate Person",
+          "argv": [
+            "tool",
+            "schema-validate",
+            "Person",
+            "--project",
+            "oracle"
+          ],
+          "exit_code": 0,
+          "stdout": "{\n  \"note_type\": \"person\",\n  \"total_notes\": 2,\n  \"total_entities\": 2,\n  \"valid_count\": 2,\n  \"warning_count\": 1,\n  \"error_count\": 0,\n  \"results\": [\n    {\n      \"note_identifier\": \"Ada Lovelace\",\n      \"schema_entity\": \"person\",\n      \"passed\": true,\n      \"field_results\": [\n        {\n          \"field_name\": \"name\",\n          \"field_type\": \"string\",\n          \"required\": true,\n          \"status\": \"present\",\n          \"values\": [\n            \"Ada Lovelace\"\n          ]\n        },\n        {\n          \"field_name\": \"role\",\n          \"field_type\": \"string\",\n          \"required\": false,\n          \"status\": \"present\",\n          \"values\": [\n            \"Mathematician\"\n          ]\n        },\n        {\n          \"field_name\": \"email\",\n          \"field_type\": \"string\",\n          \"required\": false,\n          \"status\": \"missing\",\n          \"values\": [],\n          \"message\": \"Missing optional field: email (expected [email] observation)\"\n        },\n        {\n          \"field_name\": \"works_at\",\n          \"field_type\": \"Organization\",\n          \"required\": false,\n          \"status\": \"present\",\n          \"values\": [\n            \"organizations/analytical-engine\"\n          ]\n        },\n        {\n          \"field_name\": \"tags\",\n          \"field_type\": \"string\",\n          \"required\": false,\n          \"status\": \"present\",\n          \"values\": [\n            \"pioneer\",\n            \"history\"\n          ]\n        },\n        {\n          \"field_name\": \"status\",\n          \"field_type\": \"enum\",\n          \"required\": false,\n          \"status\": \"present\",\n          \"values\": [\n            \"active\"\n          ]\n        }\n      ],\n      \"unmatched_observations\": {},\n      \"unmatched_relations\": [],\n      \"warnings\": [],\n      \"errors\": []\n    },\n    {\n      \"note_identifier\": \"Grace Hopper\",\n      \"schema_entity\": \"person\",\n      \"passed\": true,\n      \"field_results\": [\n        {\n          \"field_name\": \"name\",\n          \"field_type\": \"string\",\n          \"required\": true,\n          \"status\": \"present\",\n          \"values\": [\n            \"Grace Hopper\"\n          ]\n        },\n        {\n          \"field_name\": \"role\",\n          \"field_type\": \"string\",\n          \"required\": false,\n          \"status\": \"missing\",\n          \"values\": [],\n          \"message\": \"Missing optional field: role (expected [role] observation)\"\n        },\n        {\n          \"field_name\": \"email\",\n          \"field_type\": \"string\",\n          \"required\": false,\n          \"status\": \"missing\",\n          \"values\": [],\n          \"message\": \"Missing optional field: email (expected [email] observation)\"\n        },\n        {\n          \"field_name\": \"works_at\",\n          \"field_type\": \"Organization\",\n          \"required\": false,\n          \"status\": \"missing\",\n          \"values\": [],\n          \"message\": \"Missing relation: works_at (no 'works_at [[...]]' relation found)\"\n        },\n        {\n          \"field_name\": \"tags\",\n          \"field_type\": \"string\",\n          \"required\": false,\n          \"status\": \"missing\",\n          \"values\": [],\n          \"message\": \"Missing optional field: tags (expected [tags] observation)\"\n        },\n        {\n          \"field_name\": \"status\",\n          \"field_type\": \"enum\",\n          \"required\": false,\n          \"status\": \"enum_mismatch\",\n          \"values\": [\n            \"retired\"\n          ],\n          \"message\": \"Field 'status' has invalid value(s): retired (allowed: active, inactive)\"\n        }\n      ],\n      \"unmatched_observations\": {\n        \"hobby\": 1\n      },\n      \"unmatched_relations\": [],\n      \"warnings\": [\n        \"Field 'status' has invalid value(s): retired (allowed: active, inactive)\"\n      ],\n      \"errors\": []\n    }\n  ],\n  \"type_summaries\": []\n}\n"
+        },
+        {
+          "id": "tool schema-validate people/ada-lovelace.md",
+          "argv": [
+            "tool",
+            "schema-validate",
+            "people/ada-lovelace.md",
+            "--project",
+            "oracle"
+          ],
+          "exit_code": 0,
+          "stdout": "{\n  \"note_type\": \"person\",\n  \"total_notes\": 1,\n  \"total_entities\": 1,\n  \"valid_count\": 1,\n  \"warning_count\": 0,\n  \"error_count\": 0,\n  \"results\": [\n    {\n      \"note_identifier\": \"Ada Lovelace\",\n      \"schema_entity\": \"person\",\n      \"passed\": true,\n      \"field_results\": [\n        {\n          \"field_name\": \"name\",\n          \"field_type\": \"string\",\n          \"required\": true,\n          \"status\": \"present\",\n          \"values\": [\n            \"Ada Lovelace\"\n          ]\n        },\n        {\n          \"field_name\": \"role\",\n          \"field_type\": \"string\",\n          \"required\": false,\n          \"status\": \"present\",\n          \"values\": [\n            \"Mathematician\"\n          ]\n        },\n        {\n          \"field_name\": \"email\",\n          \"field_type\": \"string\",\n          \"required\": false,\n          \"status\": \"missing\",\n          \"values\": [],\n          \"message\": \"Missing optional field: email (expected [email] observation)\"\n        },\n        {\n          \"field_name\": \"works_at\",\n          \"field_type\": \"Organization\",\n          \"required\": false,\n          \"status\": \"present\",\n          \"values\": [\n            \"organizations/analytical-engine\"\n          ]\n        },\n        {\n          \"field_name\": \"tags\",\n          \"field_type\": \"string\",\n          \"required\": false,\n          \"status\": \"present\",\n          \"values\": [\n            \"pioneer\",\n            \"history\"\n          ]\n        },\n        {\n          \"field_name\": \"status\",\n          \"field_type\": \"enum\",\n          \"required\": false,\n          \"status\": \"present\",\n          \"values\": [\n            \"active\"\n          ]\n        }\n      ],\n      \"unmatched_observations\": {},\n      \"unmatched_relations\": [],\n      \"warnings\": [],\n      \"errors\": []\n    }\n  ],\n  \"type_summaries\": []\n}\n"
+        },
+        {
+          "id": "tool schema-validate",
+          "argv": [
+            "tool",
+            "schema-validate",
+            "--project",
+            "oracle"
+          ],
+          "exit_code": 0,
+          "stdout": "{\n  \"total_notes\": 3,\n  \"total_entities\": 3,\n  \"valid_count\": 2,\n  \"warning_count\": 1,\n  \"error_count\": 1,\n  \"results\": [\n    {\n      \"note_identifier\": \"Ada Lovelace\",\n      \"schema_entity\": \"person\",\n      \"passed\": true,\n      \"field_results\": [\n        {\n          \"field_name\": \"name\",\n          \"field_type\": \"string\",\n          \"required\": true,\n          \"status\": \"present\",\n          \"values\": [\n            \"Ada Lovelace\"\n          ]\n        },\n        {\n          \"field_name\": \"role\",\n          \"field_type\": \"string\",\n          \"required\": false,\n          \"status\": \"present\",\n          \"values\": [\n            \"Mathematician\"\n          ]\n        },\n        {\n          \"field_name\": \"email\",\n          \"field_type\": \"string\",\n          \"required\": false,\n          \"status\": \"missing\",\n          \"values\": [],\n          \"message\": \"Missing optional field: email (expected [email] observation)\"\n        },\n        {\n          \"field_name\": \"works_at\",\n          \"field_type\": \"Organization\",\n          \"required\": false,\n          \"status\": \"present\",\n          \"values\": [\n            \"organizations/analytical-engine\"\n          ]\n        },\n        {\n          \"field_name\": \"tags\",\n          \"field_type\": \"string\",\n          \"required\": false,\n          \"status\": \"present\",\n          \"values\": [\n            \"pioneer\",\n            \"history\"\n          ]\n        },\n        {\n          \"field_name\": \"status\",\n          \"field_type\": \"enum\",\n          \"required\": false,\n          \"status\": \"present\",\n          \"values\": [\n            \"active\"\n          ]\n        }\n      ],\n      \"unmatched_observations\": {},\n      \"unmatched_relations\": [],\n      \"warnings\": [],\n      \"errors\": []\n    },\n    {\n      \"note_identifier\": \"Grace Hopper\",\n      \"schema_entity\": \"person\",\n      \"passed\": true,\n      \"field_results\": [\n        {\n          \"field_name\": \"name\",\n          \"field_type\": \"string\",\n          \"required\": true,\n          \"status\": \"present\",\n          \"values\": [\n            \"Grace Hopper\"\n          ]\n        },\n        {\n          \"field_name\": \"role\",\n          \"field_type\": \"string\",\n          \"required\": false,\n          \"status\": \"missing\",\n          \"values\": [],\n          \"message\": \"Missing optional field: role (expected [role] observation)\"\n        },\n        {\n          \"field_name\": \"email\",\n          \"field_type\": \"string\",\n          \"required\": false,\n          \"status\": \"missing\",\n          \"values\": [],\n          \"message\": \"Missing optional field: email (expected [email] observation)\"\n        },\n        {\n          \"field_name\": \"works_at\",\n          \"field_type\": \"Organization\",\n          \"required\": false,\n          \"status\": \"missing\",\n          \"values\": [],\n          \"message\": \"Missing relation: works_at (no 'works_at [[...]]' relation found)\"\n        },\n        {\n          \"field_name\": \"tags\",\n          \"field_type\": \"string\",\n          \"required\": false,\n          \"status\": \"missing\",\n          \"values\": [],\n          \"message\": \"Missing optional field: tags (expected [tags] observation)\"\n        },\n        {\n          \"field_name\": \"status\",\n          \"field_type\": \"enum\",\n          \"required\": false,\n          \"status\": \"enum_mismatch\",\n          \"values\": [\n            \"retired\"\n          ],\n          \"message\": \"Field 'status' has invalid value(s): retired (allowed: active, inactive)\"\n        }\n      ],\n      \"unmatched_observations\": {\n        \"hobby\": 1\n      },\n      \"unmatched_relations\": [],\n      \"warnings\": [\n        \"Field 'status' has invalid value(s): retired (allowed: active, inactive)\"\n      ],\n      \"errors\": []\n    },\n    {\n      \"note_identifier\": \"Alpha Project\",\n      \"schema_entity\": \"project\",\n      \"passed\": false,\n      \"field_results\": [\n        {\n          \"field_name\": \"status\",\n          \"field_type\": \"enum\",\n          \"required\": false,\n          \"status\": \"enum_mismatch\",\n          \"values\": [\n            \"paused\"\n          ],\n          \"message\": \"Field 'status' has invalid value(s): paused (allowed: active, archived)\"\n        },\n        {\n          \"field_name\": \"owner\",\n          \"field_type\": \"string\",\n          \"required\": false,\n          \"status\": \"missing\",\n          \"values\": [],\n          \"message\": \"Missing optional field: owner (expected [owner] observation)\"\n        }\n      ],\n      \"unmatched_observations\": {\n        \"budget\": 1\n      },\n      \"unmatched_relations\": [],\n      \"warnings\": [],\n      \"errors\": [\n        \"Field 'status' has invalid value(s): paused (allowed: active, archived)\"\n      ]\n    }\n  ],\n  \"type_summaries\": [\n    {\n      \"note_type\": \"person\",\n      \"total_notes\": 2,\n      \"total_entities\": 2,\n      \"valid_count\": 2,\n      \"warning_count\": 1,\n      \"error_count\": 0\n    },\n    {\n      \"note_type\": \"project\",\n      \"total_notes\": 1,\n      \"total_entities\": 1,\n      \"valid_count\": 0,\n      \"warning_count\": 0,\n      \"error_count\": 1\n    }\n  ]\n}\n"
+        },
+        {
+          "id": "tool schema-validate ghost",
+          "argv": [
+            "tool",
+            "schema-validate",
+            "ghost",
+            "--project",
+            "oracle"
+          ],
+          "exit_code": 0,
+          "stdout": "{\n  \"error\": \"No notes found of type 'ghost'\"\n}\n"
+        },
+        {
+          "id": "tool schema-validate meeting",
+          "argv": [
+            "tool",
+            "schema-validate",
+            "meeting",
+            "--project",
+            "oracle"
+          ],
+          "exit_code": 0,
+          "stdout": "{\n  \"error\": \"No schema found for type 'meeting'\"\n}\n"
+        },
+        {
+          "id": "tool schema-infer person",
+          "argv": [
+            "tool",
+            "schema-infer",
+            "person",
+            "--project",
+            "oracle"
+          ],
+          "exit_code": 0,
+          "stdout": "{\n  \"note_type\": \"person\",\n  \"notes_analyzed\": 2,\n  \"field_frequencies\": [\n    {\n      \"name\": \"name\",\n      \"source\": \"observation\",\n      \"count\": 2,\n      \"total\": 2,\n      \"percentage\": 1.0,\n      \"sample_values\": [\n        \"Ada Lovelace\",\n        \"Grace Hopper\"\n      ],\n      \"is_array\": false\n    },\n    {\n      \"name\": \"status\",\n      \"source\": \"observation\",\n      \"count\": 2,\n      \"total\": 2,\n      \"percentage\": 1.0,\n      \"sample_values\": [\n        \"active\",\n        \"retired\"\n      ],\n      \"is_array\": false\n    },\n    {\n      \"name\": \"role\",\n      \"source\": \"observation\",\n      \"count\": 1,\n      \"total\": 2,\n      \"percentage\": 0.5,\n      \"sample_values\": [\n        \"Mathematician\"\n      ],\n      \"is_array\": false\n    },\n    {\n      \"name\": \"tags\",\n      \"source\": \"observation\",\n      \"count\": 1,\n      \"total\": 2,\n      \"percentage\": 0.5,\n      \"sample_values\": [\n        \"pioneer\",\n        \"history\"\n      ],\n      \"is_array\": true\n    },\n    {\n      \"name\": \"hobby\",\n      \"source\": \"observation\",\n      \"count\": 1,\n      \"total\": 2,\n      \"percentage\": 0.5,\n      \"sample_values\": [\n        \"sailing\"\n      ],\n      \"is_array\": false\n    },\n    {\n      \"name\": \"works_at\",\n      \"source\": \"relation\",\n      \"count\": 1,\n      \"total\": 2,\n      \"percentage\": 0.5,\n      \"sample_values\": [\n        \"organizations/analytical-engine\"\n      ],\n      \"is_array\": false,\n      \"target_type\": \"organization\"\n    }\n  ],\n  \"suggested_schema\": {\n    \"name\": \"string\",\n    \"status\": \"string\",\n    \"role?\": \"string\",\n    \"tags?(array)\": \"string\",\n    \"hobby?\": \"string\",\n    \"works_at?\": \"Organization\"\n  },\n  \"suggested_required\": [\n    \"name\",\n    \"status\"\n  ],\n  \"suggested_optional\": [\n    \"role\",\n    \"tags\",\n    \"hobby\",\n    \"works_at\"\n  ],\n  \"excluded\": []\n}\n"
+        },
+        {
+          "id": "tool schema-infer person --threshold 0.5",
+          "argv": [
+            "tool",
+            "schema-infer",
+            "person",
+            "--threshold",
+            "0.5",
+            "--project",
+            "oracle"
+          ],
+          "exit_code": 0,
+          "stdout": "{\n  \"note_type\": \"person\",\n  \"notes_analyzed\": 2,\n  \"field_frequencies\": [\n    {\n      \"name\": \"name\",\n      \"source\": \"observation\",\n      \"count\": 2,\n      \"total\": 2,\n      \"percentage\": 1.0,\n      \"sample_values\": [\n        \"Ada Lovelace\",\n        \"Grace Hopper\"\n      ],\n      \"is_array\": false\n    },\n    {\n      \"name\": \"status\",\n      \"source\": \"observation\",\n      \"count\": 2,\n      \"total\": 2,\n      \"percentage\": 1.0,\n      \"sample_values\": [\n        \"active\",\n        \"retired\"\n      ],\n      \"is_array\": false\n    },\n    {\n      \"name\": \"role\",\n      \"source\": \"observation\",\n      \"count\": 1,\n      \"total\": 2,\n      \"percentage\": 0.5,\n      \"sample_values\": [\n        \"Mathematician\"\n      ],\n      \"is_array\": false\n    },\n    {\n      \"name\": \"tags\",\n      \"source\": \"observation\",\n      \"count\": 1,\n      \"total\": 2,\n      \"percentage\": 0.5,\n      \"sample_values\": [\n        \"pioneer\",\n        \"history\"\n      ],\n      \"is_array\": true\n    },\n    {\n      \"name\": \"hobby\",\n      \"source\": \"observation\",\n      \"count\": 1,\n      \"total\": 2,\n      \"percentage\": 0.5,\n      \"sample_values\": [\n        \"sailing\"\n      ],\n      \"is_array\": false\n    },\n    {\n      \"name\": \"works_at\",\n      \"source\": \"relation\",\n      \"count\": 1,\n      \"total\": 2,\n      \"percentage\": 0.5,\n      \"sample_values\": [\n        \"organizations/analytical-engine\"\n      ],\n      \"is_array\": false,\n      \"target_type\": \"organization\"\n    }\n  ],\n  \"suggested_schema\": {\n    \"name\": \"string\",\n    \"status\": \"string\",\n    \"role?\": \"string\",\n    \"tags?(array)\": \"string\",\n    \"hobby?\": \"string\",\n    \"works_at?\": \"Organization\"\n  },\n  \"suggested_required\": [\n    \"name\",\n    \"status\"\n  ],\n  \"suggested_optional\": [\n    \"role\",\n    \"tags\",\n    \"hobby\",\n    \"works_at\"\n  ],\n  \"excluded\": []\n}\n"
+        },
+        {
+          "id": "tool schema-infer meeting",
+          "argv": [
+            "tool",
+            "schema-infer",
+            "meeting",
+            "--project",
+            "oracle"
+          ],
+          "exit_code": 0,
+          "stdout": "{\n  \"note_type\": \"meeting\",\n  \"notes_analyzed\": 1,\n  \"field_frequencies\": [\n    {\n      \"name\": \"decision\",\n      \"source\": \"observation\",\n      \"count\": 1,\n      \"total\": 1,\n      \"percentage\": 1.0,\n      \"sample_values\": [\n        \"Ship the local core first\"\n      ],\n      \"is_array\": false\n    }\n  ],\n  \"suggested_schema\": {\n    \"decision\": \"string\"\n  },\n  \"suggested_required\": [\n    \"decision\"\n  ],\n  \"suggested_optional\": [],\n  \"excluded\": []\n}\n"
+        },
+        {
+          "id": "tool schema-diff person",
+          "argv": [
+            "tool",
+            "schema-diff",
+            "person",
+            "--project",
+            "oracle"
+          ],
+          "exit_code": 0,
+          "stdout": "{\n  \"note_type\": \"person\",\n  \"schema_found\": true,\n  \"new_fields\": [\n    {\n      \"name\": \"hobby\",\n      \"source\": \"observation\",\n      \"count\": 1,\n      \"total\": 2,\n      \"percentage\": 0.5\n    }\n  ],\n  \"dropped_fields\": [\n    {\n      \"name\": \"email\",\n      \"source\": \"observation\",\n      \"count\": 0,\n      \"total\": 2,\n      \"percentage\": 0.0\n    }\n  ],\n  \"cardinality_changes\": [\n    \"tags: schema declares single-value but usage is typically array\"\n  ]\n}\n"
+        },
+        {
+          "id": "tool schema-diff meeting",
+          "argv": [
+            "tool",
+            "schema-diff",
+            "meeting",
+            "--project",
+            "oracle"
+          ],
+          "exit_code": 0,
+          "stdout": "{\n  \"error\": \"No schema found for type 'meeting'\"\n}\n"
+        }
+      ]
+    },
+    {
+      "name": "no-schema-vault",
+      "fixture": "vault",
+      "overrides": [],
+      "responses": [
+        {
+          "id": "initialize",
+          "request": {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+              "protocolVersion": "2024-11-05",
+              "capabilities": {},
+              "clientInfo": {
+                "name": "oracle-harness",
+                "version": "0"
+              }
+            }
+          },
+          "frame": {
+            "jsonrpc": "2.0",
+            "id": "<id>",
+            "result": {
+              "protocolVersion": "2024-11-05",
+              "capabilities": {
+                "logging": {},
+                "prompts": {
+                  "listChanged": false
+                },
+                "resources": {
+                  "subscribe": false,
+                  "listChanged": false
+                },
+                "tools": {
+                  "listChanged": true
+                }
+              },
+              "serverInfo": {
+                "name": "Basic Memory",
+                "version": "4.0.0b1"
+              },
+              "instructions": "Basic Memory is the user's personal knowledge base: Markdown notes that persist across conversations and that both the user and their AI assistants can read and write.\n\nAt the start of a session, call `recent_activity` to orient yourself in the user's notes before answering from memory. If the knowledge base is empty, briefly explain that Basic Memory gives them persistent notes shared between the user and their AI, and offer to save something useful from this conversation as their first note with `write_note` — then wait for them to agree before writing anything. Do not create notes unprompted.\n\nFor a fuller guide, read the `memory://ai_assistant_guide` resource. If you have a web or fetch tool and need current documentation, fetch `https://docs.basicmemory.com/llms.txt` first, then fetch only the relevant linked `/raw/...md` page."
+            }
+          }
+        },
+        {
+          "id": "2-schema_validate-default",
+          "request": {
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/call",
+            "params": {
+              "name": "schema_validate",
+              "arguments": {}
+            }
+          },
+          "frame": {
+            "jsonrpc": "2.0",
+            "id": "<id>",
+            "result": {
+              "_meta": {
+                "fastmcp": {
+                  "wrap_result": true
+                }
+              },
+              "content": [
+                {
+                  "text": "# No Schemas Defined\n\n`schema_validate` was called without `note_type` or `identifier`, which validates every note type that has a schema — but this project has no schema notes yet, so there is nothing to validate.\n\n## Next Steps\n\n1. **Infer a schema** — run `schema_infer(\"<note_type>\")` to analyze existing notes and get a suggested schema\n2. **Create a schema note** — write a note with `type: schema` and an `entity` field naming the note type it validates\n3. **Re-run** — call `schema_validate()` again once a schema exists\n",
+                  "type": "text"
+                }
+              ],
+              "isError": false,
+              "structuredContent": {
+                "result": "# No Schemas Defined\n\n`schema_validate` was called without `note_type` or `identifier`, which validates every note type that has a schema — but this project has no schema notes yet, so there is nothing to validate.\n\n## Next Steps\n\n1. **Infer a schema** — run `schema_infer(\"<note_type>\")` to analyze existing notes and get a suggested schema\n2. **Create a schema note** — write a note with `type: schema` and an `entity` field naming the note type it validates\n3. **Re-run** — call `schema_validate()` again once a schema exists\n"
+              }
+            }
+          }
+        },
+        {
+          "id": "3-schema_validate-output_format",
+          "request": {
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "tools/call",
+            "params": {
+              "name": "schema_validate",
+              "arguments": {
+                "output_format": "json"
+              }
+            }
+          },
+          "frame": {
+            "jsonrpc": "2.0",
+            "id": "<id>",
+            "result": {
+              "_meta": {
+                "fastmcp": {
+                  "wrap_result": true
+                }
+              },
+              "content": [
+                {
+                  "text": "{\"error\":\"No schemas defined in this project\"}",
+                  "type": "text"
+                }
+              ],
+              "isError": false,
+              "structuredContent": {
+                "result": {
+                  "error": "No schemas defined in this project"
+                }
+              }
+            }
+          }
+        }
+      ],
+      "cli": [
+        {
+          "id": "tool schema-validate",
+          "argv": [
+            "tool",
+            "schema-validate",
+            "--project",
+            "oracle"
+          ],
+          "exit_code": 0,
+          "stdout": "{\n  \"error\": \"No schemas defined in this project\"\n}\n"
+        }
+      ]
+    },
+    {
+      "name": "broken-schema-vault",
+      "fixture": "schema-vault",
+      "overrides": [
+        "schema/person.md"
+      ],
+      "responses": [
+        {
+          "id": "initialize",
+          "request": {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+              "protocolVersion": "2024-11-05",
+              "capabilities": {},
+              "clientInfo": {
+                "name": "oracle-harness",
+                "version": "0"
+              }
+            }
+          },
+          "frame": {
+            "jsonrpc": "2.0",
+            "id": "<id>",
+            "result": {
+              "protocolVersion": "2024-11-05",
+              "capabilities": {
+                "logging": {},
+                "prompts": {
+                  "listChanged": false
+                },
+                "resources": {
+                  "subscribe": false,
+                  "listChanged": false
+                },
+                "tools": {
+                  "listChanged": true
+                }
+              },
+              "serverInfo": {
+                "name": "Basic Memory",
+                "version": "4.0.0b1"
+              },
+              "instructions": "Basic Memory is the user's personal knowledge base: Markdown notes that persist across conversations and that both the user and their AI assistants can read and write.\n\nAt the start of a session, call `recent_activity` to orient yourself in the user's notes before answering from memory. If the knowledge base is empty, briefly explain that Basic Memory gives them persistent notes shared between the user and their AI, and offer to save something useful from this conversation as their first note with `write_note` — then wait for them to agree before writing anything. Do not create notes unprompted.\n\nFor a fuller guide, read the `memory://ai_assistant_guide` resource. If you have a web or fetch tool and need current documentation, fetch `https://docs.basicmemory.com/llms.txt` first, then fetch only the relevant linked `/raw/...md` page."
+            }
+          }
+        },
+        {
+          "id": "2-schema_validate-note_type",
+          "request": {
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/call",
+            "params": {
+              "name": "schema_validate",
+              "arguments": {
+                "note_type": "person"
+              }
+            }
+          },
+          "frame": {
+            "jsonrpc": "2.0",
+            "id": "<id>",
+            "result": {
+              "_meta": {
+                "fastmcp": {
+                  "wrap_result": true
+                }
+              },
+              "content": [
+                {
+                  "text": "# Schema Validation Failed\n\nError validating schemas: Invalid settings.validation value 'nonsense'; expected one of: 'warn', 'strict', or 'error' (alias for 'strict')\n\n## Troubleshooting\n1. Ensure schema notes exist (type: schema) for the target note type\n2. Check that notes have the correct type in frontmatter\n3. Verify the project has been indexed: `basic-memory status`\n",
+                  "type": "text"
+                }
+              ],
+              "isError": false,
+              "structuredContent": {
+                "result": "# Schema Validation Failed\n\nError validating schemas: Invalid settings.validation value 'nonsense'; expected one of: 'warn', 'strict', or 'error' (alias for 'strict')\n\n## Troubleshooting\n1. Ensure schema notes exist (type: schema) for the target note type\n2. Check that notes have the correct type in frontmatter\n3. Verify the project has been indexed: `basic-memory status`\n"
+              }
+            }
+          }
+        },
+        {
+          "id": "3-schema_validate-note_type-output_format",
+          "request": {
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "tools/call",
+            "params": {
+              "name": "schema_validate",
+              "arguments": {
+                "note_type": "person",
+                "output_format": "json"
+              }
+            }
+          },
+          "frame": {
+            "jsonrpc": "2.0",
+            "id": "<id>",
+            "result": {
+              "_meta": {
+                "fastmcp": {
+                  "wrap_result": true
+                }
+              },
+              "content": [
+                {
+                  "text": "{\"error\":\"Schema validation failed: Invalid settings.validation value 'nonsense'; expected one of: 'warn', 'strict', or 'error' (alias for 'strict')\"}",
+                  "type": "text"
+                }
+              ],
+              "isError": false,
+              "structuredContent": {
+                "result": {
+                  "error": "Schema validation failed: Invalid settings.validation value 'nonsense'; expected one of: 'warn', 'strict', or 'error' (alias for 'strict')"
+                }
+              }
+            }
+          }
+        },
+        {
+          "id": "4-schema_diff-note_type",
+          "request": {
+            "jsonrpc": "2.0",
+            "id": 4,
+            "method": "tools/call",
+            "params": {
+              "name": "schema_diff",
+              "arguments": {
+                "note_type": "person"
+              }
+            }
+          },
+          "frame": {
+            "jsonrpc": "2.0",
+            "id": "<id>",
+            "result": {
+              "_meta": {
+                "fastmcp": {
+                  "wrap_result": true
+                }
+              },
+              "content": [
+                {
+                  "text": "# Schema Diff Failed\n\nError detecting drift for type 'person': Invalid settings.validation value 'nonsense'; expected one of: 'warn', 'strict', or 'error' (alias for 'strict')\n\n## Troubleshooting\n1. Ensure a schema note exists for type 'person'\n2. Ensure notes of type 'person' exist in the project\n3. Verify the project has been indexed: `basic-memory status`\n",
+                  "type": "text"
+                }
+              ],
+              "isError": false,
+              "structuredContent": {
+                "result": "# Schema Diff Failed\n\nError detecting drift for type 'person': Invalid settings.validation value 'nonsense'; expected one of: 'warn', 'strict', or 'error' (alias for 'strict')\n\n## Troubleshooting\n1. Ensure a schema note exists for type 'person'\n2. Ensure notes of type 'person' exist in the project\n3. Verify the project has been indexed: `basic-memory status`\n"
+              }
+            }
+          }
+        }
+      ],
+      "cli": [
+        {
+          "id": "tool schema-validate person",
+          "argv": [
+            "tool",
+            "schema-validate",
+            "person",
+            "--project",
+            "oracle"
+          ],
+          "exit_code": 0,
+          "stdout": "{\n  \"error\": \"Schema validation failed: Invalid settings.validation value 'nonsense'; expected one of: 'warn', 'strict', or 'error' (alias for 'strict')\"\n}\n"
+        },
+        {
+          "id": "tool schema-diff person",
+          "argv": [
+            "tool",
+            "schema-diff",
+            "person",
+            "--project",
+            "oracle"
+          ],
+          "exit_code": 0,
+          "stdout": "{\n  \"error\": \"Schema diff failed: Invalid settings.validation value 'nonsense'; expected one of: 'warn', 'strict', or 'error' (alias for 'strict')\"\n}\n"
+        }
+      ]
+    }
+  ]
+}

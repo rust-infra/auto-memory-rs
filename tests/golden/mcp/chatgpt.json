@@ -1,0 +1,459 @@
+{
+  "reference": "basic-memory",
+  "project": "oracle",
+  "protocolVersion": "2024-11-05",
+  "suites": [
+    {
+      "name": "neutral-client",
+      "responses": [
+        {
+          "id": "initialize",
+          "request": {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+              "protocolVersion": "2024-11-05",
+              "capabilities": {},
+              "clientInfo": {
+                "name": "oracle-harness",
+                "version": "0"
+              }
+            }
+          },
+          "frame": {
+            "jsonrpc": "2.0",
+            "id": "<id>",
+            "result": {
+              "protocolVersion": "2024-11-05",
+              "capabilities": {
+                "logging": {},
+                "prompts": {
+                  "listChanged": false
+                },
+                "resources": {
+                  "subscribe": false,
+                  "listChanged": false
+                },
+                "tools": {
+                  "listChanged": true
+                }
+              },
+              "serverInfo": {
+                "name": "Basic Memory",
+                "version": "4.0.0b1"
+              },
+              "instructions": "Basic Memory is the user's personal knowledge base: Markdown notes that persist across conversations and that both the user and their AI assistants can read and write.\n\nAt the start of a session, call `recent_activity` to orient yourself in the user's notes before answering from memory. If the knowledge base is empty, briefly explain that Basic Memory gives them persistent notes shared between the user and their AI, and offer to save something useful from this conversation as their first note with `write_note` — then wait for them to agree before writing anything. Do not create notes unprompted.\n\nFor a fuller guide, read the `memory://ai_assistant_guide` resource. If you have a web or fetch tool and need current documentation, fetch `https://docs.basicmemory.com/llms.txt` first, then fetch only the relevant linked `/raw/...md` page."
+            }
+          }
+        },
+        {
+          "id": "2-search",
+          "request": {
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/call",
+            "params": {
+              "name": "search",
+              "arguments": {
+                "query": "rust"
+              }
+            }
+          },
+          "frame": {
+            "jsonrpc": "2.0",
+            "id": "<id>",
+            "result": {
+              "_meta": {
+                "fastmcp": {
+                  "wrap_result": true
+                }
+              },
+              "content": [
+                {
+                  "text": "[{\"type\":\"text\",\"text\":\"{\\\"results\\\": [], \\\"error\\\": \\\"Unsupported MCP client\\\", \\\"error_message\\\": \\\"The search compatibility tool is only available to OpenAI MCP clients. Use search_notes instead.\\\"}\"}]",
+                  "type": "text"
+                }
+              ],
+              "isError": false,
+              "structuredContent": {
+                "result": [
+                  {
+                    "type": "text",
+                    "text": "{\"results\": [], \"error\": \"Unsupported MCP client\", \"error_message\": \"The search compatibility tool is only available to OpenAI MCP clients. Use search_notes instead.\"}"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "id": "3-fetch",
+          "request": {
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "tools/call",
+            "params": {
+              "name": "fetch",
+              "arguments": {
+                "id": "memory://notes/simple"
+              }
+            }
+          },
+          "frame": {
+            "jsonrpc": "2.0",
+            "id": "<id>",
+            "result": {
+              "_meta": {
+                "fastmcp": {
+                  "wrap_result": true
+                }
+              },
+              "content": [
+                {
+                  "text": "[{\"type\":\"text\",\"text\":\"{\\\"id\\\": \\\"memory://notes/simple\\\", \\\"title\\\": \\\"Unsupported MCP Client\\\", \\\"text\\\": \\\"The fetch compatibility tool is only available to OpenAI MCP clients. Use read_note instead.\\\", \\\"url\\\": \\\"memory://notes/simple\\\", \\\"metadata\\\": {\\\"error\\\": \\\"Unsupported MCP client\\\"}}\"}]",
+                  "type": "text"
+                }
+              ],
+              "isError": false,
+              "structuredContent": {
+                "result": [
+                  {
+                    "type": "text",
+                    "text": "{\"id\": \"memory://notes/simple\", \"title\": \"Unsupported MCP Client\", \"text\": \"The fetch compatibility tool is only available to OpenAI MCP clients. Use read_note instead.\", \"url\": \"memory://notes/simple\", \"metadata\": {\"error\": \"Unsupported MCP client\"}}"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "openai-mcp-client",
+      "responses": [
+        {
+          "id": "initialize",
+          "request": {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+              "protocolVersion": "2024-11-05",
+              "capabilities": {},
+              "clientInfo": {
+                "name": "openai-mcp",
+                "version": "0"
+              }
+            }
+          },
+          "frame": {
+            "jsonrpc": "2.0",
+            "id": "<id>",
+            "result": {
+              "protocolVersion": "2024-11-05",
+              "capabilities": {
+                "logging": {},
+                "prompts": {
+                  "listChanged": false
+                },
+                "resources": {
+                  "subscribe": false,
+                  "listChanged": false
+                },
+                "tools": {
+                  "listChanged": true
+                }
+              },
+              "serverInfo": {
+                "name": "Basic Memory",
+                "version": "4.0.0b1"
+              },
+              "instructions": "Basic Memory is the user's personal knowledge base: Markdown notes that persist across conversations and that both the user and their AI assistants can read and write.\n\nAt the start of a session, call `recent_activity` to orient yourself in the user's notes before answering from memory. If the knowledge base is empty, briefly explain that Basic Memory gives them persistent notes shared between the user and their AI, and offer to save something useful from this conversation as their first note with `write_note` — then wait for them to agree before writing anything. Do not create notes unprompted.\n\nFor a fuller guide, read the `memory://ai_assistant_guide` resource. If you have a web or fetch tool and need current documentation, fetch `https://docs.basicmemory.com/llms.txt` first, then fetch only the relevant linked `/raw/...md` page."
+            }
+          }
+        },
+        {
+          "id": "2-search",
+          "request": {
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/call",
+            "params": {
+              "name": "search",
+              "arguments": {
+                "query": "rust"
+              }
+            }
+          },
+          "frame": {
+            "jsonrpc": "2.0",
+            "id": "<id>",
+            "result": {
+              "_meta": {
+                "fastmcp": {
+                  "wrap_result": true
+                }
+              },
+              "content": [
+                {
+                  "text": "[{\"type\":\"text\",\"text\":\"{\\\"results\\\": [{\\\"id\\\": \\\"notes/frontmatter-note\\\", \\\"title\\\": \\\"Frontmatter Demo\\\", \\\"url\\\": \\\"notes/frontmatter-note\\\"}, {\\\"id\\\": \\\"oracle/notes/simple\\\", \\\"title\\\": \\\"simple\\\", \\\"url\\\": \\\"oracle/notes/simple\\\"}, {\\\"id\\\": \\\"oracle/projects/alpha\\\", \\\"title\\\": \\\"Alpha Project\\\", \\\"url\\\": \\\"oracle/projects/alpha\\\"}], \\\"total_count\\\": 3, \\\"query\\\": \\\"rust\\\"}\"}]",
+                  "type": "text"
+                }
+              ],
+              "isError": false,
+              "structuredContent": {
+                "result": [
+                  {
+                    "type": "text",
+                    "text": "{\"results\": [{\"id\": \"notes/frontmatter-note\", \"title\": \"Frontmatter Demo\", \"url\": \"notes/frontmatter-note\"}, {\"id\": \"oracle/notes/simple\", \"title\": \"simple\", \"url\": \"oracle/notes/simple\"}, {\"id\": \"oracle/projects/alpha\", \"title\": \"Alpha Project\", \"url\": \"oracle/projects/alpha\"}], \"total_count\": 3, \"query\": \"rust\"}"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "id": "3-search",
+          "request": {
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "tools/call",
+            "params": {
+              "name": "search",
+              "arguments": {
+                "query": "zzz-nothing-matches-this"
+              }
+            }
+          },
+          "frame": {
+            "jsonrpc": "2.0",
+            "id": "<id>",
+            "result": {
+              "_meta": {
+                "fastmcp": {
+                  "wrap_result": true
+                }
+              },
+              "content": [
+                {
+                  "text": "[{\"type\":\"text\",\"text\":\"{\\\"results\\\": [], \\\"total_count\\\": 0, \\\"query\\\": \\\"zzz-nothing-matches-this\\\"}\"}]",
+                  "type": "text"
+                }
+              ],
+              "isError": false,
+              "structuredContent": {
+                "result": [
+                  {
+                    "type": "text",
+                    "text": "{\"results\": [], \"total_count\": 0, \"query\": \"zzz-nothing-matches-this\"}"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "id": "4-fetch",
+          "request": {
+            "jsonrpc": "2.0",
+            "id": 4,
+            "method": "tools/call",
+            "params": {
+              "name": "fetch",
+              "arguments": {
+                "id": "oracle/notes/simple"
+              }
+            }
+          },
+          "frame": {
+            "jsonrpc": "2.0",
+            "id": "<id>",
+            "result": {
+              "_meta": {
+                "fastmcp": {
+                  "wrap_result": true
+                }
+              },
+              "content": [
+                {
+                  "text": "[{\"type\":\"text\",\"text\":\"{\\\"id\\\": \\\"oracle/notes/simple\\\", \\\"title\\\": \\\"Simple\\\", \\\"text\\\": \\\"---\\\\ntitle: simple\\\\ntype: note\\\\npermalink: oracle/notes/simple\\\\n---\\\\n\\\\n# Simple Note\\\\n\\\\nA plain note without frontmatter. It links to [[projects/alpha]] and mentions rust.\\\\n\\\\n- [note] Created as a baseline fixture\\\", \\\"url\\\": \\\"oracle/notes/simple\\\", \\\"metadata\\\": {\\\"format\\\": \\\"markdown\\\"}}\"}]",
+                  "type": "text"
+                }
+              ],
+              "isError": false,
+              "structuredContent": {
+                "result": [
+                  {
+                    "type": "text",
+                    "text": "{\"id\": \"oracle/notes/simple\", \"title\": \"Simple\", \"text\": \"---\\ntitle: simple\\ntype: note\\npermalink: oracle/notes/simple\\n---\\n\\n# Simple Note\\n\\nA plain note without frontmatter. It links to [[projects/alpha]] and mentions rust.\\n\\n- [note] Created as a baseline fixture\", \"url\": \"oracle/notes/simple\", \"metadata\": {\"format\": \"markdown\"}}"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "id": "5-fetch",
+          "request": {
+            "jsonrpc": "2.0",
+            "id": 5,
+            "method": "tools/call",
+            "params": {
+              "name": "fetch",
+              "arguments": {
+                "id": "notes/simple.md"
+              }
+            }
+          },
+          "frame": {
+            "jsonrpc": "2.0",
+            "id": "<id>",
+            "result": {
+              "_meta": {
+                "fastmcp": {
+                  "wrap_result": true
+                }
+              },
+              "content": [
+                {
+                  "text": "[{\"type\":\"text\",\"text\":\"{\\\"id\\\": \\\"notes/simple.md\\\", \\\"title\\\": \\\"Simple.Md\\\", \\\"text\\\": \\\"---\\\\ntitle: simple\\\\ntype: note\\\\npermalink: oracle/notes/simple\\\\n---\\\\n\\\\n# Simple Note\\\\n\\\\nA plain note without frontmatter. It links to [[projects/alpha]] and mentions rust.\\\\n\\\\n- [note] Created as a baseline fixture\\\", \\\"url\\\": \\\"notes/simple.md\\\", \\\"metadata\\\": {\\\"format\\\": \\\"markdown\\\"}}\"}]",
+                  "type": "text"
+                }
+              ],
+              "isError": false,
+              "structuredContent": {
+                "result": [
+                  {
+                    "type": "text",
+                    "text": "{\"id\": \"notes/simple.md\", \"title\": \"Simple.Md\", \"text\": \"---\\ntitle: simple\\ntype: note\\npermalink: oracle/notes/simple\\n---\\n\\n# Simple Note\\n\\nA plain note without frontmatter. It links to [[projects/alpha]] and mentions rust.\\n\\n- [note] Created as a baseline fixture\", \"url\": \"notes/simple.md\", \"metadata\": {\"format\": \"markdown\"}}"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "id": "6-fetch",
+          "request": {
+            "jsonrpc": "2.0",
+            "id": 6,
+            "method": "tools/call",
+            "params": {
+              "name": "fetch",
+              "arguments": {
+                "id": "memory://notes/cjk"
+              }
+            }
+          },
+          "frame": {
+            "jsonrpc": "2.0",
+            "id": "<id>",
+            "result": {
+              "_meta": {
+                "fastmcp": {
+                  "wrap_result": true
+                }
+              },
+              "content": [
+                {
+                  "text": "[{\"type\":\"text\",\"text\":\"{\\\"id\\\": \\\"memory://notes/cjk\\\", \\\"title\\\": \\\"Cjk\\\", \\\"text\\\": \\\"---\\\\ntitle: 中文测试文档\\\\ntype: note\\\\ntags:\\\\n- 中文\\\\n- 测试\\\\npermalink: oracle/notes/cjk\\\\n---\\\\n\\\\n# 中文测试\\\\n\\\\n这是一个中文笔记，包含 English 混合内容。\\\\n\\\\n- [decision] 使用 SQLite 作为本地索引\\\\n- 关联 [[projects/alpha]]\\\", \\\"url\\\": \\\"memory://notes/cjk\\\", \\\"metadata\\\": {\\\"format\\\": \\\"markdown\\\"}}\"}]",
+                  "type": "text"
+                }
+              ],
+              "isError": false,
+              "structuredContent": {
+                "result": [
+                  {
+                    "type": "text",
+                    "text": "{\"id\": \"memory://notes/cjk\", \"title\": \"Cjk\", \"text\": \"---\\ntitle: 中文测试文档\\ntype: note\\ntags:\\n- 中文\\n- 测试\\npermalink: oracle/notes/cjk\\n---\\n\\n# 中文测试\\n\\n这是一个中文笔记，包含 English 混合内容。\\n\\n- [decision] 使用 SQLite 作为本地索引\\n- 关联 [[projects/alpha]]\", \"url\": \"memory://notes/cjk\", \"metadata\": {\"format\": \"markdown\"}}"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "id": "7-fetch",
+          "request": {
+            "jsonrpc": "2.0",
+            "id": 7,
+            "method": "tools/call",
+            "params": {
+              "name": "fetch",
+              "arguments": {
+                "id": "Wikilinks Demo"
+              }
+            }
+          },
+          "frame": {
+            "jsonrpc": "2.0",
+            "id": "<id>",
+            "result": {
+              "_meta": {
+                "fastmcp": {
+                  "wrap_result": true
+                }
+              },
+              "content": [
+                {
+                  "text": "[{\"type\":\"text\",\"text\":\"{\\\"id\\\": \\\"Wikilinks Demo\\\", \\\"title\\\": \\\"Wikilinks Demo\\\", \\\"text\\\": \\\"---\\\\ntitle: Wikilinks Demo\\\\ntype: note\\\\npermalink: oracle/notes/wikilinks\\\\n---\\\\n\\\\n# Wikilinks\\\\n\\\\n- links_to [[projects/alpha|Alpha Project]]\\\\n- links_to [[notes/nested/deep-note]]\\\\n\\\\nSee also [[people/ada-lovelace]] and [[projects/beta]].\\\", \\\"url\\\": \\\"Wikilinks Demo\\\", \\\"metadata\\\": {\\\"format\\\": \\\"markdown\\\"}}\"}]",
+                  "type": "text"
+                }
+              ],
+              "isError": false,
+              "structuredContent": {
+                "result": [
+                  {
+                    "type": "text",
+                    "text": "{\"id\": \"Wikilinks Demo\", \"title\": \"Wikilinks Demo\", \"text\": \"---\\ntitle: Wikilinks Demo\\ntype: note\\npermalink: oracle/notes/wikilinks\\n---\\n\\n# Wikilinks\\n\\n- links_to [[projects/alpha|Alpha Project]]\\n- links_to [[notes/nested/deep-note]]\\n\\nSee also [[people/ada-lovelace]] and [[projects/beta]].\", \"url\": \"Wikilinks Demo\", \"metadata\": {\"format\": \"markdown\"}}"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "id": "8-fetch",
+          "request": {
+            "jsonrpc": "2.0",
+            "id": 8,
+            "method": "tools/call",
+            "params": {
+              "name": "fetch",
+              "arguments": {
+                "id": "no-such-note-anywhere"
+              }
+            }
+          },
+          "frame": {
+            "jsonrpc": "2.0",
+            "id": "<id>",
+            "result": {
+              "_meta": {
+                "fastmcp": {
+                  "wrap_result": true
+                }
+              },
+              "content": [
+                {
+                  "text": "[{\"type\":\"text\",\"text\":\"{\\\"id\\\": \\\"no-such-note-anywhere\\\", \\\"title\\\": \\\"No Such Note Anywhere\\\", \\\"text\\\": \\\"\\\\n# Note Not Found in oracle: \\\\\\\"no-such-note-anywhere\\\\\\\"\\\\n\\\\nI couldn't find an exact match for \\\\\\\"no-such-note-anywhere\\\\\\\", but I found some related notes:\\\\n\\\\n\\\\n## 1. Deep Note\\\\n- **Type**: entity\\\\n- **Permalink**: oracle/notes/nested/deep-note\\\\n\\\\nYou can read this note with:\\\\n```\\\\nread_note(project=\\\\\\\"oracle\\\\\\\", identifier=\\\\\\\"oracle/notes/nested/deep-note\\\\\\\")\\\\n```\\\\n\\\\n\\\\n## 2. empty\\\\n- **Type**: entity\\\\n- **Permalink**: oracle/notes/empty\\\\n\\\\nYou can read this note with:\\\\n```\\\\nread_note(project=\\\\\\\"oracle\\\\\\\", identifier=\\\\\\\"oracle/notes/empty\\\\\\\")\\\\n```\\\\n\\\\n\\\\n## 3. simple\\\\n- **Type**: entity\\\\n- **Permalink**: oracle/notes/simple\\\\n\\\\nYou can read this note with:\\\\n```\\\\nread_note(project=\\\\\\\"oracle\\\\\\\", identifier=\\\\\\\"oracle/notes/simple\\\\\\\")\\\\n```\\\\n\\\\n\\\\n## 4. Unresolved Links\\\\n- **Type**: entity\\\\n- **Permalink**: oracle/notes/unresolved\\\\n\\\\nYou can read this note with:\\\\n```\\\\nread_note(project=\\\\\\\"oracle\\\\\\\", identifier=\\\\\\\"oracle/notes/unresolved\\\\\\\")\\\\n```\\\\n\\\\n\\\\n## 5. Frontmatter Demo\\\\n- **Type**: entity\\\\n- **Permalink**: notes/frontmatter-note\\\\n\\\\nYou can read this note with:\\\\n```\\\\nread_note(project=\\\\\\\"oracle\\\\\\\", identifier=\\\\\\\"notes/frontmatter-note\\\\\\\")\\\\n```\\\\n\\\\n\\\\n## 6. Wikilinks Demo\\\\n- **Type**: entity\\\\n- **Permalink**: oracle/notes/wikilinks\\\\n\\\\nYou can read this note with:\\\\n```\\\\nread_note(project=\\\\\\\"oracle\\\\\\\", identifier=\\\\\\\"oracle/notes/wikilinks\\\\\\\")\\\\n```\\\\n\\\\n\\\\n## 7. 中文测试文档\\\\n- **Type**: entity\\\\n- **Permalink**: oracle/notes/cjk\\\\n\\\\nYou can read this note with:\\\\n```\\\\nread_note(project=\\\\\\\"oracle\\\\\\\", identifier=\\\\\\\"oracle/notes/cjk\\\\\\\")\\\\n```\\\\n\\\\n\\\\n## 8. task-markers\\\\n- **Type**: entity\\\\n- **Permalink**: oracle/notes/task-markers\\\\n\\\\nYou can read this note with:\\\\n```\\\\nread_note(project=\\\\\\\"oracle\\\\\\\", identifier=\\\\\\\"oracle/notes/task-markers\\\\\\\")\\\\n```\\\\n\\\\n\\\\n## 9. Relations Demo\\\\n- **Type**: entity\\\\n- **Permalink**: oracle/notes/relations\\\\n\\\\nYou can read this note with:\\\\n```\\\\nread_note(project=\\\\\\\"oracle\\\\\\\", identifier=\\\\\\\"oracle/notes/relations\\\\\\\")\\\\n```\\\\n\\\\n\\\\n## 10. Observations Demo\\\\n- **Type**: entity\\\\n- **Permalink**: oracle/notes/observations\\\\n\\\\nYou can read this note with:\\\\n```\\\\nread_note(project=\\\\\\\"oracle\\\\\\\", identifier=\\\\\\\"oracle/notes/observations\\\\\\\")\\\\n```\\\\n\\\\n\\\\n## Try More Specific Lookup\\\\nFor exact matches, try using the full permalink from one of the results above.\\\\n\\\\n## Search For More Results\\\\nTo see more related content:\\\\n```\\\\nsearch_notes(project=\\\\\\\"oracle\\\\\\\", query=\\\\\\\"no-such-note-anywhere\\\\\\\")\\\\n```\\\\n\\\\n## Create New Note\\\\nIf none of these match what you're looking for, consider creating a new note:\\\\n```\\\\nwrite_note(\\\\n    project=\\\\\\\"oracle\\\\\\\",\\\\n    title=\\\\\\\"[Your title]\\\\\\\",\\\\n    content=\\\\\\\"[Your content]\\\\\\\",\\\\n    folder=\\\\\\\"notes\\\\\\\"\\\\n)\\\\n```\\\\n\\\", \\\"url\\\": \\\"no-such-note-anywhere\\\", \\\"metadata\\\": {\\\"error\\\": \\\"Document not found\\\"}}\"}]",
+                  "type": "text"
+                }
+              ],
+              "isError": false,
+              "structuredContent": {
+                "result": [
+                  {
+                    "type": "text",
+                    "text": "{\"id\": \"no-such-note-anywhere\", \"title\": \"No Such Note Anywhere\", \"text\": \"\\n# Note Not Found in oracle: \\\"no-such-note-anywhere\\\"\\n\\nI couldn't find an exact match for \\\"no-such-note-anywhere\\\", but I found some related notes:\\n\\n\\n## 1. Deep Note\\n- **Type**: entity\\n- **Permalink**: oracle/notes/nested/deep-note\\n\\nYou can read this note with:\\n```\\nread_note(project=\\\"oracle\\\", identifier=\\\"oracle/notes/nested/deep-note\\\")\\n```\\n\\n\\n## 2. empty\\n- **Type**: entity\\n- **Permalink**: oracle/notes/empty\\n\\nYou can read this note with:\\n```\\nread_note(project=\\\"oracle\\\", identifier=\\\"oracle/notes/empty\\\")\\n```\\n\\n\\n## 3. simple\\n- **Type**: entity\\n- **Permalink**: oracle/notes/simple\\n\\nYou can read this note with:\\n```\\nread_note(project=\\\"oracle\\\", identifier=\\\"oracle/notes/simple\\\")\\n```\\n\\n\\n## 4. Unresolved Links\\n- **Type**: entity\\n- **Permalink**: oracle/notes/unresolved\\n\\nYou can read this note with:\\n```\\nread_note(project=\\\"oracle\\\", identifier=\\\"oracle/notes/unresolved\\\")\\n```\\n\\n\\n## 5. Frontmatter Demo\\n- **Type**: entity\\n- **Permalink**: notes/frontmatter-note\\n\\nYou can read this note with:\\n```\\nread_note(project=\\\"oracle\\\", identifier=\\\"notes/frontmatter-note\\\")\\n```\\n\\n\\n## 6. Wikilinks Demo\\n- **Type**: entity\\n- **Permalink**: oracle/notes/wikilinks\\n\\nYou can read this note with:\\n```\\nread_note(project=\\\"oracle\\\", identifier=\\\"oracle/notes/wikilinks\\\")\\n```\\n\\n\\n## 7. 中文测试文档\\n- **Type**: entity\\n- **Permalink**: oracle/notes/cjk\\n\\nYou can read this note with:\\n```\\nread_note(project=\\\"oracle\\\", identifier=\\\"oracle/notes/cjk\\\")\\n```\\n\\n\\n## 8. task-markers\\n- **Type**: entity\\n- **Permalink**: oracle/notes/task-markers\\n\\nYou can read this note with:\\n```\\nread_note(project=\\\"oracle\\\", identifier=\\\"oracle/notes/task-markers\\\")\\n```\\n\\n\\n## 9. Relations Demo\\n- **Type**: entity\\n- **Permalink**: oracle/notes/relations\\n\\nYou can read this note with:\\n```\\nread_note(project=\\\"oracle\\\", identifier=\\\"oracle/notes/relations\\\")\\n```\\n\\n\\n## 10. Observations Demo\\n- **Type**: entity\\n- **Permalink**: oracle/notes/observations\\n\\nYou can read this note with:\\n```\\nread_note(project=\\\"oracle\\\", identifier=\\\"oracle/notes/observations\\\")\\n```\\n\\n\\n## Try More Specific Lookup\\nFor exact matches, try using the full permalink from one of the results above.\\n\\n## Search For More Results\\nTo see more related content:\\n```\\nsearch_notes(project=\\\"oracle\\\", query=\\\"no-such-note-anywhere\\\")\\n```\\n\\n## Create New Note\\nIf none of these match what you're looking for, consider creating a new note:\\n```\\nwrite_note(\\n    project=\\\"oracle\\\",\\n    title=\\\"[Your title]\\\",\\n    content=\\\"[Your content]\\\",\\n    folder=\\\"notes\\\"\\n)\\n```\\n\", \"url\": \"no-such-note-anywhere\", \"metadata\": {\"error\": \"Document not found\"}}"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

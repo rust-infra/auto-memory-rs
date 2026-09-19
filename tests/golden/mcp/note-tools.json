@@ -1,0 +1,1649 @@
+{
+  "reference": "basic-memory",
+  "project": "oracle",
+  "protocolVersion": "2024-11-05",
+  "responses": [
+    {
+      "id": "initialize",
+      "request": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+          "protocolVersion": "2024-11-05",
+          "capabilities": {},
+          "clientInfo": {
+            "name": "oracle-harness",
+            "version": "0"
+          }
+        }
+      },
+      "frame": {
+        "jsonrpc": "2.0",
+        "id": "<id>",
+        "result": {
+          "protocolVersion": "2024-11-05",
+          "capabilities": {
+            "logging": {},
+            "prompts": {
+              "listChanged": false
+            },
+            "resources": {
+              "subscribe": false,
+              "listChanged": false
+            },
+            "tools": {
+              "listChanged": true
+            }
+          },
+          "serverInfo": {
+            "name": "Basic Memory",
+            "version": "4.0.0b1"
+          },
+          "instructions": "Basic Memory is the user's personal knowledge base: Markdown notes that persist across conversations and that both the user and their AI assistants can read and write.\n\nAt the start of a session, call `recent_activity` to orient yourself in the user's notes before answering from memory. If the knowledge base is empty, briefly explain that Basic Memory gives them persistent notes shared between the user and their AI, and offer to save something useful from this conversation as their first note with `write_note` — then wait for them to agree before writing anything. Do not create notes unprompted.\n\nFor a fuller guide, read the `memory://ai_assistant_guide` resource. If you have a web or fetch tool and need current documentation, fetch `https://docs.basicmemory.com/llms.txt` first, then fetch only the relevant linked `/raw/...md` page."
+        }
+      }
+    },
+    {
+      "id": "2-write_note",
+      "request": {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "tools/call",
+        "params": {
+          "name": "write_note",
+          "arguments": {
+            "title": "Typed Note",
+            "content": "# Typed Note\n\n- [role] writer\n",
+            "directory": "people",
+            "note_type": "person",
+            "tags": [
+              "author",
+              "#ship-it"
+            ],
+            "output_format": "json"
+          }
+        }
+      },
+      "frame": {
+        "jsonrpc": "2.0",
+        "id": "<id>",
+        "result": {
+          "_meta": {
+            "fastmcp": {
+              "wrap_result": true
+            }
+          },
+          "content": [
+            {
+              "text": "{\"title\":\"Typed Note\",\"permalink\":\"oracle/people/typed-note\",\"file_path\":\"people/Typed Note.md\",\"checksum\":null,\"action\":\"created\"}",
+              "type": "text"
+            }
+          ],
+          "isError": false,
+          "structuredContent": {
+            "result": {
+              "title": "Typed Note",
+              "permalink": "oracle/people/typed-note",
+              "file_path": "people/Typed Note.md",
+              "checksum": null,
+              "action": "created"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "3-read_note",
+      "request": {
+        "jsonrpc": "2.0",
+        "id": 3,
+        "method": "tools/call",
+        "params": {
+          "name": "read_note",
+          "arguments": {
+            "identifier": "people/typed-note",
+            "output_format": "json",
+            "include_frontmatter": true
+          }
+        }
+      },
+      "frame": {
+        "jsonrpc": "2.0",
+        "id": "<id>",
+        "result": {
+          "_meta": {
+            "fastmcp": {
+              "wrap_result": true
+            }
+          },
+          "content": [
+            {
+              "text": "{\"title\":\"Typed Note\",\"permalink\":\"oracle/people/typed-note\",\"file_path\":\"people/Typed Note.md\",\"content\":\"---\\ntitle: Typed Note\\ntype: person\\npermalink: oracle/people/typed-note\\ntags:\\n- author\\n- ship-it\\n---\\n\\n# Typed Note\\n\\n- [role] writer\\n\",\"frontmatter\":{\"title\":\"Typed Note\",\"type\":\"person\",\"permalink\":\"oracle/people/typed-note\",\"tags\":[\"author\",\"ship-it\"]}}",
+              "type": "text"
+            }
+          ],
+          "isError": false,
+          "structuredContent": {
+            "result": {
+              "title": "Typed Note",
+              "permalink": "oracle/people/typed-note",
+              "file_path": "people/Typed Note.md",
+              "content": "---\ntitle: Typed Note\ntype: person\npermalink: oracle/people/typed-note\ntags:\n- author\n- ship-it\n---\n\n# Typed Note\n\n- [role] writer\n",
+              "frontmatter": {
+                "title": "Typed Note",
+                "type": "person",
+                "permalink": "oracle/people/typed-note",
+                "tags": [
+                  "author",
+                  "ship-it"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "4-write_note",
+      "request": {
+        "jsonrpc": "2.0",
+        "id": 4,
+        "method": "tools/call",
+        "params": {
+          "name": "write_note",
+          "arguments": {
+            "title": "Merged Note",
+            "content": "# Merged Note\n",
+            "directory": "notes",
+            "note_type": "meeting",
+            "tags": "alpha,beta",
+            "metadata": {
+              "tags": [
+                "ignored"
+              ],
+              "status": "active"
+            },
+            "output_format": "json"
+          }
+        }
+      },
+      "frame": {
+        "jsonrpc": "2.0",
+        "id": "<id>",
+        "result": {
+          "_meta": {
+            "fastmcp": {
+              "wrap_result": true
+            }
+          },
+          "content": [
+            {
+              "text": "{\"title\":\"Merged Note\",\"permalink\":\"oracle/notes/merged-note\",\"file_path\":\"notes/Merged Note.md\",\"checksum\":null,\"action\":\"created\"}",
+              "type": "text"
+            }
+          ],
+          "isError": false,
+          "structuredContent": {
+            "result": {
+              "title": "Merged Note",
+              "permalink": "oracle/notes/merged-note",
+              "file_path": "notes/Merged Note.md",
+              "checksum": null,
+              "action": "created"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "5-read_note",
+      "request": {
+        "jsonrpc": "2.0",
+        "id": 5,
+        "method": "tools/call",
+        "params": {
+          "name": "read_note",
+          "arguments": {
+            "identifier": "notes/merged-note",
+            "output_format": "json",
+            "include_frontmatter": true
+          }
+        }
+      },
+      "frame": {
+        "jsonrpc": "2.0",
+        "id": "<id>",
+        "result": {
+          "_meta": {
+            "fastmcp": {
+              "wrap_result": true
+            }
+          },
+          "content": [
+            {
+              "text": "{\"title\":\"Merged Note\",\"permalink\":\"oracle/notes/merged-note\",\"file_path\":\"notes/Merged Note.md\",\"content\":\"---\\ntitle: Merged Note\\ntype: meeting\\npermalink: oracle/notes/merged-note\\ntags:\\n- alpha\\n- beta\\nstatus: active\\n---\\n\\n# Merged Note\\n\",\"frontmatter\":{\"title\":\"Merged Note\",\"type\":\"meeting\",\"permalink\":\"oracle/notes/merged-note\",\"tags\":[\"alpha\",\"beta\"],\"status\":\"active\"}}",
+              "type": "text"
+            }
+          ],
+          "isError": false,
+          "structuredContent": {
+            "result": {
+              "title": "Merged Note",
+              "permalink": "oracle/notes/merged-note",
+              "file_path": "notes/Merged Note.md",
+              "content": "---\ntitle: Merged Note\ntype: meeting\npermalink: oracle/notes/merged-note\ntags:\n- alpha\n- beta\nstatus: active\n---\n\n# Merged Note\n",
+              "frontmatter": {
+                "title": "Merged Note",
+                "type": "meeting",
+                "permalink": "oracle/notes/merged-note",
+                "tags": [
+                  "alpha",
+                  "beta"
+                ],
+                "status": "active"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "6-write_note",
+      "request": {
+        "jsonrpc": "2.0",
+        "id": 6,
+        "method": "tools/call",
+        "params": {
+          "name": "write_note",
+          "arguments": {
+            "title": "Content Type",
+            "content": "---\ntype: reference\n---\n\n# Content Type\n",
+            "directory": "notes",
+            "note_type": "person",
+            "output_format": "json"
+          }
+        }
+      },
+      "frame": {
+        "jsonrpc": "2.0",
+        "id": "<id>",
+        "result": {
+          "_meta": {
+            "fastmcp": {
+              "wrap_result": true
+            }
+          },
+          "content": [
+            {
+              "text": "{\"title\":\"Content Type\",\"permalink\":\"oracle/notes/content-type\",\"file_path\":\"notes/Content Type.md\",\"checksum\":null,\"action\":\"created\"}",
+              "type": "text"
+            }
+          ],
+          "isError": false,
+          "structuredContent": {
+            "result": {
+              "title": "Content Type",
+              "permalink": "oracle/notes/content-type",
+              "file_path": "notes/Content Type.md",
+              "checksum": null,
+              "action": "created"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "7-read_note",
+      "request": {
+        "jsonrpc": "2.0",
+        "id": 7,
+        "method": "tools/call",
+        "params": {
+          "name": "read_note",
+          "arguments": {
+            "identifier": "notes/content-type",
+            "output_format": "json",
+            "include_frontmatter": true
+          }
+        }
+      },
+      "frame": {
+        "jsonrpc": "2.0",
+        "id": "<id>",
+        "result": {
+          "_meta": {
+            "fastmcp": {
+              "wrap_result": true
+            }
+          },
+          "content": [
+            {
+              "text": "{\"title\":\"Content Type\",\"permalink\":\"oracle/notes/content-type\",\"file_path\":\"notes/Content Type.md\",\"content\":\"---\\ntitle: Content Type\\ntype: reference\\npermalink: oracle/notes/content-type\\n---\\n\\n# Content Type\",\"frontmatter\":{\"title\":\"Content Type\",\"type\":\"reference\",\"permalink\":\"oracle/notes/content-type\"}}",
+              "type": "text"
+            }
+          ],
+          "isError": false,
+          "structuredContent": {
+            "result": {
+              "title": "Content Type",
+              "permalink": "oracle/notes/content-type",
+              "file_path": "notes/Content Type.md",
+              "content": "---\ntitle: Content Type\ntype: reference\npermalink: oracle/notes/content-type\n---\n\n# Content Type",
+              "frontmatter": {
+                "title": "Content Type",
+                "type": "reference",
+                "permalink": "oracle/notes/content-type"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "8-write_note",
+      "request": {
+        "jsonrpc": "2.0",
+        "id": 8,
+        "method": "tools/call",
+        "params": {
+          "name": "write_note",
+          "arguments": {
+            "title": "Escape",
+            "content": "# Escape",
+            "directory": "../outside"
+          }
+        }
+      },
+      "frame": {
+        "jsonrpc": "2.0",
+        "id": "<id>",
+        "result": {
+          "_meta": {
+            "fastmcp": {
+              "wrap_result": true
+            }
+          },
+          "content": [
+            {
+              "text": "# Error\n\nDirectory path '../outside' is not allowed - paths must stay within project boundaries",
+              "type": "text"
+            }
+          ],
+          "isError": false,
+          "structuredContent": {
+            "result": "# Error\n\nDirectory path '../outside' is not allowed - paths must stay within project boundaries"
+          }
+        }
+      }
+    },
+    {
+      "id": "9-write_note",
+      "request": {
+        "jsonrpc": "2.0",
+        "id": 9,
+        "method": "tools/call",
+        "params": {
+          "name": "write_note",
+          "arguments": {
+            "title": "Escape",
+            "content": "# Escape",
+            "directory": "../outside",
+            "output_format": "json"
+          }
+        }
+      },
+      "frame": {
+        "jsonrpc": "2.0",
+        "id": "<id>",
+        "result": {
+          "_meta": {
+            "fastmcp": {
+              "wrap_result": true
+            }
+          },
+          "content": [
+            {
+              "text": "{\"title\":\"Escape\",\"permalink\":null,\"file_path\":null,\"checksum\":null,\"action\":\"created\",\"error\":\"SECURITY_VALIDATION_ERROR\"}",
+              "type": "text"
+            }
+          ],
+          "isError": false,
+          "structuredContent": {
+            "result": {
+              "title": "Escape",
+              "permalink": null,
+              "file_path": null,
+              "checksum": null,
+              "action": "created",
+              "error": "SECURITY_VALIDATION_ERROR"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "10-write_note",
+      "request": {
+        "jsonrpc": "2.0",
+        "id": 10,
+        "method": "tools/call",
+        "params": {
+          "name": "write_note",
+          "arguments": {
+            "title": "At Root",
+            "content": "# At Root",
+            "directory": "/",
+            "output_format": "json"
+          }
+        }
+      },
+      "frame": {
+        "jsonrpc": "2.0",
+        "id": "<id>",
+        "result": {
+          "_meta": {
+            "fastmcp": {
+              "wrap_result": true
+            }
+          },
+          "content": [
+            {
+              "text": "{\"title\":\"At Root\",\"permalink\":\"oracle/at-root\",\"file_path\":\"At Root.md\",\"checksum\":null,\"action\":\"created\"}",
+              "type": "text"
+            }
+          ],
+          "isError": false,
+          "structuredContent": {
+            "result": {
+              "title": "At Root",
+              "permalink": "oracle/at-root",
+              "file_path": "At Root.md",
+              "checksum": null,
+              "action": "created"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "11-delete_note",
+      "request": {
+        "jsonrpc": "2.0",
+        "id": 11,
+        "method": "tools/call",
+        "params": {
+          "name": "delete_note",
+          "arguments": {
+            "identifier": "projects",
+            "is_directory": true
+          }
+        }
+      },
+      "frame": {
+        "jsonrpc": "2.0",
+        "id": "<id>",
+        "result": {
+          "_meta": {
+            "fastmcp": {
+              "wrap_result": true
+            }
+          },
+          "content": [
+            {
+              "text": "# Directory Deleted Successfully\n\n**Directory:** `projects`\n\n## Summary\n- Total files: 2\n- Successfully deleted: 2\n- Failed: 0\n\n## Deleted Files\n- `projects/alpha.md`\n- `projects/beta.md`\n\n<!-- Project: oracle -->",
+              "type": "text"
+            }
+          ],
+          "isError": false,
+          "structuredContent": {
+            "result": "# Directory Deleted Successfully\n\n**Directory:** `projects`\n\n## Summary\n- Total files: 2\n- Successfully deleted: 2\n- Failed: 0\n\n## Deleted Files\n- `projects/alpha.md`\n- `projects/beta.md`\n\n<!-- Project: oracle -->"
+          }
+        }
+      }
+    },
+    {
+      "id": "12-delete_note",
+      "request": {
+        "jsonrpc": "2.0",
+        "id": 12,
+        "method": "tools/call",
+        "params": {
+          "name": "delete_note",
+          "arguments": {
+            "identifier": "notes/empty",
+            "output_format": "json"
+          }
+        }
+      },
+      "frame": {
+        "jsonrpc": "2.0",
+        "id": "<id>",
+        "result": {
+          "_meta": {
+            "fastmcp": {
+              "wrap_result": true
+            }
+          },
+          "content": [
+            {
+              "text": "{\"deleted\":true,\"title\":\"empty\",\"permalink\":\"oracle/notes/empty\",\"file_path\":\"notes/empty.md\"}",
+              "type": "text"
+            }
+          ],
+          "isError": false,
+          "structuredContent": {
+            "result": {
+              "deleted": true,
+              "title": "empty",
+              "permalink": "oracle/notes/empty",
+              "file_path": "notes/empty.md"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "13-move_note",
+      "request": {
+        "jsonrpc": "2.0",
+        "id": 13,
+        "method": "tools/call",
+        "params": {
+          "name": "move_note",
+          "arguments": {
+            "identifier": "notes/nested",
+            "destination_folder": "archive",
+            "is_directory": true,
+            "output_format": "json"
+          }
+        }
+      },
+      "frame": {
+        "jsonrpc": "2.0",
+        "id": "<id>",
+        "result": {
+          "_meta": {
+            "fastmcp": {
+              "wrap_result": true
+            }
+          },
+          "content": [
+            {
+              "text": "{\"moved\":false,\"title\":null,\"permalink\":null,\"file_path\":null,\"source\":\"notes/nested\",\"destination\":null,\"error\":\"DESTINATION_FOLDER_NOT_FOR_DIRECTORIES\"}",
+              "type": "text"
+            }
+          ],
+          "isError": false,
+          "structuredContent": {
+            "result": {
+              "moved": false,
+              "title": null,
+              "permalink": null,
+              "file_path": null,
+              "source": "notes/nested",
+              "destination": null,
+              "error": "DESTINATION_FOLDER_NOT_FOR_DIRECTORIES"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "14-read_note",
+      "request": {
+        "jsonrpc": "2.0",
+        "id": 14,
+        "method": "tools/call",
+        "params": {
+          "name": "read_note",
+          "arguments": {
+            "identifier": "archive/deep-note",
+            "output_format": "json"
+          }
+        }
+      },
+      "frame": {
+        "jsonrpc": "2.0",
+        "id": "<id>",
+        "result": {
+          "_meta": {
+            "fastmcp": {
+              "wrap_result": true
+            }
+          },
+          "content": [
+            {
+              "text": "{\"title\":null,\"permalink\":null,\"file_path\":null,\"content\":null,\"frontmatter\":null,\"related_results\":[{\"title\":\"Deep Note\",\"permalink\":\"oracle/notes/nested/deep-note\",\"file_path\":\"notes/nested/deep-note.md\"},{\"title\":\"Wikilinks Demo\",\"permalink\":\"oracle/notes/wikilinks\",\"file_path\":\"notes/wikilinks.md\"},{\"title\":\"Merged Note\",\"permalink\":\"oracle/notes/merged-note\",\"file_path\":\"notes/Merged Note.md\"},{\"title\":\"Typed Note\",\"permalink\":\"oracle/people/typed-note\",\"file_path\":\"people/Typed Note.md\"},{\"title\":\"Typed Note\",\"permalink\":\"oracle/people/typed-note\",\"file_path\":\"people/Typed Note.md\"},{\"title\":\"Content Type\",\"permalink\":\"oracle/notes/content-type\",\"file_path\":\"notes/Content Type.md\"},{\"title\":\"simple\",\"permalink\":\"oracle/notes/simple\",\"file_path\":\"notes/simple.md\"},{\"title\":\"Unresolved Links\",\"permalink\":\"oracle/notes/unresolved\",\"file_path\":\"notes/unresolved.md\"},{\"title\":\"Frontmatter Demo\",\"permalink\":\"notes/frontmatter-note\",\"file_path\":\"notes/frontmatter.md\"},{\"title\":\"中文测试文档\",\"permalink\":\"oracle/notes/cjk\",\"file_path\":\"notes/cjk.md\"}]}",
+              "type": "text"
+            }
+          ],
+          "isError": false,
+          "structuredContent": {
+            "result": {
+              "title": null,
+              "permalink": null,
+              "file_path": null,
+              "content": null,
+              "frontmatter": null,
+              "related_results": [
+                {
+                  "title": "Deep Note",
+                  "permalink": "oracle/notes/nested/deep-note",
+                  "file_path": "notes/nested/deep-note.md"
+                },
+                {
+                  "title": "Wikilinks Demo",
+                  "permalink": "oracle/notes/wikilinks",
+                  "file_path": "notes/wikilinks.md"
+                },
+                {
+                  "title": "Merged Note",
+                  "permalink": "oracle/notes/merged-note",
+                  "file_path": "notes/Merged Note.md"
+                },
+                {
+                  "title": "Typed Note",
+                  "permalink": "oracle/people/typed-note",
+                  "file_path": "people/Typed Note.md"
+                },
+                {
+                  "title": "Typed Note",
+                  "permalink": "oracle/people/typed-note",
+                  "file_path": "people/Typed Note.md"
+                },
+                {
+                  "title": "Content Type",
+                  "permalink": "oracle/notes/content-type",
+                  "file_path": "notes/Content Type.md"
+                },
+                {
+                  "title": "simple",
+                  "permalink": "oracle/notes/simple",
+                  "file_path": "notes/simple.md"
+                },
+                {
+                  "title": "Unresolved Links",
+                  "permalink": "oracle/notes/unresolved",
+                  "file_path": "notes/unresolved.md"
+                },
+                {
+                  "title": "Frontmatter Demo",
+                  "permalink": "notes/frontmatter-note",
+                  "file_path": "notes/frontmatter.md"
+                },
+                {
+                  "title": "中文测试文档",
+                  "permalink": "oracle/notes/cjk",
+                  "file_path": "notes/cjk.md"
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "15-delete_note",
+      "request": {
+        "jsonrpc": "2.0",
+        "id": 15,
+        "method": "tools/call",
+        "params": {
+          "name": "delete_note",
+          "arguments": {
+            "identifier": "no-such-note-anywhere"
+          }
+        }
+      },
+      "frame": {
+        "jsonrpc": "2.0",
+        "id": "<id>",
+        "result": {
+          "_meta": {
+            "fastmcp": {
+              "wrap_result": true
+            }
+          },
+          "content": [
+            {
+              "text": "false",
+              "type": "text"
+            }
+          ],
+          "isError": false,
+          "structuredContent": {
+            "result": false
+          }
+        }
+      }
+    },
+    {
+      "id": "16-delete_note",
+      "request": {
+        "jsonrpc": "2.0",
+        "id": 16,
+        "method": "tools/call",
+        "params": {
+          "name": "delete_note",
+          "arguments": {
+            "identifier": "no-such-note-anywhere",
+            "output_format": "json"
+          }
+        }
+      },
+      "frame": {
+        "jsonrpc": "2.0",
+        "id": "<id>",
+        "result": {
+          "_meta": {
+            "fastmcp": {
+              "wrap_result": true
+            }
+          },
+          "content": [
+            {
+              "text": "{\"deleted\":false,\"title\":null,\"permalink\":null,\"file_path\":null}",
+              "type": "text"
+            }
+          ],
+          "isError": false,
+          "structuredContent": {
+            "result": {
+              "deleted": false,
+              "title": null,
+              "permalink": null,
+              "file_path": null
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "17-move_note",
+      "request": {
+        "jsonrpc": "2.0",
+        "id": 17,
+        "method": "tools/call",
+        "params": {
+          "name": "move_note",
+          "arguments": {
+            "identifier": "notes/simple",
+            "destination_path": "archive/simple-moved.md",
+            "output_format": "json"
+          }
+        }
+      },
+      "frame": {
+        "jsonrpc": "2.0",
+        "id": "<id>",
+        "result": {
+          "_meta": {
+            "fastmcp": {
+              "wrap_result": true
+            }
+          },
+          "content": [
+            {
+              "text": "{\"moved\":true,\"title\":\"simple\",\"permalink\":\"oracle/notes/simple\",\"file_path\":\"archive/simple-moved.md\",\"source\":\"notes/simple\",\"destination\":\"archive/simple-moved.md\"}",
+              "type": "text"
+            }
+          ],
+          "isError": false,
+          "structuredContent": {
+            "result": {
+              "moved": true,
+              "title": "simple",
+              "permalink": "oracle/notes/simple",
+              "file_path": "archive/simple-moved.md",
+              "source": "notes/simple",
+              "destination": "archive/simple-moved.md"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "18-move_note",
+      "request": {
+        "jsonrpc": "2.0",
+        "id": 18,
+        "method": "tools/call",
+        "params": {
+          "name": "move_note",
+          "arguments": {
+            "identifier": "notes/nested",
+            "destination_path": "archive/nested",
+            "is_directory": true,
+            "output_format": "json"
+          }
+        }
+      },
+      "frame": {
+        "jsonrpc": "2.0",
+        "id": "<id>",
+        "result": {
+          "_meta": {
+            "fastmcp": {
+              "wrap_result": true
+            }
+          },
+          "content": [
+            {
+              "text": "{\"moved\":true,\"title\":null,\"permalink\":null,\"file_path\":null,\"source\":\"notes/nested\",\"destination\":\"archive/nested\",\"is_directory\":true,\"total_files\":1,\"successful_moves\":1,\"failed_moves\":0}",
+              "type": "text"
+            }
+          ],
+          "isError": false,
+          "structuredContent": {
+            "result": {
+              "moved": true,
+              "title": null,
+              "permalink": null,
+              "file_path": null,
+              "source": "notes/nested",
+              "destination": "archive/nested",
+              "is_directory": true,
+              "total_files": 1,
+              "successful_moves": 1,
+              "failed_moves": 0
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "19-read_note",
+      "request": {
+        "jsonrpc": "2.0",
+        "id": 19,
+        "method": "tools/call",
+        "params": {
+          "name": "read_note",
+          "arguments": {
+            "identifier": "archive/nested/deep-note",
+            "output_format": "json"
+          }
+        }
+      },
+      "frame": {
+        "jsonrpc": "2.0",
+        "id": "<id>",
+        "result": {
+          "_meta": {
+            "fastmcp": {
+              "wrap_result": true
+            }
+          },
+          "content": [
+            {
+              "text": "{\"title\":\"Deep Note\",\"permalink\":\"oracle/notes/nested/deep-note\",\"file_path\":\"archive/nested/deep-note.md\",\"content\":\"\\n# Deep Note\\n\\nNested fixture linking back to [[notes/simple]].\\n\\n- [fact] Nested paths must keep slash-separated permalinks\",\"frontmatter\":{\"title\":\"Deep Note\",\"type\":\"note\",\"permalink\":\"oracle/notes/nested/deep-note\"}}",
+              "type": "text"
+            }
+          ],
+          "isError": false,
+          "structuredContent": {
+            "result": {
+              "title": "Deep Note",
+              "permalink": "oracle/notes/nested/deep-note",
+              "file_path": "archive/nested/deep-note.md",
+              "content": "\n# Deep Note\n\nNested fixture linking back to [[notes/simple]].\n\n- [fact] Nested paths must keep slash-separated permalinks",
+              "frontmatter": {
+                "title": "Deep Note",
+                "type": "note",
+                "permalink": "oracle/notes/nested/deep-note"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "20-move_note",
+      "request": {
+        "jsonrpc": "2.0",
+        "id": 20,
+        "method": "tools/call",
+        "params": {
+          "name": "move_note",
+          "arguments": {
+            "identifier": "notes/relations",
+            "destination_folder": "archive",
+            "output_format": "json"
+          }
+        }
+      },
+      "frame": {
+        "jsonrpc": "2.0",
+        "id": "<id>",
+        "result": {
+          "_meta": {
+            "fastmcp": {
+              "wrap_result": true
+            }
+          },
+          "content": [
+            {
+              "text": "{\"moved\":true,\"title\":\"Relations Demo\",\"permalink\":\"oracle/notes/relations\",\"file_path\":\"archive/relations.md\",\"source\":\"notes/relations\",\"destination\":\"archive/relations.md\"}",
+              "type": "text"
+            }
+          ],
+          "isError": false,
+          "structuredContent": {
+            "result": {
+              "moved": true,
+              "title": "Relations Demo",
+              "permalink": "oracle/notes/relations",
+              "file_path": "archive/relations.md",
+              "source": "notes/relations",
+              "destination": "archive/relations.md"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "21-read_note",
+      "request": {
+        "jsonrpc": "2.0",
+        "id": 21,
+        "method": "tools/call",
+        "params": {
+          "name": "read_note",
+          "arguments": {
+            "identifier": "archive/relations",
+            "output_format": "json"
+          }
+        }
+      },
+      "frame": {
+        "jsonrpc": "2.0",
+        "id": "<id>",
+        "result": {
+          "_meta": {
+            "fastmcp": {
+              "wrap_result": true
+            }
+          },
+          "content": [
+            {
+              "text": "{\"title\":\"Relations Demo\",\"permalink\":\"oracle/notes/relations\",\"file_path\":\"archive/relations.md\",\"content\":\"\\n# Relations\\n\\n- depends_on [[projects/alpha]]\\n- \\\"implemented by\\\" [[people/ada-lovelace]]\\n- relates_to [[notes/simple]] (primary source)\\n\\nProse with an inline [[notes/frontmatter]] link and an [[projects/beta|Beta]] display link.\",\"frontmatter\":{\"title\":\"Relations Demo\",\"type\":\"note\",\"permalink\":\"oracle/notes/relations\"}}",
+              "type": "text"
+            }
+          ],
+          "isError": false,
+          "structuredContent": {
+            "result": {
+              "title": "Relations Demo",
+              "permalink": "oracle/notes/relations",
+              "file_path": "archive/relations.md",
+              "content": "\n# Relations\n\n- depends_on [[projects/alpha]]\n- \"implemented by\" [[people/ada-lovelace]]\n- relates_to [[notes/simple]] (primary source)\n\nProse with an inline [[notes/frontmatter]] link and an [[projects/beta|Beta]] display link.",
+              "frontmatter": {
+                "title": "Relations Demo",
+                "type": "note",
+                "permalink": "oracle/notes/relations"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "22-write_note",
+      "request": {
+        "jsonrpc": "2.0",
+        "id": 22,
+        "method": "tools/call",
+        "params": {
+          "name": "write_note",
+          "arguments": {
+            "title": "At Root",
+            "content": "# At Root\n\n- [fact] again",
+            "directory": "/",
+            "output_format": "json"
+          }
+        }
+      },
+      "frame": {
+        "jsonrpc": "2.0",
+        "id": "<id>",
+        "result": {
+          "_meta": {
+            "fastmcp": {
+              "wrap_result": true
+            }
+          },
+          "content": [
+            {
+              "text": "{\"title\":\"At Root\",\"permalink\":\"at-root\",\"file_path\":null,\"checksum\":null,\"action\":\"conflict\",\"error\":\"NOTE_ALREADY_EXISTS\"}",
+              "type": "text"
+            }
+          ],
+          "isError": false,
+          "structuredContent": {
+            "result": {
+              "title": "At Root",
+              "permalink": "at-root",
+              "file_path": null,
+              "checksum": null,
+              "action": "conflict",
+              "error": "NOTE_ALREADY_EXISTS"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "23-write_note",
+      "request": {
+        "jsonrpc": "2.0",
+        "id": 23,
+        "method": "tools/call",
+        "params": {
+          "name": "write_note",
+          "arguments": {
+            "title": "At Root",
+            "content": "# At Root\n\n- [fact] replaced",
+            "directory": "/",
+            "overwrite": true,
+            "output_format": "json"
+          }
+        }
+      },
+      "frame": {
+        "jsonrpc": "2.0",
+        "id": "<id>",
+        "result": {
+          "_meta": {
+            "fastmcp": {
+              "wrap_result": true
+            }
+          },
+          "content": [
+            {
+              "text": "{\"title\":\"At Root\",\"permalink\":\"oracle/at-root\",\"file_path\":\"At Root.md\",\"checksum\":null,\"action\":\"updated\"}",
+              "type": "text"
+            }
+          ],
+          "isError": false,
+          "structuredContent": {
+            "result": {
+              "title": "At Root",
+              "permalink": "oracle/at-root",
+              "file_path": "At Root.md",
+              "checksum": null,
+              "action": "updated"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "24-delete_note",
+      "request": {
+        "jsonrpc": "2.0",
+        "id": 24,
+        "method": "tools/call",
+        "params": {
+          "name": "delete_note",
+          "arguments": {
+            "identifier": "duplicates",
+            "is_directory": true,
+            "output_format": "json"
+          }
+        }
+      },
+      "frame": {
+        "jsonrpc": "2.0",
+        "id": "<id>",
+        "result": {
+          "_meta": {
+            "fastmcp": {
+              "wrap_result": true
+            }
+          },
+          "content": [
+            {
+              "text": "{\"deleted\":true,\"is_directory\":true,\"identifier\":\"duplicates\",\"total_files\":2,\"successful_deletes\":2,\"failed_deletes\":0,\"deleted_files\":[\"duplicates/dup-a/same-title.md\",\"duplicates/dup-b/same-title.md\"],\"errors\":[]}",
+              "type": "text"
+            }
+          ],
+          "isError": false,
+          "structuredContent": {
+            "result": {
+              "deleted": true,
+              "is_directory": true,
+              "identifier": "duplicates",
+              "total_files": 2,
+              "successful_deletes": 2,
+              "failed_deletes": 0,
+              "deleted_files": [
+                "duplicates/dup-a/same-title.md",
+                "duplicates/dup-b/same-title.md"
+              ],
+              "errors": []
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "25-delete_note",
+      "request": {
+        "jsonrpc": "2.0",
+        "id": 25,
+        "method": "tools/call",
+        "params": {
+          "name": "delete_note",
+          "arguments": {
+            "identifier": "no-such-directory",
+            "is_directory": true,
+            "output_format": "json"
+          }
+        }
+      },
+      "frame": {
+        "jsonrpc": "2.0",
+        "id": "<id>",
+        "result": {
+          "_meta": {
+            "fastmcp": {
+              "wrap_result": true
+            }
+          },
+          "content": [
+            {
+              "text": "{\"deleted\":false,\"is_directory\":true,\"identifier\":\"no-such-directory\",\"total_files\":0,\"successful_deletes\":0,\"failed_deletes\":0,\"deleted_files\":[],\"errors\":[],\"error\":\"Directory not found or empty: no files matched\"}",
+              "type": "text"
+            }
+          ],
+          "isError": false,
+          "structuredContent": {
+            "result": {
+              "deleted": false,
+              "is_directory": true,
+              "identifier": "no-such-directory",
+              "total_files": 0,
+              "successful_deletes": 0,
+              "failed_deletes": 0,
+              "deleted_files": [],
+              "errors": [],
+              "error": "Directory not found or empty: no files matched"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "26-move_note",
+      "request": {
+        "jsonrpc": "2.0",
+        "id": 26,
+        "method": "tools/call",
+        "params": {
+          "name": "move_note",
+          "arguments": {
+            "identifier": "no-such-note-anywhere",
+            "destination_path": "archive/nope.md",
+            "output_format": "json"
+          }
+        }
+      },
+      "frame": {
+        "jsonrpc": "2.0",
+        "id": "<id>",
+        "result": {
+          "_meta": {
+            "fastmcp": {
+              "wrap_result": true
+            }
+          },
+          "content": [
+            {
+              "text": "{\"moved\":false,\"title\":null,\"permalink\":null,\"file_path\":null,\"source\":\"no-such-note-anywhere\",\"destination\":\"archive/nope.md\",\"error\":\"Entity not found: 'no-such-note-anywhere'\"}",
+              "type": "text"
+            }
+          ],
+          "isError": false,
+          "structuredContent": {
+            "result": {
+              "moved": false,
+              "title": null,
+              "permalink": null,
+              "file_path": null,
+              "source": "no-such-note-anywhere",
+              "destination": "archive/nope.md",
+              "error": "Entity not found: 'no-such-note-anywhere'"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "27-move_note",
+      "request": {
+        "jsonrpc": "2.0",
+        "id": 27,
+        "method": "tools/call",
+        "params": {
+          "name": "move_note",
+          "arguments": {
+            "identifier": "notes/cjk",
+            "destination_path": "archive/cjk.md",
+            "output_format": "json"
+          }
+        }
+      },
+      "frame": {
+        "jsonrpc": "2.0",
+        "id": "<id>",
+        "result": {
+          "_meta": {
+            "fastmcp": {
+              "wrap_result": true
+            }
+          },
+          "content": [
+            {
+              "text": "{\"moved\":true,\"title\":\"中文测试文档\",\"permalink\":\"oracle/notes/cjk\",\"file_path\":\"archive/cjk.md\",\"source\":\"notes/cjk\",\"destination\":\"archive/cjk.md\"}",
+              "type": "text"
+            }
+          ],
+          "isError": false,
+          "structuredContent": {
+            "result": {
+              "moved": true,
+              "title": "中文测试文档",
+              "permalink": "oracle/notes/cjk",
+              "file_path": "archive/cjk.md",
+              "source": "notes/cjk",
+              "destination": "archive/cjk.md"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "28-move_note",
+      "request": {
+        "jsonrpc": "2.0",
+        "id": 28,
+        "method": "tools/call",
+        "params": {
+          "name": "move_note",
+          "arguments": {
+            "identifier": "notes/cjk",
+            "destination_path": "archive/cjk.md",
+            "output_format": "json"
+          }
+        }
+      },
+      "frame": {
+        "jsonrpc": "2.0",
+        "id": "<id>",
+        "result": {
+          "_meta": {
+            "fastmcp": {
+              "wrap_result": true
+            }
+          },
+          "content": [
+            {
+              "text": "{\"moved\":false,\"title\":\"中文测试文档\",\"permalink\":\"oracle/notes/cjk\",\"file_path\":\"archive/cjk.md\",\"source\":\"notes/cjk\",\"destination\":\"archive/cjk.md\",\"error\":\"DESTINATION_SAME_AS_SOURCE\"}",
+              "type": "text"
+            }
+          ],
+          "isError": false,
+          "structuredContent": {
+            "result": {
+              "moved": false,
+              "title": "中文测试文档",
+              "permalink": "oracle/notes/cjk",
+              "file_path": "archive/cjk.md",
+              "source": "notes/cjk",
+              "destination": "archive/cjk.md",
+              "error": "DESTINATION_SAME_AS_SOURCE"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "29-write_note",
+      "request": {
+        "jsonrpc": "2.0",
+        "id": 29,
+        "method": "tools/call",
+        "params": {
+          "name": "write_note",
+          "arguments": {
+            "title": "Text Surface",
+            "content": "# Text Surface",
+            "directory": "notes"
+          }
+        }
+      },
+      "frame": {
+        "jsonrpc": "2.0",
+        "id": "<id>",
+        "result": {
+          "_meta": {
+            "fastmcp": {
+              "wrap_result": true
+            }
+          },
+          "content": [
+            {
+              "text": "# Created note\nproject: oracle\nfile_path: notes/Text Surface.md\npermalink: oracle/notes/text-surface\nchecksum: unknown\n\n[Session: Using project 'oracle']",
+              "type": "text"
+            }
+          ],
+          "isError": false,
+          "structuredContent": {
+            "result": "# Created note\nproject: oracle\nfile_path: notes/Text Surface.md\npermalink: oracle/notes/text-surface\nchecksum: unknown\n\n[Session: Using project 'oracle']"
+          }
+        }
+      }
+    },
+    {
+      "id": "30-move_note",
+      "request": {
+        "jsonrpc": "2.0",
+        "id": 30,
+        "method": "tools/call",
+        "params": {
+          "name": "move_note",
+          "arguments": {
+            "identifier": "notes/text-surface",
+            "destination_path": "archive/text-surface.md"
+          }
+        }
+      },
+      "frame": {
+        "jsonrpc": "2.0",
+        "id": "<id>",
+        "result": {
+          "_meta": {
+            "fastmcp": {
+              "wrap_result": true
+            }
+          },
+          "content": [
+            {
+              "text": "✅ Note moved successfully\n\n📁 **notes/text-surface** → **archive/text-surface.md**\n🔗 Permalink: oracle/notes/text-surface\n📊 Database and search index updated\n\n<!-- Project: oracle -->",
+              "type": "text"
+            }
+          ],
+          "isError": false,
+          "structuredContent": {
+            "result": "✅ Note moved successfully\n\n📁 **notes/text-surface** → **archive/text-surface.md**\n🔗 Permalink: oracle/notes/text-surface\n📊 Database and search index updated\n\n<!-- Project: oracle -->"
+          }
+        }
+      }
+    },
+    {
+      "id": "31-delete_note",
+      "request": {
+        "jsonrpc": "2.0",
+        "id": 31,
+        "method": "tools/call",
+        "params": {
+          "name": "delete_note",
+          "arguments": {
+            "identifier": "archive/text-surface.md"
+          }
+        }
+      },
+      "frame": {
+        "jsonrpc": "2.0",
+        "id": "<id>",
+        "result": {
+          "_meta": {
+            "fastmcp": {
+              "wrap_result": true
+            }
+          },
+          "content": [
+            {
+              "text": "true",
+              "type": "text"
+            }
+          ],
+          "isError": false,
+          "structuredContent": {
+            "result": true
+          }
+        }
+      }
+    },
+    {
+      "id": "32-write_note",
+      "request": {
+        "jsonrpc": "2.0",
+        "id": 32,
+        "method": "tools/call",
+        "params": {
+          "name": "write_note",
+          "arguments": {
+            "title": "Editable",
+            "content": "# Editable\n\n- [fact] first\n",
+            "directory": "notes",
+            "output_format": "json"
+          }
+        }
+      },
+      "frame": {
+        "jsonrpc": "2.0",
+        "id": "<id>",
+        "result": {
+          "_meta": {
+            "fastmcp": {
+              "wrap_result": true
+            }
+          },
+          "content": [
+            {
+              "text": "{\"title\":\"Editable\",\"permalink\":\"oracle/notes/editable\",\"file_path\":\"notes/Editable.md\",\"checksum\":null,\"action\":\"created\"}",
+              "type": "text"
+            }
+          ],
+          "isError": false,
+          "structuredContent": {
+            "result": {
+              "title": "Editable",
+              "permalink": "oracle/notes/editable",
+              "file_path": "notes/Editable.md",
+              "checksum": null,
+              "action": "created"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "33-edit_note",
+      "request": {
+        "jsonrpc": "2.0",
+        "id": 33,
+        "method": "tools/call",
+        "params": {
+          "name": "edit_note",
+          "arguments": {
+            "identifier": "notes/editable",
+            "operation": "append",
+            "content": "- [fact] appended",
+            "output_format": "json"
+          }
+        }
+      },
+      "frame": {
+        "jsonrpc": "2.0",
+        "id": "<id>",
+        "result": {
+          "_meta": {
+            "fastmcp": {
+              "wrap_result": true
+            }
+          },
+          "content": [
+            {
+              "text": "{\"title\":\"Editable\",\"permalink\":\"oracle/notes/editable\",\"file_path\":\"notes/Editable.md\",\"checksum\":null,\"operation\":\"append\",\"fileCreated\":false}",
+              "type": "text"
+            }
+          ],
+          "isError": false,
+          "structuredContent": {
+            "result": {
+              "title": "Editable",
+              "permalink": "oracle/notes/editable",
+              "file_path": "notes/Editable.md",
+              "checksum": null,
+              "operation": "append",
+              "fileCreated": false
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "34-edit_note",
+      "request": {
+        "jsonrpc": "2.0",
+        "id": 34,
+        "method": "tools/call",
+        "params": {
+          "name": "edit_note",
+          "arguments": {
+            "identifier": "notes/editable",
+            "operation": "append",
+            "content": "- [fact] text mode"
+          }
+        }
+      },
+      "frame": {
+        "jsonrpc": "2.0",
+        "id": "<id>",
+        "result": {
+          "_meta": {
+            "fastmcp": {
+              "wrap_result": true
+            }
+          },
+          "content": [
+            {
+              "text": "# Edited note (append)\nproject: oracle\nfile_path: notes/Editable.md\npermalink: oracle/notes/editable\nchecksum: unknown\noperation: Added 1 lines to end of note\n\n[Session: Using project 'oracle']",
+              "type": "text"
+            }
+          ],
+          "isError": false,
+          "structuredContent": {
+            "result": "# Edited note (append)\nproject: oracle\nfile_path: notes/Editable.md\npermalink: oracle/notes/editable\nchecksum: unknown\noperation: Added 1 lines to end of note\n\n[Session: Using project 'oracle']"
+          }
+        }
+      }
+    },
+    {
+      "id": "35-edit_note",
+      "request": {
+        "jsonrpc": "2.0",
+        "id": 35,
+        "method": "tools/call",
+        "params": {
+          "name": "edit_note",
+          "arguments": {
+            "identifier": "notes/no-such-editable",
+            "operation": "append",
+            "content": "- [fact] nowhere",
+            "output_format": "json"
+          }
+        }
+      },
+      "frame": {
+        "jsonrpc": "2.0",
+        "id": "<id>",
+        "result": {
+          "_meta": {
+            "fastmcp": {
+              "wrap_result": true
+            }
+          },
+          "content": [
+            {
+              "text": "{\"title\":\"no-such-editable\",\"permalink\":\"oracle/notes/no-such-editable\",\"file_path\":\"notes/no-such-editable.md\",\"checksum\":null,\"operation\":\"append\",\"fileCreated\":true}",
+              "type": "text"
+            }
+          ],
+          "isError": false,
+          "structuredContent": {
+            "result": {
+              "title": "no-such-editable",
+              "permalink": "oracle/notes/no-such-editable",
+              "file_path": "notes/no-such-editable.md",
+              "checksum": null,
+              "operation": "append",
+              "fileCreated": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "36-edit_note",
+      "request": {
+        "jsonrpc": "2.0",
+        "id": 36,
+        "method": "tools/call",
+        "params": {
+          "name": "edit_note",
+          "arguments": {
+            "identifier": "notes/no-such-editable",
+            "operation": "append",
+            "content": "- [fact] nowhere"
+          }
+        }
+      },
+      "frame": {
+        "jsonrpc": "2.0",
+        "id": "<id>",
+        "result": {
+          "_meta": {
+            "fastmcp": {
+              "wrap_result": true
+            }
+          },
+          "content": [
+            {
+              "text": "# Edited note (append)\nproject: oracle\nfile_path: notes/no-such-editable.md\npermalink: oracle/notes/no-such-editable\nchecksum: unknown\noperation: Added 1 lines to end of note\n\n[Session: Using project 'oracle']",
+              "type": "text"
+            }
+          ],
+          "isError": false,
+          "structuredContent": {
+            "result": "# Edited note (append)\nproject: oracle\nfile_path: notes/no-such-editable.md\npermalink: oracle/notes/no-such-editable\nchecksum: unknown\noperation: Added 1 lines to end of note\n\n[Session: Using project 'oracle']"
+          }
+        }
+      }
+    }
+  ],
+  "files": {
+    "people/typed-note.md": null,
+    "notes/merged-note.md": null,
+    "notes/content-type.md": null,
+    "At Root.md": "---\ntitle: At Root\ntype: note\npermalink: oracle/at-root\n---\n\n# At Root\n\n- [fact] replaced",
+    "archive/deep-note.md": null,
+    "archive/nested/deep-note.md": "---\ntitle: Deep Note\ntype: note\npermalink: oracle/notes/nested/deep-note\n---\n\n# Deep Note\n\nNested fixture linking back to [[notes/simple]].\n\n- [fact] Nested paths must keep slash-separated permalinks",
+    "archive/simple-moved.md": "---\ntitle: simple\ntype: note\npermalink: oracle/notes/simple\n---\n\n# Simple Note\n\nA plain note without frontmatter. It links to [[projects/alpha]] and mentions rust.\n\n- [note] Created as a baseline fixture",
+    "archive/relations.md": "---\ntitle: Relations Demo\ntype: note\npermalink: oracle/notes/relations\n---\n\n# Relations\n\n- depends_on [[projects/alpha]]\n- \"implemented by\" [[people/ada-lovelace]]\n- relates_to [[notes/simple]] (primary source)\n\nProse with an inline [[notes/frontmatter]] link and an [[projects/beta|Beta]] display link.",
+    "archive/cjk.md": "---\ntitle: 中文测试文档\ntype: note\ntags:\n- 中文\n- 测试\npermalink: oracle/notes/cjk\n---\n\n# 中文测试\n\n这是一个中文笔记，包含 English 混合内容。\n\n- [decision] 使用 SQLite 作为本地索引\n- 关联 [[projects/alpha]]",
+    "duplicates/dup-a/same-title.md": null,
+    "notes/nested/deep-note.md": null,
+    "notes/simple.md": null,
+    "notes/relations.md": null,
+    "notes/cjk.md": null,
+    "notes/Text Surface.md": null,
+    "archive/text-surface.md": null,
+    "notes/Editable.md": "---\ntitle: Editable\ntype: note\npermalink: oracle/notes/editable\n---\n\n# Editable\n\n- [fact] first\n- [fact] appended\n- [fact] text mode",
+    "notes/no-such-editable.md": "---\ntitle: no-such-editable\ntype: note\npermalink: oracle/notes/no-such-editable\n---\n\n- [fact] nowhere\n- [fact] nowhere",
+    "projects/alpha.md": null
+  }
+}

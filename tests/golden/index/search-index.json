@@ -1,0 +1,472 @@
+[
+  {
+    "type": "entity",
+    "title": "Frontmatter Demo",
+    "permalink": "notes/frontmatter-note",
+    "file_path": "notes/frontmatter.md",
+    "category": null,
+    "relation_type": null,
+    "content_stems": "frontmatter\nFrontmatter Demo\nfrontmatter demo\ndemo\n# Frontmatter Demo\n\nThis note carries structured metadata and is tagged for search.\n\n- [decision] Keep Markdown as the source of truth\n- [constraint] No cloud functionality in the Rust port\nfrontmatter-note\nnotes/frontmatter-note\nnotes\nnotes/frontmatter.md\nfrontmatter.md\nnotes\nrust\narchitecture",
+    "content_snippet": "# Frontmatter Demo\n\nThis note carries structured metadata and is tagged for search.\n\n- [decision] Keep Markdown as the source of truth\n- [constraint] No cloud functionality in the Rust port"
+  },
+  {
+    "type": "entity",
+    "title": "Same Title",
+    "permalink": "oracle/duplicates/dup-a/same-title",
+    "file_path": "duplicates/dup-a/same-title.md",
+    "category": null,
+    "relation_type": null,
+    "content_stems": "Same Title\nsame\ntitle\nsame title\n# Duplicate A\n\nFirst note with a duplicate title.\n\n- [fact] Duplicate title in folder A\nsame-title\nduplicates\noracle/duplicates/dup-a/same-title\noracle\ndup-a\nsame-title.md\nduplicates/dup-a/same-title.md\ndup-a\nduplicates",
+    "content_snippet": "# Duplicate A\n\nFirst note with a duplicate title.\n\n- [fact] Duplicate title in folder A"
+  },
+  {
+    "type": "entity",
+    "title": "Same Title",
+    "permalink": "oracle/duplicates/dup-b/same-title",
+    "file_path": "duplicates/dup-b/same-title.md",
+    "category": null,
+    "relation_type": null,
+    "content_stems": "Same Title\nsame\ntitle\nsame title\n# Duplicate B\n\nSecond note with a duplicate title. See [[duplicates/dup-a/same-title]].\n\n- [fact] Duplicate title in folder B\nsame-title\nduplicates\ndup-b\noracle/duplicates/dup-b/same-title\noracle\nsame-title.md\ndup-b\nduplicates/dup-b/same-title.md\nduplicates",
+    "content_snippet": "# Duplicate B\n\nSecond note with a duplicate title. See [[duplicates/dup-a/same-title]].\n\n- [fact] Duplicate title in folder B"
+  },
+  {
+    "type": "entity",
+    "title": "中文测试文档",
+    "permalink": "oracle/notes/cjk",
+    "file_path": "notes/cjk.md",
+    "category": null,
+    "relation_type": null,
+    "content_stems": "中文测试文档\n# 中文测试\n\n这是一个中文笔记，包含 English 混合内容。\n\n- [decision] 使用 SQLite 作为本地索引\n- 关联 [[projects/alpha]]\ncjk\noracle/notes/cjk\noracle\nnotes\ncjk.md\nnotes/cjk.md\nnotes\n中文\n测试",
+    "content_snippet": "# 中文测试\n\n这是一个中文笔记，包含 English 混合内容。\n\n- [decision] 使用 SQLite 作为本地索引\n- 关联 [[projects/alpha]]"
+  },
+  {
+    "type": "entity",
+    "title": "empty",
+    "permalink": "oracle/notes/empty",
+    "file_path": "notes/empty.md",
+    "category": null,
+    "relation_type": null,
+    "content_stems": "empty\noracle/notes/empty\nempty\noracle\nnotes\nempty.md\nnotes/empty.md\nnotes",
+    "content_snippet": ""
+  },
+  {
+    "type": "entity",
+    "title": "Deep Note",
+    "permalink": "oracle/notes/nested/deep-note",
+    "file_path": "notes/nested/deep-note.md",
+    "category": null,
+    "relation_type": null,
+    "content_stems": "deep\nnote\ndeep note\nDeep Note\n# Deep Note\n\nNested fixture linking back to [[notes/simple]].\n\n- [fact] Nested paths must keep slash-separated permalinks\ndeep-note\nnotes\nnested\noracle/notes/nested/deep-note\noracle\nnested\ndeep-note.md\nnotes\nnotes/nested/deep-note.md",
+    "content_snippet": "# Deep Note\n\nNested fixture linking back to [[notes/simple]].\n\n- [fact] Nested paths must keep slash-separated permalinks"
+  },
+  {
+    "type": "entity",
+    "title": "Observations Demo",
+    "permalink": "oracle/notes/observations",
+    "file_path": "notes/observations.md",
+    "category": null,
+    "relation_type": null,
+    "content_stems": "observations\nObservations Demo\nobservations demo\ndemo\n# Observations\n\n- [decision] Use SQLite FTS5 for text search\n- [requirement] Must support CJK #cjk #search\n- [fact] Parser preserves frontmatter checksums\n- With no category but a #tag\n- [] Empty bracket content\n- [00:00:11] transcript line should not be a category\n- [ ] unchecked task\n- [x] checked task\n- [link](https://example.com) markdown link\n\n> [!info] Callout\n> - [note] callout bullet should not be an observation\n\nRegular prose with a [[projects/alpha]] link.\nobservations\nnotes\noracle\noracle/notes/observations\nnotes\nobservations.md\nnotes/observations.md\ndemo",
+    "content_snippet": "# Observations\n\n- [decision] Use SQLite FTS5 for text search\n- [requirement] Must support CJK #cjk #search\n- [fact] Parser preserves frontmatter checksums\n- With no category but a #tag\n- [] Empty bracket content\n- [00:00:11] transcript line should not be a category\n- [ ] unchecked task\n- [x] checked task\n- [link](https://example.com) markdown link\n\n> [!info] Callout\n> - [note] callout bullet should not be an observation\n\nRegular prose with a [[projects/alpha]] link."
+  },
+  {
+    "type": "entity",
+    "title": "Relations Demo",
+    "permalink": "oracle/notes/relations",
+    "file_path": "notes/relations.md",
+    "category": null,
+    "relation_type": null,
+    "content_stems": "relations\nrelations demo\ndemo\nRelations Demo\n# Relations\n\n- depends_on [[projects/alpha]]\n- \"implemented by\" [[people/ada-lovelace]]\n- relates_to [[notes/simple]] (primary source)\n\nProse with an inline [[notes/frontmatter]] link and an [[projects/beta|Beta]] display link.\nrelations\nnotes\noracle\noracle/notes/relations\nnotes/relations.md\nrelations.md\nnotes",
+    "content_snippet": "# Relations\n\n- depends_on [[projects/alpha]]\n- \"implemented by\" [[people/ada-lovelace]]\n- relates_to [[notes/simple]] (primary source)\n\nProse with an inline [[notes/frontmatter]] link and an [[projects/beta|Beta]] display link."
+  },
+  {
+    "type": "entity",
+    "title": "simple",
+    "permalink": "oracle/notes/simple",
+    "file_path": "notes/simple.md",
+    "category": null,
+    "relation_type": null,
+    "content_stems": "simple\n# Simple Note\n\nA plain note without frontmatter. It links to [[projects/alpha]] and mentions rust.\n\n- [note] Created as a baseline fixture\nsimple\noracle/notes/simple\noracle\nnotes\nsimple.md\nnotes/simple.md\nnotes",
+    "content_snippet": "# Simple Note\n\nA plain note without frontmatter. It links to [[projects/alpha]] and mentions rust.\n\n- [note] Created as a baseline fixture"
+  },
+  {
+    "type": "entity",
+    "title": "task-markers",
+    "permalink": "oracle/notes/task-markers",
+    "file_path": "notes/task-markers.md",
+    "category": null,
+    "relation_type": null,
+    "content_stems": "task-markers\n# Task Markers\n\n- [ ] unchecked task\n- [x] checked task\n- [/] in progress task\n- [00:01:02] transcript timestamp\n\n- [note] a genuine observation\noracle/notes/task-markers\ntask-markers\noracle\nnotes\ntask-markers.md\nnotes/task-markers.md\nnotes",
+    "content_snippet": "# Task Markers\n\n- [ ] unchecked task\n- [x] checked task\n- [/] in progress task\n- [00:01:02] transcript timestamp\n\n- [note] a genuine observation"
+  },
+  {
+    "type": "entity",
+    "title": "Unresolved Links",
+    "permalink": "oracle/notes/unresolved",
+    "file_path": "notes/unresolved.md",
+    "category": null,
+    "relation_type": null,
+    "content_stems": "links\nUnresolved Links\nunresolved\nunresolved links\n# Unresolved Links\n\nThis links to [[notes/does-not-exist]] before the target exists.\nnotes\nunresolved\noracle/notes/unresolved\noracle\nunresolved.md\nnotes/unresolved.md\nnotes",
+    "content_snippet": "# Unresolved Links\n\nThis links to [[notes/does-not-exist]] before the target exists."
+  },
+  {
+    "type": "entity",
+    "title": "Wikilinks Demo",
+    "permalink": "oracle/notes/wikilinks",
+    "file_path": "notes/wikilinks.md",
+    "category": null,
+    "relation_type": null,
+    "content_stems": "Wikilinks Demo\nwikilinks\ndemo\nwikilinks demo\n# Wikilinks\n\n- links_to [[projects/alpha|Alpha Project]]\n- links_to [[notes/nested/deep-note]]\n\nSee also [[people/ada-lovelace]] and [[projects/beta]].\noracle/notes/wikilinks\nwikilinks\noracle\nnotes\nwikilinks.md\nnotes/wikilinks.md\nnotes",
+    "content_snippet": "# Wikilinks\n\n- links_to [[projects/alpha|Alpha Project]]\n- links_to [[notes/nested/deep-note]]\n\nSee also [[people/ada-lovelace]] and [[projects/beta]]."
+  },
+  {
+    "type": "entity",
+    "title": "Ada Lovelace",
+    "permalink": "oracle/people/ada-lovelace",
+    "file_path": "people/ada-lovelace.md",
+    "category": null,
+    "relation_type": null,
+    "content_stems": "lovelace\nAda Lovelace\nada\nada lovelace\n# Ada Lovelace\n\nMathematician referenced by several fixture notes.\n\n- [fact] First programmer\npeople\nada-lovelace\noracle\noracle/people/ada-lovelace\npeople/ada-lovelace.md\npeople\nada-lovelace.md\nperson\nhistory",
+    "content_snippet": "# Ada Lovelace\n\nMathematician referenced by several fixture notes.\n\n- [fact] First programmer"
+  },
+  {
+    "type": "entity",
+    "title": "Alpha Project",
+    "permalink": "oracle/projects/alpha",
+    "file_path": "projects/alpha.md",
+    "category": null,
+    "relation_type": null,
+    "content_stems": "Alpha Project\nalpha\nproject\nalpha project\n# Alpha Project\n\nMain fixture project. Links back to [[notes/simple]], forming a cycle.\n\n- [decision] Alpha uses the Rust core\n- [requirement] Must stay offline\nprojects\nalpha\noracle\noracle/projects/alpha\nprojects/alpha.md\nprojects\nalpha.md",
+    "content_snippet": "# Alpha Project\n\nMain fixture project. Links back to [[notes/simple]], forming a cycle.\n\n- [decision] Alpha uses the Rust core\n- [requirement] Must stay offline"
+  },
+  {
+    "type": "entity",
+    "title": "Beta Project",
+    "permalink": "oracle/projects/beta",
+    "file_path": "projects/beta.md",
+    "category": null,
+    "relation_type": null,
+    "content_stems": "Beta Project\nbeta project\nproject\nbeta\n# Beta Project\n\nSecondary fixture project.\n\n- [note] Beta is archived\nprojects\noracle/projects/beta\noracle\nbeta\nprojects\nbeta.md\nprojects/beta.md",
+    "content_snippet": "# Beta Project\n\nSecondary fixture project.\n\n- [note] Beta is archived"
+  },
+  {
+    "type": "observation",
+    "title": "constraint: No cloud functionality in the Rust port...",
+    "permalink": "notes/frontmatter-note/observations/constraint/no-cloud-functionality-in-the-rust-port",
+    "file_path": "notes/frontmatter.md",
+    "category": "constraint",
+    "relation_type": null,
+    "content_stems": "rust\nno\nfunctionality\nport\nthe\ncloud\nin\nno cloud functionality in the rust port\nNo cloud functionality in the Rust port",
+    "content_snippet": "No cloud functionality in the Rust port"
+  },
+  {
+    "type": "observation",
+    "title": "decision: Keep Markdown as the source of truth...",
+    "permalink": "notes/frontmatter-note/observations/decision/keep-markdown-as-the-source-of-truth",
+    "file_path": "notes/frontmatter.md",
+    "category": "decision",
+    "relation_type": null,
+    "content_stems": "keep markdown as the source of truth\nkeep\nmarkdown\nof\nthe\nas\nsource\nKeep Markdown as the source of truth\ntruth",
+    "content_snippet": "Keep Markdown as the source of truth"
+  },
+  {
+    "type": "observation",
+    "title": "fact: Duplicate title in folder A...",
+    "permalink": "oracle/duplicates/dup-a/same-title/observations/fact/duplicate-title-in-folder-a",
+    "file_path": "duplicates/dup-a/same-title.md",
+    "category": "fact",
+    "relation_type": null,
+    "content_stems": "Duplicate title in folder A\nduplicate\nin\na\nfolder\ntitle\nduplicate title in folder a",
+    "content_snippet": "Duplicate title in folder A"
+  },
+  {
+    "type": "observation",
+    "title": "fact: Duplicate title in folder B...",
+    "permalink": "oracle/duplicates/dup-b/same-title/observations/fact/duplicate-title-in-folder-b",
+    "file_path": "duplicates/dup-b/same-title.md",
+    "category": "fact",
+    "relation_type": null,
+    "content_stems": "b\nDuplicate title in folder B\nduplicate\nduplicate title in folder b\nin\nfolder\ntitle",
+    "content_snippet": "Duplicate title in folder B"
+  },
+  {
+    "type": "observation",
+    "title": "decision: 使用 SQLite 作为本地索引...",
+    "permalink": "oracle/notes/cjk/observations/decision/使用-sqlite-作为本地索引",
+    "file_path": "notes/cjk.md",
+    "category": "decision",
+    "relation_type": null,
+    "content_stems": "sqlite\n作为本地索引\n使用 sqlite 作为本地索引\n使用\n使用 SQLite 作为本地索引",
+    "content_snippet": "使用 SQLite 作为本地索引"
+  },
+  {
+    "type": "observation",
+    "title": "fact: Nested paths must keep slash-separated permalinks...",
+    "permalink": "oracle/notes/nested/deep-note/observations/fact/nested-paths-must-keep-slash-separated-permalinks",
+    "file_path": "notes/nested/deep-note.md",
+    "category": "fact",
+    "relation_type": null,
+    "content_stems": "nested paths must keep slash-separated permalinks\nNested paths must keep slash-separated permalinks\nkeep\nmust\nnested\nslash-separated\npaths\npermalinks",
+    "content_snippet": "Nested paths must keep slash-separated permalinks"
+  },
+  {
+    "type": "observation",
+    "title": "decision: Use SQLite FTS5 for text search...",
+    "permalink": "oracle/notes/observations/observations/decision/use-sqlite-fts5-for-text-search",
+    "file_path": "notes/observations.md",
+    "category": "decision",
+    "relation_type": null,
+    "content_stems": "text\nsqlite\nfts5\nsearch\nfor\nUse SQLite FTS5 for text search\nuse sqlite fts5 for text search\nuse",
+    "content_snippet": "Use SQLite FTS5 for text search"
+  },
+  {
+    "type": "observation",
+    "title": "fact: Parser preserves frontmatter checksums...",
+    "permalink": "oracle/notes/observations/observations/fact/parser-preserves-frontmatter-checksums",
+    "file_path": "notes/observations.md",
+    "category": "fact",
+    "relation_type": null,
+    "content_stems": "parser preserves frontmatter checksums\npreserves\nparser\nchecksums\nfrontmatter\nParser preserves frontmatter checksums",
+    "content_snippet": "Parser preserves frontmatter checksums"
+  },
+  {
+    "type": "observation",
+    "title": "note: With no category but a #tag...",
+    "permalink": "oracle/notes/observations/observations/note/with-no-category-but-a-tag",
+    "file_path": "notes/observations.md",
+    "category": "note",
+    "relation_type": null,
+    "content_stems": "#tag\nbut\nno\nwith\nWith no category but a #tag\na\nwith no category but a #tag\ncategory",
+    "content_snippet": "With no category but a #tag"
+  },
+  {
+    "type": "observation",
+    "title": "requirement: Must support CJK #cjk #search...",
+    "permalink": "oracle/notes/observations/observations/requirement/must-support-cjk-cjk-search",
+    "file_path": "notes/observations.md",
+    "category": "requirement",
+    "relation_type": null,
+    "content_stems": "must support cjk #cjk #search\nsupport\ncjk\nMust support CJK #cjk #search\nmust\n#search\n#cjk",
+    "content_snippet": "Must support CJK #cjk #search"
+  },
+  {
+    "type": "observation",
+    "title": "note: Created as a baseline fixture...",
+    "permalink": "oracle/notes/simple/observations/note/created-as-a-baseline-fixture",
+    "file_path": "notes/simple.md",
+    "category": "note",
+    "relation_type": null,
+    "content_stems": "created\nfixture\nas\ncreated as a baseline fixture\nCreated as a baseline fixture\na\nbaseline",
+    "content_snippet": "Created as a baseline fixture"
+  },
+  {
+    "type": "observation",
+    "title": "note: a genuine observation...",
+    "permalink": "oracle/notes/task-markers/observations/note/a-genuine-observation",
+    "file_path": "notes/task-markers.md",
+    "category": "note",
+    "relation_type": null,
+    "content_stems": "a genuine observation\ngenuine\na\nobservation",
+    "content_snippet": "a genuine observation"
+  },
+  {
+    "type": "observation",
+    "title": "fact: First programmer...",
+    "permalink": "oracle/people/ada-lovelace/observations/fact/first-programmer",
+    "file_path": "people/ada-lovelace.md",
+    "category": "fact",
+    "relation_type": null,
+    "content_stems": "first programmer\nFirst programmer\nprogrammer\nfirst",
+    "content_snippet": "First programmer"
+  },
+  {
+    "type": "observation",
+    "title": "decision: Alpha uses the Rust core...",
+    "permalink": "oracle/projects/alpha/observations/decision/alpha-uses-the-rust-core",
+    "file_path": "projects/alpha.md",
+    "category": "decision",
+    "relation_type": null,
+    "content_stems": "core\nrust\nuses\nthe\nAlpha uses the Rust core\nalpha uses the rust core\nalpha",
+    "content_snippet": "Alpha uses the Rust core"
+  },
+  {
+    "type": "observation",
+    "title": "requirement: Must stay offline...",
+    "permalink": "oracle/projects/alpha/observations/requirement/must-stay-offline",
+    "file_path": "projects/alpha.md",
+    "category": "requirement",
+    "relation_type": null,
+    "content_stems": "Must stay offline\nmust\noffline\nstay\nmust stay offline",
+    "content_snippet": "Must stay offline"
+  },
+  {
+    "type": "observation",
+    "title": "note: Beta is archived...",
+    "permalink": "oracle/projects/beta/observations/note/beta-is-archived",
+    "file_path": "projects/beta.md",
+    "category": "note",
+    "relation_type": null,
+    "content_stems": "archived\nbeta\nis\nBeta is archived\nbeta is archived",
+    "content_snippet": "Beta is archived"
+  },
+  {
+    "type": "relation",
+    "title": "Same Title -> Same Title",
+    "permalink": "oracle/duplicates/dup-b/same-title/links-to/oracle/duplicates/dup-a/same-title",
+    "file_path": "duplicates/dup-b/same-title.md",
+    "category": null,
+    "relation_type": "links_to",
+    "content_stems": "->\nsame\nsame title -> same title\nSame Title -> Same Title\ntitle",
+    "content_snippet": null
+  },
+  {
+    "type": "relation",
+    "title": "中文测试文档 -> Alpha Project",
+    "permalink": "oracle/notes/cjk/关联/oracle/projects/alpha",
+    "file_path": "notes/cjk.md",
+    "category": null,
+    "relation_type": "关联",
+    "content_stems": "->\n中文测试文档 -> alpha project\nproject\n中文测试文档 -> Alpha Project\n中文测试文档\nalpha",
+    "content_snippet": null
+  },
+  {
+    "type": "relation",
+    "title": "Deep Note -> simple",
+    "permalink": "oracle/notes/nested/deep-note/links-to/oracle/notes/simple",
+    "file_path": "notes/nested/deep-note.md",
+    "category": null,
+    "relation_type": "links_to",
+    "content_stems": "deep\n->\nDeep Note -> simple\ndeep note -> simple\nsimple\nnote",
+    "content_snippet": null
+  },
+  {
+    "type": "relation",
+    "title": "Observations Demo -> Alpha Project",
+    "permalink": "oracle/notes/observations/links-to/oracle/projects/alpha",
+    "file_path": "notes/observations.md",
+    "category": null,
+    "relation_type": "links_to",
+    "content_stems": "observations\nalpha\n->\nproject\ndemo\nObservations Demo -> Alpha Project\nobservations demo -> alpha project",
+    "content_snippet": null
+  },
+  {
+    "type": "relation",
+    "title": "Relations Demo -> Alpha Project",
+    "permalink": "oracle/notes/relations/depends-on/oracle/projects/alpha",
+    "file_path": "notes/relations.md",
+    "category": null,
+    "relation_type": "depends_on",
+    "content_stems": "alpha\n->\nproject\nRelations Demo -> Alpha Project\ndemo\nrelations\nrelations demo -> alpha project",
+    "content_snippet": null
+  },
+  {
+    "type": "relation",
+    "title": "Relations Demo -> Ada Lovelace",
+    "permalink": "oracle/notes/relations/implemented-by/oracle/people/ada-lovelace",
+    "file_path": "notes/relations.md",
+    "category": null,
+    "relation_type": "implemented by",
+    "content_stems": "lovelace\n->\nada\ndemo\nrelations\nrelations demo -> ada lovelace\nRelations Demo -> Ada Lovelace",
+    "content_snippet": null
+  },
+  {
+    "type": "relation",
+    "title": "Relations Demo -> Frontmatter Demo",
+    "permalink": "oracle/notes/relations/links-to/notes/frontmatter-note",
+    "file_path": "notes/relations.md",
+    "category": null,
+    "relation_type": "links_to",
+    "content_stems": "->\ndemo\nrelations\nrelations demo -> frontmatter demo\nfrontmatter\nRelations Demo -> Frontmatter Demo",
+    "content_snippet": null
+  },
+  {
+    "type": "relation",
+    "title": "Relations Demo -> Beta Project",
+    "permalink": "oracle/notes/relations/links-to/oracle/projects/beta",
+    "file_path": "notes/relations.md",
+    "category": null,
+    "relation_type": "links_to",
+    "content_stems": "->\nproject\nbeta\ndemo\nrelations\nRelations Demo -> Beta Project\nrelations demo -> beta project",
+    "content_snippet": null
+  },
+  {
+    "type": "relation",
+    "title": "Relations Demo -> simple",
+    "permalink": "oracle/notes/relations/relates-to/oracle/notes/simple",
+    "file_path": "notes/relations.md",
+    "category": null,
+    "relation_type": "relates_to",
+    "content_stems": "->\nrelations demo -> simple\nsimple\ndemo\nrelations\nRelations Demo -> simple",
+    "content_snippet": null
+  },
+  {
+    "type": "relation",
+    "title": "simple -> Alpha Project",
+    "permalink": "oracle/notes/simple/links-to/oracle/projects/alpha",
+    "file_path": "notes/simple.md",
+    "category": null,
+    "relation_type": "links_to",
+    "content_stems": "->\nproject\nsimple -> Alpha Project\nsimple\nsimple -> alpha project\nalpha",
+    "content_snippet": null
+  },
+  {
+    "type": "relation",
+    "title": "Unresolved Links",
+    "permalink": "oracle/notes/unresolved/links-to/notes/does-not-exist",
+    "file_path": "notes/unresolved.md",
+    "category": null,
+    "relation_type": "links_to",
+    "content_stems": "links\nUnresolved Links\nunresolved\nunresolved links",
+    "content_snippet": null
+  },
+  {
+    "type": "relation",
+    "title": "Wikilinks Demo -> Deep Note",
+    "permalink": "oracle/notes/wikilinks/links-to/oracle/notes/nested/deep-note",
+    "file_path": "notes/wikilinks.md",
+    "category": null,
+    "relation_type": "links_to",
+    "content_stems": "deep\n->\nWikilinks Demo -> Deep Note\ndemo\nwikilinks\nwikilinks demo -> deep note\nnote",
+    "content_snippet": null
+  },
+  {
+    "type": "relation",
+    "title": "Wikilinks Demo -> Ada Lovelace",
+    "permalink": "oracle/notes/wikilinks/links-to/oracle/people/ada-lovelace",
+    "file_path": "notes/wikilinks.md",
+    "category": null,
+    "relation_type": "links_to",
+    "content_stems": "lovelace\n->\nada\ndemo\nwikilinks\nWikilinks Demo -> Ada Lovelace\nwikilinks demo -> ada lovelace",
+    "content_snippet": null
+  },
+  {
+    "type": "relation",
+    "title": "Wikilinks Demo -> Alpha Project",
+    "permalink": "oracle/notes/wikilinks/links-to/oracle/projects/alpha",
+    "file_path": "notes/wikilinks.md",
+    "category": null,
+    "relation_type": "links_to",
+    "content_stems": "->\nproject\ndemo\nwikilinks\nWikilinks Demo -> Alpha Project\nwikilinks demo -> alpha project\nalpha",
+    "content_snippet": null
+  },
+  {
+    "type": "relation",
+    "title": "Wikilinks Demo -> Beta Project",
+    "permalink": "oracle/notes/wikilinks/links-to/oracle/projects/beta",
+    "file_path": "notes/wikilinks.md",
+    "category": null,
+    "relation_type": "links_to",
+    "content_stems": "Wikilinks Demo -> Beta Project\n->\nproject\nbeta\nwikilinks demo -> beta project\ndemo\nwikilinks",
+    "content_snippet": null
+  },
+  {
+    "type": "relation",
+    "title": "Alpha Project -> simple",
+    "permalink": "oracle/projects/alpha/links-to/oracle/notes/simple",
+    "file_path": "projects/alpha.md",
+    "category": null,
+    "relation_type": "links_to",
+    "content_stems": "alpha project -> simple\n->\nproject\nsimple\nAlpha Project -> simple\nalpha",
+    "content_snippet": null
+  }
+]
