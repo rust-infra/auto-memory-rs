@@ -149,7 +149,7 @@ Twenty tools are exposed: the note family (`write_note`, `read_note`, `view_note
 `search`/`fetch` adapters that answer only OpenAI's MCP client), graph (`build_context`),
 navigation (`list_directory`), activity (`recent_activity`), projects
 (`list_memory_projects`, `create_memory_project`, `delete_project`), the schema tools
-(`schema_validate`, `schema_infer`, `schema_diff`), and `basic_memory_diagnostics`. The server is
+(`schema_validate`, `schema_infer`, `schema_diff`), and `auto_memory_diagnostics`. The server is
 always constrained to one project; use the CLI for project lifecycle and for indexing.
 
 Add `--reranker` to rescore the top candidates with a cross-encoder

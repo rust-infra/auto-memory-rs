@@ -118,7 +118,7 @@ $BIN status --index /tmp/am-demo/memory2.db --project "My Vault"   # ❌ project
 ### 2.3 项目名与 permalink 混用时的行为
 
 `mcp --project my-vault`（传 permalink 而不是名字）能跑，但项目的展示名会被改写成
-`my-vault`；`basic_memory_diagnostics` 里能看到实际生效的名字：
+`my-vault`；`auto_memory_diagnostics` 里能看到实际生效的名字：
 
 ```
 - Project: my-vault (my-vault)
@@ -283,7 +283,7 @@ Restart=on-failure
 $BIN mcp --vault "$VAULT" --index "$INDEX" --project "$PROJECT" <<'EOF'
 {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"probe","version":"0"}}}
 {"jsonrpc":"2.0","method":"notifications/initialized"}
-{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"basic_memory_diagnostics","arguments":{}}}
+{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"auto_memory_diagnostics","arguments":{}}}
 EOF
 ```
 
@@ -423,7 +423,7 @@ checksum: unknown
 | 活动 | `recent_activity` |
 | 项目 | `list_memory_projects` `create_memory_project` `delete_project` |
 | Schema | `schema_validate` `schema_infer` `schema_diff` |
-| 诊断 | `basic_memory_diagnostics` |
+| 诊断 | `auto_memory_diagnostics` |
 
 要点：笔记类是 upsert 语义（`edit_note` 的 identifier 不存在时会创建笔记）；
 所有笔记工具的 `output_format` 默认 `text`，要结构化数据传 `"json"`
@@ -447,7 +447,7 @@ MCP 服务始终被约束在**一个项目**内，项目生命周期（建/删�
 |---|---|---|
 | `project not found: <name>` | 读命令用了项目名而不是 permalink | 用 `my-vault` 这种规范化形式；或先 `list_memory_projects` 看 permalink |
 | `vault directory not found` | `reindex` 的 `--vault` 不是目录 | 检查路径；`mcp` 不做此检查，别用它来验证 |
-| 客户端连上了但搜不到东西 | `--vault` 指向的目录里没有笔记（`mcp` 启动时会 reconcile，不是缺 `reindex`） | 跑 §7.1 的 `basic_memory_diagnostics` 看 Project/Vault/counts；路径写错还会 prune 该项目已有行，改对后用 `reindex --full` 恢复 |
+| 客户端连上了但搜不到东西 | `--vault` 指向的目录里没有笔记（`mcp` 启动时会 reconcile，不是缺 `reindex`） | 跑 §7.1 的 `auto_memory_diagnostics` 看 Project/Vault/counts；路径写错还会 prune 该项目已有行，改对后用 `reindex --full` 恢复 |
 | 同一个 vault 出现两个项目 | 某次命令漏了 `--project`，注册出"目录名"项目 | 每条命令都显式 `--project`；必要时重建索引 |
 | `--vector` 结果为空 | 没跑过 `reindex --embeddings` | 先建向量索引；MCP 侧还要 `--model-cache` 或 `--embedding-fixture` |
 | `watch --embeddings` 直接退出，退出码 2 | watch 只维护文本索引，不刷新向量；`--embeddings` 是全局开关，不拦就会静默无效 | 向量刷新是单独一趟：`reindex --vault <dir> --index <db> --embeddings` |

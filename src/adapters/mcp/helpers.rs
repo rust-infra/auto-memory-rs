@@ -69,7 +69,7 @@ pub(crate) fn text_result(text: impl Into<String>) -> Value {
 /// Wrap already-rendered text as a tool result with **no** `structuredContent`.
 ///
 /// FastMCP omits the structured payload for a tool declared with `output_schema=None`,
-/// which is how the reference declares `basic_memory_diagnostics`.
+/// which is how the reference declares `auto_memory_diagnostics`.
 pub(crate) fn plain_text_result(text: impl Into<String>) -> Value {
     json!({
         "content": [{ "type": "text", "text": text.into() }],

@@ -56,7 +56,7 @@ pub const SERVER_NAME: &str = "auto-memory-rs";
 ///
 /// The wire names are the compatibility contract (`docs/mcp-spec.md` §3–5); the
 /// `strum` derives generate them from the variant names (`WriteNote` → `write_note`,
-/// `BasicMemoryDiagnostics` → `basic_memory_diagnostics`), so the enum is the only
+/// `AutoMemoryDiagnostics` → `auto_memory_diagnostics`), so the enum is the only
 /// place a tool name is written down. `EnumIter` supplies the advertised order for
 /// `tools/list` and the diagnostics report, `FromStr` parses a `tools/call` name, and
 /// `call_tool` matches on the variant exhaustively — a tool that reaches one surface
@@ -88,8 +88,8 @@ pub enum ToolName {
     SchemaInfer,
     /// `schema_diff` — detect drift between a definition and observed usage.
     SchemaDiff,
-    /// `basic_memory_diagnostics` — version, project, and index report.
-    BasicMemoryDiagnostics,
+    /// `auto_memory_diagnostics` — version, project, and index report.
+    AutoMemoryDiagnostics,
     /// `list_directory` — browse the vault directory tree.
     ListDirectory,
     /// `read_content` — read a file's raw content by path or permalink.
@@ -489,7 +489,7 @@ impl<'a> McpServer<'a> {
             ToolName::SchemaValidate => self.schema_validate(&arguments)?,
             ToolName::SchemaInfer => self.schema_infer(&arguments)?,
             ToolName::SchemaDiff => self.schema_diff(&arguments)?,
-            ToolName::BasicMemoryDiagnostics => self.diagnostics()?,
+            ToolName::AutoMemoryDiagnostics => self.diagnostics()?,
         })
     }
 
@@ -2090,7 +2090,7 @@ mod tests {
                 "schema_validate",
                 "schema_infer",
                 "schema_diff",
-                "basic_memory_diagnostics",
+                "auto_memory_diagnostics",
                 "list_directory",
                 "read_content",
                 "view_note",

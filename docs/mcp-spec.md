@@ -25,7 +25,7 @@ family (`write_note`, `read_note`, `view_note`, `read_content`, `edit_note`, `mo
 `initialize` `clientInfo`), `build_context` (honours `output_format="text"`), `list_directory`
 (text + json), `recent_activity` (text + json), the project trio (`list_memory_projects`,
 `create_memory_project`, `delete_project`), the schema trio (`schema_validate`, `schema_infer`,
-`schema_diff`), and `basic_memory_diagnostics`. That enum is the one source of truth for the
+`schema_diff`), and `auto_memory_diagnostics`. That enum is the one source of truth for the
 names: it drives `tools/list` (each variant carries its description and input schema),
 `tools/call` dispatch (an exhaustive match, so a variant cannot go unhandled), the diagnostics
 report's `tools` array, and the `unknown tool: <name>` error path. `list_workspaces`
@@ -149,7 +149,7 @@ Known divergences, each with a reason:
 | `schema_validate` | schema | validate notes against Picoschema |
 | `schema_infer` | schema | infer Picoschema from notes |
 | `schema_diff` | schema | schema drift report |
-| `basic_memory_diagnostics` | diagnostics | version/config report |
+| `auto_memory_diagnostics` | diagnostics | version/config report |
 
 Cloud/workspace-only surfaces (out of scope for `auto-memory-rs`): `list_workspaces` and any
 `chatgpt`/`ui` variants.
@@ -252,7 +252,7 @@ Note types are compared through `normalize_note_type` (`to_snake_case`), because
 frontmatter keeps the author's spelling: `schema_validate(note_type="Person")` reports
 `note_type: "person"` and covers a note whose file says `type: Person`.
 
-`basic_memory_diagnostics()` → version/system/config summary (secrets redacted).
+`auto_memory_diagnostics()` → version/system/config summary (secrets redacted).
 
 ## 6. Behavior contracts
 

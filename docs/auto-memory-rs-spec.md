@@ -330,7 +330,7 @@ Search:     search, search_notes, fetch, recent_activity, list_directory
 Graph:      build_context
 Projects:   list_memory_projects, create_memory_project, delete_project
 Schema:     schema_infer, schema_validate, schema_diff
-Diagnostics: basic_memory_diagnostics
+Diagnostics: auto_memory_diagnostics
 ```
 
 ## 14. Reliability Requirements

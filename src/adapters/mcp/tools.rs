@@ -149,7 +149,7 @@ impl ToolName {
                     "output_format": { "type": "string", "enum": ["text", "json"] },
                 }),
             ),
-            Self::BasicMemoryDiagnostics => {
+            Self::AutoMemoryDiagnostics => {
                 ("Report version, project, and index counts.", &[], json!({}))
             }
             Self::ListDirectory => (

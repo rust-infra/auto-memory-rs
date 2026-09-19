@@ -137,7 +137,7 @@ fn mcp_session_exposes_tools_and_keeps_stdout_clean() {
                "params": {"name": "build_context",
                           "arguments": {"url": "memory://notes/simple", "depth": 1}}}),
         json!({"jsonrpc": "2.0", "id": 5, "method": "tools/call",
-               "params": {"name": "basic_memory_diagnostics", "arguments": {}}}),
+               "params": {"name": "auto_memory_diagnostics", "arguments": {}}}),
         json!({"jsonrpc": "2.0", "id": 6, "method": "tools/call",
                "params": {"name": "read_note",
                           "arguments": {"identifier": "oracle/notes/simple",
@@ -183,7 +183,7 @@ fn mcp_session_exposes_tools_and_keeps_stdout_clean() {
         "list_memory_projects",
         "create_memory_project",
         "delete_project",
-        "basic_memory_diagnostics",
+        "auto_memory_diagnostics",
     ] {
         assert!(tools.contains(&expected.to_owned()), "missing {expected}");
     }

@@ -15,7 +15,7 @@ use serde_json::Value;
 
 fn request(id: u64) -> String {
     format!(
-        r#"{{"jsonrpc":"2.0","id":{id},"method":"tools/call","params":{{"name":"basic_memory_diagnostics","arguments":{{}}}}}}"#
+        r#"{{"jsonrpc":"2.0","id":{id},"method":"tools/call","params":{{"name":"auto_memory_diagnostics","arguments":{{}}}}}}"#
     )
 }
 

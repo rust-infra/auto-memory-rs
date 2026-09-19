@@ -7,6 +7,8 @@
 
 mod common;
 
+use common::canonicalize_renames;
+
 use std::collections::BTreeSet;
 
 use serde_json::Value;
@@ -74,7 +76,11 @@ fn every_tool_advertises_the_reference_parameters() {
     for tool in auto_memory::adapters::mcp::tool_definitions() {
         let name = tool["name"].as_str().expect("tool name");
         // `list_workspaces` is reference-only (Web/Cloud stays out of scope).
-        let Some(expected) = reference.iter().find(|entry| entry["name"] == name) else {
+        let reference_name = canonicalize_renames(name);
+        let Some(expected) = reference
+            .iter()
+            .find(|entry| entry["name"] == reference_name.as_str())
+        else {
             continue;
         };
         let (ours, theirs) = (properties(&tool), properties(expected));

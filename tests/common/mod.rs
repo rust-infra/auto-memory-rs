@@ -390,7 +390,8 @@ pub fn canonicalize_text(input: &str) -> String {
 /// byte-for-byte reproducible from `tools/export_reference.py`; this port renames the
 /// user-visible surface (`Auto Memory`, and its own binary in the guidance text), so
 /// comparisons map that surface back before asserting equality. Each pair is a whole
-/// phrase rather than a word swap, so the mapping stays unambiguous. Every other
+/// phrase rather than a word swap, so the mapping stays unambiguous; the one bare
+/// identifier is the diagnostics tool name, which clients call by name. Every other
 /// byte of a payload still has to match the reference.
 const RENAMED_SURFACE: &[(&str, &str)] = &[
     ("# Auto Memory Diagnostics", "# Basic Memory Diagnostics"),
@@ -407,6 +408,7 @@ const RENAMED_SURFACE: &[(&str, &str)] = &[
         "Restart the Auto Memory server/process",
         "Restart the Basic Memory server/process",
     ),
+    ("auto_memory_diagnostics", "basic_memory_diagnostics"),
     ("`auto-memory status`", "`basic-memory status`"),
     (
         "run `auto-memory reindex`",
