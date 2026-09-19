@@ -414,7 +414,7 @@ pub fn map_notify_event(root: &Path, event: &Event) -> Vec<(String, ChangeKind)>
 /// than a polled flag — which is what makes a graceful stop (Ctrl-C, then flush the
 /// pending window) possible without racing the signal.
 ///
-/// Indexing is synchronous by design (`docs/basic-memory-rs-spec.md` §6), so the poll
+/// Indexing is synchronous by design (`docs/auto-memory-rs-spec.md` §6), so the poll
 /// and the final flush run through [`tokio::task::block_in_place`]: a caller that
 /// shares this runtime with, say, an MCP server keeps its reactor while SQLite and the
 /// file reads run. That needs a multi-thread runtime — see
@@ -581,7 +581,7 @@ mod tests {
 
     #[test]
     fn bmignore_patterns_are_loaded_from_the_vault() {
-        let dir = std::env::temp_dir().join(format!("bm-ignore-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("am-ignore-{}", std::process::id()));
         std::fs::create_dir_all(&dir).expect("dir");
         std::fs::write(dir.join(".bmignore"), "# comment\ndrafts/\n*.bak\n").expect("write");
         let rules = IgnoreRules::load(&dir, &[]);

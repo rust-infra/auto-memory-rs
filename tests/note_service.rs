@@ -6,10 +6,10 @@
 use std::fs;
 use std::path::PathBuf;
 
-use basic_mem::application::note::NoteService;
-use basic_mem::indexing::{IndexOptions, IndexService};
-use basic_mem::markdown::{EditOperation, EditOptions};
-use basic_mem::storage::Store;
+use auto_memory::application::note::NoteService;
+use auto_memory::indexing::{IndexOptions, IndexService};
+use auto_memory::markdown::{EditOperation, EditOptions};
+use auto_memory::storage::Store;
 use serde_yaml_ng::Value;
 mod common;
 use common::{Scratch, copy_dir};

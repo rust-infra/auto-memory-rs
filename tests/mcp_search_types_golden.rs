@@ -170,7 +170,7 @@ fn semantic_search_types_run_when_a_runtime_is_configured() {
     let fixture = repo_root().join("tests/golden/vector/embeddings-reference.json");
 
     // The vector index has to exist before the server can rank against it.
-    let reindex = Command::new(env!("CARGO_BIN_EXE_basic-mem"))
+    let reindex = Command::new(env!("CARGO_BIN_EXE_auto-memory"))
         .args(["reindex", "--vault"])
         .arg(&vault)
         .args(["--index"])

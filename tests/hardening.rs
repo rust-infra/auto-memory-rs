@@ -202,7 +202,7 @@ fn malformed_utf8_file_is_skipped_without_losing_the_vault() {
     .expect("write");
 
     let index = dir.join("memory.db");
-    let output = Command::new(env!("CARGO_BIN_EXE_basic-mem"))
+    let output = Command::new(env!("CARGO_BIN_EXE_auto-memory"))
         .args(["reindex", "--vault"])
         .arg(&vault)
         .args(["--index"])
@@ -220,7 +220,7 @@ fn malformed_utf8_file_is_skipped_without_losing_the_vault() {
     assert_eq!(report["skipped"], 2, "{report}");
     assert!(report["added"].as_u64().unwrap_or(0) > 0, "{report}");
 
-    let store = basic_mem::storage::Store::open(&index).expect("store");
+    let store = auto_memory::storage::Store::open(&index).expect("store");
     let project = store
         .project_by_permalink("oracle")
         .expect("lookup")
@@ -251,7 +251,7 @@ fn writing_and_reparsing_notes_is_a_fixed_point() {
     let vault = dir.join("vault");
     fs::create_dir_all(&vault).expect("vault");
     let index = dir.join("memory.db");
-    let mut store = basic_mem::storage::Store::open(&index).expect("store");
+    let mut store = auto_memory::storage::Store::open(&index).expect("store");
     let project_id = store
         .upsert_project("oracle", "oracle", &vault.to_string_lossy())
         .expect("project");
@@ -288,13 +288,14 @@ fn writing_and_reparsing_notes_is_a_fixed_point() {
         for _ in 0..next() % 12 {
             body.push_str(alphabet[next() % alphabet.len()]);
         }
-        let note = basic_mem::markdown::parse_document("notes/generated.md", &body).expect("parse");
+        let note =
+            auto_memory::markdown::parse_document("notes/generated.md", &body).expect("parse");
         {
-            let mut service = basic_mem::application::note::NoteService::new(
+            let mut service = auto_memory::application::note::NoteService::new(
                 &mut store,
                 project_id,
                 &vault,
-                basic_mem::indexing::IndexOptions::new("oracle"),
+                auto_memory::indexing::IndexOptions::new("oracle"),
             );
             let written = service.write_note("notes/generated.md", &note.content, &[], true);
             assert!(written.is_ok(), "round {round}: {written:?}");
@@ -302,13 +303,13 @@ fn writing_and_reparsing_notes_is_a_fixed_point() {
 
         let once = fs::read_to_string(vault.join("notes/generated.md")).expect("read");
         let reparsed =
-            basic_mem::markdown::parse_document("notes/generated.md", &once).expect("reparse");
+            auto_memory::markdown::parse_document("notes/generated.md", &once).expect("reparse");
         {
-            let mut service = basic_mem::application::note::NoteService::new(
+            let mut service = auto_memory::application::note::NoteService::new(
                 &mut store,
                 project_id,
                 &vault,
-                basic_mem::indexing::IndexOptions::new("oracle"),
+                auto_memory::indexing::IndexOptions::new("oracle"),
             );
             let rewritten = service
                 .write_note("notes/generated.md", &reparsed.content, &[], true)

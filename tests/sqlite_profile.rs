@@ -15,7 +15,7 @@
 use std::thread;
 use std::time::{Duration, Instant};
 
-use basic_mem::storage::Store;
+use auto_memory::storage::Store;
 use rusqlite::{Connection, ErrorCode};
 mod common;
 use common::Scratch;

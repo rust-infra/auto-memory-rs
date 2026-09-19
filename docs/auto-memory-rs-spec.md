@@ -1,13 +1,13 @@
-# basic-mem-rs Specification
+# auto-memory-rs Specification
 
 - **Status:** Accepted
 - **Date:** 2026-09-08
 - **Scope:** Local-only Rust implementation of the Basic Memory core
-- **Repository:** `basic-mem-rs`
+- **Repository:** `auto-memory-rs`
 
 ## 1. Purpose
 
-`basic-mem-rs` is a local-first Rust implementation of the Basic Memory core. It keeps the core data model, parsing semantics, indexing behavior, search behavior, knowledge-graph traversal, context construction, and MCP behavior compatible with the reference implementation while intentionally excluding Web and Cloud product layers.
+`auto-memory-rs` is a local-first Rust implementation of the Basic Memory core. It keeps the core data model, parsing semantics, indexing behavior, search behavior, knowledge-graph traversal, context construction, and MCP behavior compatible with the reference implementation while intentionally excluding Web and Cloud product layers.
 
 The implementation must be idiomatic Rust internally. Compatibility applies to externally observable behavior and algorithm results, not to the source language's original module layout or class structure.
 
@@ -47,7 +47,7 @@ The implementation must be idiomatic Rust internally. Compatibility applies to e
 - Built-in conflict resolution.
 - Mobile applications.
 
-External tools such as Git, Syncthing, or Dropbox may synchronize the Markdown directory, but synchronization is outside the responsibility of `basic-mem-rs`.
+External tools such as Git, Syncthing, or Dropbox may synchronize the Markdown directory, but synchronization is outside the responsibility of `auto-memory-rs`.
 
 ## 3. Compatibility Definition
 
@@ -316,7 +316,7 @@ MCP and CLI must call these services instead of implementing separate business l
 The first MCP transport is local stdio only:
 
 ```bash
-basic-mem mcp --project /path/to/memory
+auto-memory mcp --project /path/to/memory
 ```
 
 MCP adapters are responsible for input deserialization, validation, error mapping, and output serialization. They must not contain SQL, Markdown parsing, search ranking, or graph traversal.

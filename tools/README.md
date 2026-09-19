@@ -1,7 +1,7 @@
 # Oracle Harness
 
 `export_reference.py` captures golden outputs from the **pinned reference implementation**
-(Basic Memory 0.23.2) so `basic-mem-rs` can prove behavior compatibility.
+(Basic Memory 0.23.2) so `auto-memory-rs` can prove behavior compatibility.
 
 ## What it does
 
@@ -137,7 +137,7 @@ replayed by `tests/chatgpt_mcp_golden.rs`.
 ## Offline smoke check
 
 ```bash
-python3 tools/smoke.py            # add --skip-build to reuse target/release/basic-mem
+python3 tools/smoke.py            # add --skip-build to reuse target/release/auto-memory
 ```
 
 `smoke.py` is the release gate for a clean machine: it builds offline, indexes a throwaway vault,
@@ -162,7 +162,7 @@ runs it with the repo as `cwd`), so that name is ignored by git.
 
 ## Not part of the harness
 
-`basic-mem-hook.py` is user-facing: an agent-lifecycle hook that briefs a Codex or
+`auto-memory-hook.py` is user-facing: an agent-lifecycle hook that briefs a Codex or
 Tact session from an existing index (see `docs/hooks.md`). It talks to the built
 binary, never to the reference implementation, and nothing in the test suite imports
 it.

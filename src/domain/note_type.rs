@@ -13,7 +13,7 @@
 /// boundaries gain an underscore, and the result is lowercased:
 ///
 /// ```
-/// # use basic_mem::domain::note_type::normalize_note_type;
+/// # use auto_memory::domain::note_type::normalize_note_type;
 /// assert_eq!(normalize_note_type("BasicMemory"), "basic_memory");
 /// assert_eq!(normalize_note_type("Memory Service"), "memory_service");
 /// assert_eq!(normalize_note_type("memory-service"), "memory_service");

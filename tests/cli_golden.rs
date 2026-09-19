@@ -10,8 +10,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use basic_mem::indexing::{RebuildOptions, rebuild_vault};
-use basic_mem::storage::Store;
+use auto_memory::indexing::{RebuildOptions, rebuild_vault};
+use auto_memory::storage::Store;
 use common::{Scratch, canonicalize_text, copy_dir, fixtures_vault, repo_root};
 use serde_json::Value;
 
@@ -36,23 +36,23 @@ fn fixture_index() -> (Scratch, Scratch, PathBuf) {
 }
 
 fn run(index: &Path, args: &[&str]) -> std::process::Output {
-    Command::new(env!("CARGO_BIN_EXE_basic-mem"))
+    Command::new(env!("CARGO_BIN_EXE_auto-memory"))
         .args(["context"])
         .args(args)
         .args(["--index", &index.to_string_lossy(), "--project", "oracle"])
         .output()
-        .expect("run basic-mem")
+        .expect("run auto-memory")
 }
 
-/// Run `basic-mem` with a full argument list.
+/// Run `auto-memory` with a full argument list.
 fn run_cli(args: &[&str]) -> std::process::Output {
-    Command::new(env!("CARGO_BIN_EXE_basic-mem"))
+    Command::new(env!("CARGO_BIN_EXE_auto-memory"))
         .args(args)
         // Pin the log filter: assertions on stderr must not depend on the developer's
         // own RUST_LOG.
-        .env("RUST_LOG", "basic_mem=info")
+        .env("RUST_LOG", "auto_memory=info")
         .output()
-        .expect("run basic-mem")
+        .expect("run auto-memory")
 }
 
 #[test]

@@ -1,4 +1,4 @@
-//! `basic-mem hook` — the harness SessionStart/PreCompact front door.
+//! `auto-memory hook` — the harness SessionStart/PreCompact front door.
 //!
 //! Two layers are pinned here: the library-level brief (header, fenced data,
 //! recall prompt, bound) and the CLI contract (stdout carries the brief only,
@@ -10,10 +10,10 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-use basic_mem::hooks::settings::Settings;
-use basic_mem::hooks::{Harness, build_session_brief};
-use basic_mem::indexing::{RebuildOptions, rebuild_vault};
-use basic_mem::storage::Store;
+use auto_memory::hooks::settings::Settings;
+use auto_memory::hooks::{Harness, build_session_brief};
+use auto_memory::indexing::{RebuildOptions, rebuild_vault};
+use auto_memory::storage::Store;
 
 fn codex_settings() -> Settings {
     Settings {
@@ -44,7 +44,7 @@ fn brief_reports_project_and_stays_bounded() {
     );
     assert!(brief.contains("## Where to write"), "{brief}");
     assert!(brief.ends_with(profile.default_recall_prompt), "{brief}");
-    assert!(brief.chars().count() <= basic_mem::hooks::profiles::MAX_BRIEF_CHARS);
+    assert!(brief.chars().count() <= auto_memory::hooks::profiles::MAX_BRIEF_CHARS);
 }
 
 #[test]
@@ -58,7 +58,7 @@ fn checkpoint_prompt_prefixes_the_brief() {
         true,
         Some("CHECKPOINT NOW"),
     );
-    assert!(brief.starts_with("CHECKPOINT NOW\n\n---\n\n# Basic Memory — session context"));
+    assert!(brief.starts_with("CHECKPOINT NOW\n\n---\n\n# Auto Memory — session context"));
 }
 
 #[test]
@@ -100,17 +100,17 @@ fn file_index(tag: &str) -> (common::Scratch, PathBuf) {
     (scratch, index)
 }
 
-/// Run `basic-mem hook …` with `HOME` pointed at an empty dir so the developer's
+/// Run `auto-memory hook …` with `HOME` pointed at an empty dir so the developer's
 /// real `~/.codex/basic-memory.json` cannot leak into the test.
 fn run_hook(args: &[&str], stdin: &str, home: &Path) -> (i32, String, String) {
-    let mut child = Command::new(env!("CARGO_BIN_EXE_basic-mem"))
+    let mut child = Command::new(env!("CARGO_BIN_EXE_auto-memory"))
         .args(args)
         .env("HOME", home)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .expect("spawn basic-mem");
+        .expect("spawn auto-memory");
     child
         .stdin
         .take()
@@ -174,10 +174,7 @@ fn cli_session_start_prints_a_brief_for_the_project() {
     );
     assert_eq!(code, 0);
     assert!(stdout.contains("**Project:** oracle"), "{stdout}");
-    assert!(
-        stdout.contains("Basic Memory — session context"),
-        "{stdout}"
-    );
+    assert!(stdout.contains("Auto Memory — session context"), "{stdout}");
 }
 
 #[test]

@@ -159,7 +159,7 @@ fn mcp_session_exposes_tools_and_keeps_stdout_clean() {
 
     let initialize = &frame_of(&frames, 1)["result"];
     assert_eq!(initialize["protocolVersion"], "2024-11-05");
-    assert_eq!(initialize["serverInfo"]["name"], "basic-mem-rs");
+    assert_eq!(initialize["serverInfo"]["name"], "auto-memory-rs");
     assert!(initialize["capabilities"]["tools"].is_object());
 
     let tools = frame_of(&frames, 2)["result"]["tools"]
@@ -214,7 +214,7 @@ fn mcp_session_exposes_tools_and_keeps_stdout_clean() {
         "{report}"
     );
     assert!(
-        report.contains("\n## Version\n- basic-mem-rs: "),
+        report.contains("\n## Version\n- auto-memory-rs: "),
         "{report}"
     );
     assert!(report.contains("\n## System\n- OS: "), "{report}");

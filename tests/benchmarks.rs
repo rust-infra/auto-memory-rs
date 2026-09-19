@@ -16,9 +16,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
-use basic_mem::indexing::{IndexOptions, IndexService};
-use basic_mem::search::TextSearchOptions;
-use basic_mem::storage::Store;
+use auto_memory::indexing::{IndexOptions, IndexService};
+use auto_memory::search::TextSearchOptions;
+use auto_memory::storage::Store;
 mod common;
 use common::Scratch;
 
@@ -204,7 +204,7 @@ fn benchmark_semantic_chunking() {
     let started = Instant::now();
     let mut chunks = 0usize;
     for _ in 0..10 {
-        chunks = basic_mem::search::build_chunk_records(&rows).len();
+        chunks = auto_memory::search::build_chunk_records(&rows).len();
     }
     let elapsed = started.elapsed() / 10;
     println!(

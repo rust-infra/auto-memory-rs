@@ -6,11 +6,11 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
-use basic_mem::indexing::{
+use auto_memory::indexing::{
     ChangeKind, Debouncer, FileEvent, IndexOptions, IndexOutcome, IndexService, RebuildOptions,
     rebuild_vault,
 };
-use basic_mem::storage::Store;
+use auto_memory::storage::Store;
 mod common;
 use common::{Scratch, copy_dir, fixtures_vault};
 

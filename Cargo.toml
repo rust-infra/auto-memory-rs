@@ -1,5 +1,5 @@
 [package]
-name = "basic-mem-rs"
+name = "auto-memory-rs"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.85"
@@ -8,11 +8,11 @@ license = "AGPL-3.0-or-later"
 publish = false
 
 [lib]
-name = "basic_mem"
+name = "auto_memory"
 path = "src/lib.rs"
 
 [[bin]]
-name = "basic-mem"
+name = "auto-memory"
 path = "src/main.rs"
 
 [dependencies]

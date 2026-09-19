@@ -25,7 +25,7 @@ fn mcp_logs_stay_on_stderr_and_stdout_stays_protocol_only() {
     let vault = dir.join("vault");
     copy_dir_with_mtimes(&fixtures_vault(), &vault);
 
-    let mut child = Command::new(env!("CARGO_BIN_EXE_basic-mem"))
+    let mut child = Command::new(env!("CARGO_BIN_EXE_auto-memory"))
         .args(["mcp", "--vault"])
         .arg(&vault)
         .args(["--index"])
@@ -33,12 +33,12 @@ fn mcp_logs_stay_on_stderr_and_stdout_stays_protocol_only() {
         .args(["--project", "oracle"])
         // Pin the filter: the assertions below must not depend on the developer's own
         // RUST_LOG, and this is the default a user gets.
-        .env("RUST_LOG", "basic_mem=info")
+        .env("RUST_LOG", "auto_memory=info")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .expect("spawn basic-mem mcp");
+        .expect("spawn auto-memory mcp");
     {
         let stdin = child.stdin.as_mut().expect("stdin");
         for id in [1, 2] {

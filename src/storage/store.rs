@@ -223,7 +223,7 @@ impl Store {
     pub fn open(path: impl AsRef<Path>) -> Result<Self> {
         let path = path.as_ref();
         // SQLite creates the database file but not its directory; the CLI/MCP are
-        // routinely pointed at `~/.local/share/basic-mem/memory.db` on a fresh machine.
+        // routinely pointed at `~/.local/share/auto-memory/memory.db` on a fresh machine.
         if let Some(parent) = path.parent()
             && !parent.as_os_str().is_empty()
         {

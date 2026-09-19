@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Brief an agent session from a `basic-mem-rs` index.
+"""Brief an agent session from a `auto-memory-rs` index.
 
 Written as an agent-lifecycle hook for both harnesses that use the Claude Code
 plugin contract — Codex plugins (`.codex-plugin/plugin.json` → `hooks/hooks.json`)
@@ -19,17 +19,17 @@ What it does:
 
 Configuration is environment-only, so the same script works for any vault:
 
-    BASIC_MEM_INDEX    index file (default: ~/.local/share/basic-mem/memory.db)
-    BASIC_MEM_PROJECT  project permalink, e.g. `oracle`          (required)
-    BASIC_MEM_BIN      binary (default: `basic-mem` from PATH)
-    BASIC_MEM_DAYS     lookback window for SessionStart (default: 7)
-    BASIC_MEM_LIMIT    results per briefing (default: 8)
-    BASIC_MEM_QUERY    replaces the SessionStart lookback with a search query
+    AUTO_MEMORY_INDEX    index file (default: ~/.local/share/auto-memory/memory.db)
+    AUTO_MEMORY_PROJECT  project permalink, e.g. `oracle`          (required)
+    AUTO_MEMORY_BIN      binary (default: `auto-memory` from PATH)
+    AUTO_MEMORY_DAYS     lookback window for SessionStart (default: 7)
+    AUTO_MEMORY_LIMIT    results per briefing (default: 8)
+    AUTO_MEMORY_QUERY    replaces the SessionStart lookback with a search query
 
-Project mapping per directory: set `BASIC_MEM_PROJECT_<SLUG>` where `<SLUG>` is the
+Project mapping per directory: set `AUTO_MEMORY_PROJECT_<SLUG>` where `<SLUG>` is the
 payload `cwd` upper-cased with every non-alphanumeric character replaced by `_`
-(e.g. `/home/me/vault` → `BASIC_MEM_PROJECT_HOME_ME_VAULT`), and it wins over
-`BASIC_MEM_PROJECT`. That is how one hook serves several vaults.
+(e.g. `/home/me/vault` → `AUTO_MEMORY_PROJECT_HOME_ME_VAULT`), and it wins over
+`AUTO_MEMORY_PROJECT`. That is how one hook serves several vaults.
 """
 
 from __future__ import annotations
@@ -60,12 +60,12 @@ def slug(path: str) -> str:
 
 
 def setting(name: str, cwd: str, default: str | None = None) -> str | None:
-    """`BASIC_MEM_<name>_<cwd slug>` if set, else `BASIC_MEM_<name>`."""
+    """`AUTO_MEMORY_<name>_<cwd slug>` if set, else `AUTO_MEMORY_<name>`."""
     if cwd:
-        scoped = os.environ.get(f"BASIC_MEM_{name}_{slug(cwd)}")
+        scoped = os.environ.get(f"AUTO_MEMORY_{name}_{slug(cwd)}")
         if scoped:
             return scoped
-    return os.environ.get(f"BASIC_MEM_{name}", default)
+    return os.environ.get(f"AUTO_MEMORY_{name}", default)
 
 
 def run_search(args: list[str], binary: str, timeout: float = 8.0) -> dict:
@@ -104,9 +104,9 @@ def brief_rows(page: dict) -> list[str]:
 def build(session: dict) -> str:
     event = session.get("hook_event_name") or "SessionStart"
     cwd = session.get("cwd") or os.getcwd()
-    binary = setting("BIN", cwd, "basic-mem") or "basic-mem"
+    binary = setting("BIN", cwd, "auto-memory") or "auto-memory"
     index = setting("INDEX", cwd) or os.path.expanduser(
-        "~/.local/share/basic-mem/memory.db"
+        "~/.local/share/auto-memory/memory.db"
     )
     project = setting("PROJECT", cwd)
     if not project:

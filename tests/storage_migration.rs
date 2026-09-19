@@ -7,7 +7,7 @@
 
 use std::fs;
 
-use basic_mem::storage::{SCHEMA_VERSION, Store};
+use auto_memory::storage::{SCHEMA_VERSION, Store};
 mod common;
 use common::Scratch;
 
@@ -59,7 +59,7 @@ fn reopening_keeps_rows_and_restamps_the_version() {
         let project_id = store
             .upsert_project("oracle", "oracle", &vault.to_string_lossy())
             .expect("project");
-        let document = basic_mem::markdown::parse_document(
+        let document = auto_memory::markdown::parse_document(
             "note.md",
             &fs::read_to_string(vault.join("note.md")).expect("read"),
         )
@@ -71,7 +71,7 @@ fn reopening_keeps_rows_and_restamps_the_version() {
                 Some("oracle/note"),
                 "checksum",
                 &document,
-                &basic_mem::domain::DocumentTimestamps {
+                &auto_memory::domain::DocumentTimestamps {
                     created_at: "2026-01-01 00:00:00".to_owned(),
                     updated_at: "2026-01-01 00:00:00".to_owned(),
                 },

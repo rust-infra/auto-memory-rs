@@ -1,6 +1,6 @@
-# basic-mem-rs 接入与使用指南
+# auto-memory-rs 接入与使用指南
 
-本文面向"把 `basic-mem-rs` 接到自己的知识库 + 接到 AI 客户端（MCP）"的落地场景。
+本文面向"把 `auto-memory-rs` 接到自己的知识库 + 接到 AI 客户端（MCP）"的落地场景。
 每一步都可以直接复制执行；标注了本机实测输出，以及在实测中踩出来的坑。
 
 阅读顺序建议：先看 §0 的流程图和 §2 的三个概念（80% 的报错都来自 §2），
@@ -9,7 +9,7 @@
 
 > **定位**：Markdown 是唯一真源，SQLite 索引是派生数据（随时可删可重建）。
 > 没有 Web UI、没有云同步、没有账号。Obsidian（或任何编辑器）改文件，
-> `basic-mem` 索引 + 检索，MCP 负责把这份能力交给 AI 客户端。
+> `auto-memory` 索引 + 检索，MCP 负责把这份能力交给 AI 客户端。
 
 ---
 
@@ -31,13 +31,13 @@
 
 | 命令 | 作用 | `--project` 语义 |
 |---|---|---|
-| `basic-mem reindex` | 建/更新索引 | **项目名**（可省略，默认取 vault 目录名） |
-| `basic-mem watch` | 监听 vault 变化并增量索引 | **项目名** |
-| `basic-mem mcp` | stdio MCP 服务 | **项目名** |
-| `basic-mem status` | 打印索引计数 | **permalink** |
-| `basic-mem search` | 全文 / 向量 / 混合检索 | **permalink** |
-| `basic-mem context` | 按 `memory://` 走图，输出上下文 | **permalink** |
-| `basic-mem schema validate\|infer\|diff` | Picoschema 校验/推断/漂移 | **permalink** |
+| `auto-memory reindex` | 建/更新索引 | **项目名**（可省略，默认取 vault 目录名） |
+| `auto-memory watch` | 监听 vault 变化并增量索引 | **项目名** |
+| `auto-memory mcp` | stdio MCP 服务 | **项目名** |
+| `auto-memory status` | 打印索引计数 | **permalink** |
+| `auto-memory search` | 全文 / 向量 / 混合检索 | **permalink** |
+| `auto-memory context` | 按 `memory://` 走图，输出上下文 | **permalink** |
+| `auto-memory schema validate\|infer\|diff` | Picoschema 校验/推断/漂移 | **permalink** |
 
 ---
 
@@ -50,22 +50,22 @@
 
 ```bash
 cargo build --release
-./target/release/basic-mem --version      # basic-mem 0.1.0
+./target/release/auto-memory --version      # auto-memory 0.1.0
 ```
 
 可选（只有要用 `--vector` / `--hybrid` / `--reranker` 时才需要）：
 
 ```bash
 # 模型缓存默认 ~/.config/basic-memory/fastembed_cache（与参考实现共用同一份缓存）
-./target/release/basic-mem reindex --vault "$VAULT" --index "$INDEX" --project "$PROJECT" --embeddings
+./target/release/auto-memory reindex --vault "$VAULT" --index "$INDEX" --project "$PROJECT" --embeddings
 ```
 
 下面的示例统一用这组变量，替换成自己的路径即可：
 
 ```bash
-BIN=/path/to/basic-mem-rs/target/release/basic-mem
+BIN=/path/to/auto-memory-rs/target/release/auto-memory
 VAULT=$HOME/vault                                  # markdown 笔记目录
-INDEX=$HOME/.local/share/basic-mem/memory.db       # 索引，放在 vault 之外
+INDEX=$HOME/.local/share/auto-memory/memory.db       # 索引，放在 vault 之外
 PROJECT=oracle                                     # 项目名（见 §2）
 ```
 
@@ -99,9 +99,9 @@ PROJECT=oracle                                     # 项目名（见 §2）
 
 ```bash
 # vault 目录名是 "My Vault"，注册出的项目名是 "My Vault"，permalink 是 my-vault
-$BIN reindex --vault "$HOME/bm demo2/My Vault" --index /tmp/bm-demo/memory2.db
-$BIN status --index /tmp/bm-demo/memory2.db --project my-vault     # ✅ 正常，打印计数
-$BIN status --index /tmp/bm-demo/memory2.db --project "My Vault"   # ❌ project not found: My Vault
+$BIN reindex --vault "$HOME/bm demo2/My Vault" --index /tmp/am-demo/memory2.db
+$BIN status --index /tmp/am-demo/memory2.db --project my-vault     # ✅ 正常，打印计数
+$BIN status --index /tmp/am-demo/memory2.db --project "My Vault"   # ❌ project not found: My Vault
 ```
 
 **坑：忘记 `--project` 会在同一个索引里注册出第二个项目。** 同一份 vault、同一个
@@ -260,16 +260,16 @@ INFO watch stopped batches=1
 | 你想要 | 怎么做 |
 |---|---|
 | 默认视图（启动 / 初始 reconcile / 每个**有改动**的批次 / 停止） | 什么都不用设 |
-| 看到每个文件事件、被忽略的路径（"为什么这个文件没被索引"） | `RUST_LOG=basic_mem=debug` |
+| 看到每个文件事件、被忽略的路径（"为什么这个文件没被索引"） | `RUST_LOG=auto_memory=debug` |
 | 完全静音，只要那份 JSON | `RUST_LOG=off` |
-| 只调某个模块 | `RUST_LOG=basic_mem::indexing=debug`（按 target 过滤） |
+| 只调某个模块 | `RUST_LOG=auto_memory::indexing=debug`（按 target 过滤） |
 | 交给 systemd/journald | 什么都不用做：SIGTERM 现在也是**优雅退出**（冲刷待处理窗口 + 打印 `batches`） |
 
 systemd 示例（`systemctl stop` 发的就是 SIGTERM，日志会进 journal）：
 
 ```ini
 [Service]
-ExecStart=/home/me/.cargo/bin/basic-mem watch --vault %h/vault --index %h/.local/share/basic-mem/memory.db --project oracle
+ExecStart=/home/me/.cargo/bin/auto-memory watch --vault %h/vault --index %h/.local/share/auto-memory/memory.db --project oracle
 Restart=on-failure
 ```
 
@@ -290,7 +290,7 @@ EOF
 期望（实测）：
 
 ```json
-{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2024-11-05","capabilities":{"tools":{}},"serverInfo":{"name":"basic-mem-rs","version":"0.1.0"}}}
+{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2024-11-05","capabilities":{"tools":{}},"serverInfo":{"name":"auto-memory-rs","version":"0.1.0"}}}
 ```
 
 第二个响应里应包含：
@@ -316,7 +316,7 @@ INFO mcp server starting project=demo permalink=demo vault=/home/me/vault index=
 **先确认这两行**，再往客户端里配。路径抄错是最常见的"接上了但没数据"。
 
 协议要点：stdio 上跑换行分隔的 JSON-RPC 2.0，协议版本 `2024-11-05`，
-服务名 `basic-mem-rs`；stdout 只输出协议帧，诊断信息走 stderr。
+服务名 `auto-memory-rs`；stdout 只输出协议帧，诊断信息走 stderr。
 支持 `initialize`、`notifications/initialized`、`ping`、`tools/list`、`tools/call`。
 Ctrl-C 会等当前请求处理完再退出。
 
@@ -325,12 +325,12 @@ Ctrl-C 会等当前请求处理完再退出。
 ```json
 {
   "mcpServers": {
-    "basic-memory-rs": {
-      "command": "/home/me/Projects/basic-mem-rs/target/release/basic-mem",
+    "auto-memory-rs": {
+      "command": "/home/me/Projects/auto-memory-rs/target/release/auto-memory",
       "args": [
         "mcp",
         "--vault", "/home/me/vault",
-        "--index", "/home/me/.local/share/basic-mem/memory.db",
+        "--index", "/home/me/.local/share/auto-memory/memory.db",
         "--project", "oracle"
       ]
     }
@@ -348,15 +348,15 @@ Ctrl-C 会等当前请求处理完再退出。
 本机现有的写法是这样（把 command/args 换成 Rust 二进制即可）：
 
 ```toml
-[mcp_servers.basic-memory-rs]
+[mcp_servers.auto-memory-rs]
 type = "stdio"
-command = "/home/me/Projects/basic-mem-rs/target/release/basic-mem"
+command = "/home/me/Projects/auto-memory-rs/target/release/auto-memory"
 args = ["mcp", "--vault", "/home/me/vault",
-        "--index", "/home/me/.local/share/basic-mem/memory.db",
+        "--index", "/home/me/.local/share/auto-memory/memory.db",
         "--project", "oracle"]
 ```
 
-也有 CLI：`codex mcp add basic-memory-rs -- /path/to/basic-mem mcp --vault ... --index ... --project ...`
+也有 CLI：`codex mcp add auto-memory-rs -- /path/to/auto-memory mcp --vault ... --index ... --project ...`
 （`codex mcp list` / `get` / `remove` 对应增删查）。
 
 > 与官方 Python 版并存：官方版靠 `BASIC_MEMORY_CONFIG_DIR` 发现配置，
@@ -451,7 +451,7 @@ MCP 服务始终被约束在**一个项目**内，项目生命周期（建/删�
 | 同一个 vault 出现两个项目 | 某次命令漏了 `--project`，注册出"目录名"项目 | 每条命令都显式 `--project`；必要时重建索引 |
 | `--vector` 结果为空 | 没跑过 `reindex --embeddings` | 先建向量索引；MCP 侧还要 `--model-cache` 或 `--embedding-fixture` |
 | `watch --embeddings` 直接退出，退出码 2 | watch 只维护文本索引，不刷新向量；`--embeddings` 是全局开关，不拦就会静默无效 | 向量刷新是单独一趟：`reindex --vault <dir> --index <db> --embeddings` |
-| watch 跑着但看不到任何输出，不知道成功没 | 日志在 **stderr**，默认 `info`（启动 / 初始 reconcile / 有改动的批次 / 停止各一行）；stdout 只有退出时的 `{"batches":N}` | 按 §6.1 看 stderr；要事件级细节用 `RUST_LOG=basic_mem=debug` |
+| watch 跑着但看不到任何输出，不知道成功没 | 日志在 **stderr**，默认 `info`（启动 / 初始 reconcile / 有改动的批次 / 停止各一行）；stdout 只有退出时的 `{"batches":N}` | 按 §6.1 看 stderr；要事件级细节用 `RUST_LOG=auto_memory=debug` |
 | `systemctl stop` 后既没日志也没有 `batches` | 旧版本只监听 SIGINT | 现在 SIGTERM 也优雅退出（冲刷待处理窗口 + 打印 `batches`）；确认跑的是新装的那个二进制 |
 | `--type X --category Y` 结果为空 | 前者过滤 entity 行、后者把检索收敛到 observation 行 | 二选一，见 §5 |
 | MCP 里语义检索被拒绝 | 未挂载 embedding runtime | 同上；这是刻意行为（不退化成文本检索） |

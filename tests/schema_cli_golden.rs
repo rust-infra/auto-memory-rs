@@ -1,4 +1,4 @@
-//! Phase 12–13: `basic-mem schema …` against the reference's JSON CLI surface.
+//! Phase 12–13: `auto-memory schema …` against the reference's JSON CLI surface.
 //!
 //! The reference exposes the same three tools through `bm tool schema-validate`,
 //! `bm tool schema-infer`, and `bm tool schema-diff`, which print the tool's
@@ -42,7 +42,7 @@ fn prepare(suite: &Value) -> (PathBuf, PathBuf, Scratch) {
     }
 
     let index = dir.join("memory.db");
-    let status = Command::new(env!("CARGO_BIN_EXE_basic-mem"))
+    let status = Command::new(env!("CARGO_BIN_EXE_auto-memory"))
         .args(["reindex", "--vault"])
         .arg(&vault)
         .args(["--index"])
@@ -80,13 +80,13 @@ fn schema_cli_replays_the_reference_json_output() {
             command.extend(&argv[2..trailing]);
             command.push("--index");
 
-            let output = Command::new(env!("CARGO_BIN_EXE_basic-mem"))
+            let output = Command::new(env!("CARGO_BIN_EXE_auto-memory"))
                 .args(&command)
                 .arg(&index)
                 .args(["--project", "oracle", "--vault"])
                 .arg(&vault)
                 .output()
-                .expect("run basic-mem schema");
+                .expect("run auto-memory schema");
 
             let stdout = String::from_utf8(output.stdout).expect("utf8 stdout");
             assert_eq!(

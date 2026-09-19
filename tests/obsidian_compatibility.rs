@@ -16,11 +16,11 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
-use basic_mem::indexing::{
+use auto_memory::indexing::{
     ChangeKind, IndexOptions, IndexService, VaultWatcher, shutdown_when, watch_vault,
 };
-use basic_mem::runtime::block_on;
-use basic_mem::storage::Store;
+use auto_memory::runtime::block_on;
+use auto_memory::storage::Store;
 mod common;
 use common::{Scratch, copy_dir, fixture, repo_root};
 
@@ -33,13 +33,13 @@ fn atomic_write(vault: &Path, relative_path: &str, content: &str) {
 }
 
 /// The `links_to` search row owned by the note that links to a future target.
-fn relation_search_row(store: &Store, project_id: i64) -> basic_mem::domain::SearchResult {
+fn relation_search_row(store: &Store, project_id: i64) -> auto_memory::domain::SearchResult {
     store
         .search_text(
             project_id,
-            &basic_mem::search::TextSearchOptions {
-                entity_types: vec![basic_mem::domain::SearchItemType::Relation],
-                ..basic_mem::search::TextSearchOptions::default()
+            &auto_memory::search::TextSearchOptions {
+                entity_types: vec![auto_memory::domain::SearchItemType::Relation],
+                ..auto_memory::search::TextSearchOptions::default()
             },
         )
         .expect("search")
@@ -524,9 +524,9 @@ fn deleting_a_note_drops_derived_state_and_a_full_reindex_restores_the_vault() {
     let page = store
         .search_text(
             project_id,
-            &basic_mem::search::TextSearchOptions {
+            &auto_memory::search::TextSearchOptions {
                 permalink: Some("oracle/notes/simple".to_owned()),
-                ..basic_mem::search::TextSearchOptions::default()
+                ..auto_memory::search::TextSearchOptions::default()
             },
         )
         .expect("search");

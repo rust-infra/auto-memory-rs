@@ -16,13 +16,13 @@ settings:
   frontmatter:
     status?(enum, lifecycle of the decision): [open, accepted, superseded, rejected]
     decided?: string, when the decision was made (ISO timestamp)
-    project?: string, the Basic Memory project this decision belongs to
+    project?: string, the Auto Memory project this decision belongs to
 ---
 
 # Decision
 
 A **DecisionNote** is a durable record of a real choice — one with alternatives
-and a rationale, not a passing preference. Basic Memory host integrations
+and a rationale, not a passing preference. Auto Memory host integrations
 encourage agents to capture these as decisions are made or explicitly requested.
 
 Decisions are found by structured recall:

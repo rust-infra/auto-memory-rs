@@ -1,13 +1,13 @@
 {
-  "name": "basic-memory-rs",
+  "name": "auto-memory-rs",
   "version": "0.1.0",
-  "description": "A Codex-native bridge to a local basic-mem-rs index for durable engineering context and resumable checkpoints.",
+  "description": "A Codex-native bridge to a local auto-memory-rs index for durable engineering context and resumable checkpoints.",
   "author": {
-    "name": "basic-mem-rs"
+    "name": "auto-memory-rs"
   },
   "license": "AGPL-3.0-or-later",
   "keywords": [
-    "basic-memory",
+    "auto-memory",
     "codex",
     "memory",
     "knowledge-graph",
@@ -17,15 +17,15 @@
   "skills": "./skills/",
   "hooks": "./hooks/hooks.json",
   "interface": {
-    "displayName": "Basic Memory for Codex",
+    "displayName": "Auto Memory for Codex",
     "shortDescription": "Carry decisions and handoffs across Codex threads",
-    "longDescription": "Brief each Codex session from a local basic-mem-rs index, capture engineering decisions, and checkpoint long-running work so a later thread can resume with repo-backed context.",
-    "developerName": "basic-mem-rs",
+    "longDescription": "Brief each Codex session from a local auto-memory-rs index, capture engineering decisions, and checkpoint long-running work so a later thread can resume with repo-backed context.",
+    "developerName": "auto-memory-rs",
     "category": "Developer Tools",
     "capabilities": ["Interactive", "Read", "Write"],
     "defaultPrompt": [
-      "Use Basic Memory to orient before changing this repo.",
-      "Checkpoint this Codex thread into Basic Memory.",
+      "Use Auto Memory to orient before changing this repo.",
+      "Checkpoint this Codex thread into Auto Memory.",
       "Capture the decision we just made."
     ]
   }

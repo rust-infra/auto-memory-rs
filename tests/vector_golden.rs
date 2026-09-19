@@ -15,13 +15,13 @@ const SCORE_TOLERANCE: f32 = 5e-4;
 use std::collections::HashMap;
 use std::fs;
 
-use basic_mem::domain::SearchItemType;
-use basic_mem::indexing::{IndexOptions, IndexService};
-use basic_mem::search::chunking::{build_chunk_records, entity_fingerprint};
-use basic_mem::search::embedding::{
+use auto_memory::domain::SearchItemType;
+use auto_memory::indexing::{IndexOptions, IndexService};
+use auto_memory::search::chunking::{build_chunk_records, entity_fingerprint};
+use auto_memory::search::embedding::{
     EmbeddingProvider, FixtureEmbeddingProvider, cosine_similarity,
 };
-use basic_mem::search::vector::{
+use auto_memory::search::vector::{
     DEFAULT_MIN_SIMILARITY, DEFAULT_VECTOR_K, FUSION_BONUS, SearchKey, VectorSearchOptions,
     fuse_hybrid, matched_chunk_text, normalize_fts_scores, rank_chunks, row_key_from_chunk_key,
     search_hybrid, search_vector,
@@ -246,7 +246,7 @@ fn cosine_similarity_ranks_expected_vectors() {
 
 #[test]
 fn vector_ranking_applies_threshold_and_limit() {
-    let rows = basic_mem::search::chunking::SemanticRow {
+    let rows = auto_memory::search::chunking::SemanticRow {
         id: 1,
         item_type: "entity".to_owned(),
         title: Some("A".to_owned()),
@@ -431,7 +431,7 @@ fn stored_vector_index_replays_reference_search() {
 /// Compare one search page against a golden: permalink order, `matched_chunk`, and
 /// scores within `tolerance`.
 fn compare_search_page(
-    page: &basic_mem::search::text::SearchPage,
+    page: &auto_memory::search::text::SearchPage,
     golden: &Value,
     tolerance: f32,
     label: &str,

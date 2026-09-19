@@ -8,11 +8,11 @@ use std::fs;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
-use basic_mem::indexing::{
+use auto_memory::indexing::{
     ChangeKind, IndexOptions, IndexService, VaultWatcher, WatchReport, shutdown_when, watch_vault,
 };
-use basic_mem::runtime::block_on;
-use basic_mem::storage::Store;
+use auto_memory::runtime::block_on;
+use auto_memory::storage::Store;
 mod common;
 use common::{Scratch, fixture};
 

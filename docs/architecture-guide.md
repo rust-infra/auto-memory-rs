@@ -1,4 +1,4 @@
-# basic-mem-rs 架构与数据流
+# auto-memory-rs 架构与数据流
 
 三组图回答三组问题：**代码怎么分层**（§1）、**数据存在哪、长什么样**（§2）、
 **一次写入/检索到底走了哪些步骤**（§3、§4）。图为 Mermaid，GitLab/GitHub 直接渲染。
@@ -283,7 +283,7 @@ flowchart TB
 
 ### 3.2 `watch`（Obsidian 开着时的实时同步）
 
-运行期日志走 stderr，默认 `info` 一行一个批次（`RUST_LOG=basic_mem=debug` 加事件级与忽略原因，
+运行期日志走 stderr，默认 `info` 一行一个批次（`RUST_LOG=auto_memory=debug` 加事件级与忽略原因，
 `RUST_LOG=off` 静音）；stdout 只在退出时给一份 `{"batches":N}`。SIGINT 与 SIGTERM 都是优雅退出：
 先冲刷待处理窗口再报数（`indexing::watcher::log_watch_report`、`main.rs::shutdown_signal`）。
 

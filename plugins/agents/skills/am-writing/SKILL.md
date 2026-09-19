@@ -1,11 +1,11 @@
 ---
-name: bm-writing
-description: Apply the user-customizable writing standard for Basic Memory notes created or substantially revised by Codex. Use with bm-checkpoint, bm-decide, bm-remember, and other Basic Memory note-writing workflows.
+name: am-writing
+description: Apply the user-customizable writing standard for Auto Memory notes created or substantially revised by Codex. Use with am-checkpoint, am-decide, am-remember, and other Auto Memory note-writing workflows.
 ---
 
 # Write Useful Project Memory
 
-Use this shared standard whenever a Codex Basic Memory skill writes or
+Use this shared standard whenever a Codex Auto Memory skill writes or
 substantially revises a note. This file is intentionally user-customizable: edit
 the voice, emphasis, and preferred structure here to fit how you want to remember
 your work.
@@ -44,7 +44,7 @@ and workflow. This skill shapes the note; it never overrides factual constraints
   project or repo, the git branch, and the PR or issue — plus the commit sha
   when a specific commit matters.
 - Put anchors the note's schema defines in frontmatter; record the rest as
-  observations, e.g. `- [branch] feat/bm-writing` or `- [pr] #1123`.
+  observations, e.g. `- [branch] feat/am-writing` or `- [pr] #1123`.
 - Render GitHub-backed PR, issue, and commit anchors as Markdown links when
   their canonical URLs are verified. Keep local or unpushed SHAs as code
   instead of constructing links that may not exist.

@@ -1,4 +1,4 @@
-//! `basic-mem-rs` — a local-first Rust implementation of the Basic Memory core.
+//! `auto-memory-rs` — a local-first Rust implementation of the Basic Memory core.
 //!
 //! The crate keeps the **observable behavior** of the reference implementation
 //! (Basic Memory 0.23.2, see `docs/reference.md`) while organizing the code in

@@ -11,8 +11,8 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-use basic_mem::indexing::{RebuildOptions, rebuild_vault};
-use basic_mem::storage::Store;
+use auto_memory::indexing::{RebuildOptions, rebuild_vault};
+use auto_memory::storage::Store;
 use serde_json::Value;
 
 /// Root of the repository (`CARGO_MANIFEST_DIR`).
@@ -40,7 +40,7 @@ impl Scratch {
     /// A fresh scratch directory whose name embeds `tag`.
     pub fn new(tag: &str) -> Self {
         let dir = tempfile::Builder::new()
-            .prefix(&format!("basic-mem-rs-{tag}-"))
+            .prefix(&format!("auto-memory-rs-{tag}-"))
             .tempdir()
             .expect("scratch dir");
         Self { dir }
@@ -140,7 +140,7 @@ pub struct SessionOutput {
     pub stderr: String,
 }
 
-/// One `basic-mem mcp` session over a vault, driven from a script of requests.
+/// One `auto-memory mcp` session over a vault, driven from a script of requests.
 ///
 /// Every fixture project is called `oracle`, so that is the default; a test that needs
 /// a different server shape (a model cache, a fixture embedding file) adds arguments
@@ -161,7 +161,7 @@ impl<'a> Session<'a> {
         }
     }
 
-    /// Append extra `basic-mem mcp` arguments.
+    /// Append extra `auto-memory mcp` arguments.
     #[must_use]
     pub fn with_args<I, S>(mut self, args: I) -> Self
     where
@@ -178,14 +178,14 @@ impl<'a> Session<'a> {
     }
 }
 
-/// Run one `basic-mem mcp` session, feeding `requests` on stdin.
+/// Run one `auto-memory mcp` session, feeding `requests` on stdin.
 fn run_mcp_session(
     vault: &Path,
     index: &Path,
     extra_args: &[String],
     requests: &[Value],
 ) -> SessionOutput {
-    let mut child = Command::new(env!("CARGO_BIN_EXE_basic-mem"))
+    let mut child = Command::new(env!("CARGO_BIN_EXE_auto-memory"))
         .args(["mcp", "--vault"])
         .arg(vault)
         .args(["--index"])
@@ -195,7 +195,7 @@ fn run_mcp_session(
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .expect("spawn basic-mem mcp");
+        .expect("spawn auto-memory mcp");
     {
         let stdin = child.stdin.as_mut().expect("stdin");
         for request in requests {

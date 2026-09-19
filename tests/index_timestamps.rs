@@ -8,8 +8,8 @@
 use std::fs;
 use std::time::Duration;
 
-use basic_mem::indexing::{IndexOptions, IndexService, RebuildOptions, rebuild_vault};
-use basic_mem::storage::Store;
+use auto_memory::indexing::{IndexOptions, IndexService, RebuildOptions, rebuild_vault};
+use auto_memory::storage::Store;
 mod common;
 use common::Scratch;
 
@@ -29,7 +29,7 @@ fn created_at_is_the_insert_time_and_updated_at_is_the_file_mtime() {
         .expect("metadata")
         .modified()
         .expect("mtime");
-    let file_time = basic_mem::domain::timeframe::storage_timestamp(
+    let file_time = auto_memory::domain::timeframe::storage_timestamp(
         chrono::DateTime::<chrono::FixedOffset>::from(chrono::DateTime::<chrono::Utc>::from(
             file_time,
         ))

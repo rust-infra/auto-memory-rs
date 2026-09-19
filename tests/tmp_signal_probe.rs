@@ -4,7 +4,7 @@
 
 use std::time::Duration;
 
-use basic_mem::runtime::block_on;
+use auto_memory::runtime::block_on;
 
 fn ping_self() {
     let pid = std::process::id().to_string();

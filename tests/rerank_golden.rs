@@ -14,17 +14,17 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 
-use basic_mem::domain::SearchItemType;
-use basic_mem::indexing::{IndexOptions, IndexService, RebuildOptions, rebuild_vault};
-use basic_mem::runtime::find_onnx_runtime;
-use basic_mem::runtime::rerank::{
+use auto_memory::domain::SearchItemType;
+use auto_memory::indexing::{IndexOptions, IndexService, RebuildOptions, rebuild_vault};
+use auto_memory::runtime::find_onnx_runtime;
+use auto_memory::runtime::rerank::{
     DEFAULT_RERANKER_CANDIDATES, DEFAULT_RERANKER_MAX_DOCUMENT_CHARS, OnnxRerankProvider,
     RerankRequest,
 };
-use basic_mem::search::embedding::{EmbeddingProvider, FixtureEmbeddingProvider};
-use basic_mem::search::rerank::{FixtureRerankProvider, build_rerank_document};
-use basic_mem::search::vector::{VectorSearchOptions, search_hybrid, search_vector};
-use basic_mem::storage::Store;
+use auto_memory::search::embedding::{EmbeddingProvider, FixtureEmbeddingProvider};
+use auto_memory::search::rerank::{FixtureRerankProvider, build_rerank_document};
+use auto_memory::search::vector::{VectorSearchOptions, search_hybrid, search_vector};
+use auto_memory::storage::Store;
 use serde_json::Value;
 mod common;
 use common::{Scratch, copy_dir, load_golden_json, repo_root};
@@ -75,7 +75,7 @@ fn expected_rows(case: &Value) -> Vec<(String, f32)> {
         .collect()
 }
 
-fn compare(page: &basic_mem::search::text::SearchPage, case: &Value, label: &str) {
+fn compare(page: &auto_memory::search::text::SearchPage, case: &Value, label: &str) {
     let expected = expected_rows(case);
     assert_eq!(page.results.len(), expected.len(), "{label}: result count");
     for (index, (row, (permalink, score))) in page.results.iter().zip(&expected).enumerate() {
@@ -186,7 +186,8 @@ fn onnx_reranker_reproduces_the_reference_scores() {
             std::env::var_os("HOME")
                 .map(|home| PathBuf::from(home).join(".config/basic-memory/fastembed_cache"))
         });
-    let Some(cache) = cache.filter(|path| basic_mem::runtime::reference_rerank_dir(path).is_some())
+    let Some(cache) =
+        cache.filter(|path| auto_memory::runtime::reference_rerank_dir(path).is_some())
     else {
         eprintln!("skipping: no reranker model in the fastembed cache");
         return;

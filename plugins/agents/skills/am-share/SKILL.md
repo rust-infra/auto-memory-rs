@@ -1,6 +1,6 @@
 ---
-name: bm-share
-description: Share a personal Basic Memory note to a configured team project from Codex with attribution and explicit confirmation.
+name: am-share
+description: Share a personal Auto Memory note to a configured team project from Codex with attribution and explicit confirmation.
 ---
 
 # Share A Note

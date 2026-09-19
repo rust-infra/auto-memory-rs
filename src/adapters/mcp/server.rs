@@ -50,7 +50,7 @@ use crate::storage::Store;
 /// JSON-RPC protocol version reported in `initialize`.
 pub const MCP_PROTOCOL_VERSION: &str = "2024-11-05";
 /// Server name reported in `initialize`.
-pub const SERVER_NAME: &str = "basic-mem-rs";
+pub const SERVER_NAME: &str = "auto-memory-rs";
 
 /// The tools `tools/list` advertises and `tools/call` accepts.
 ///
@@ -358,7 +358,7 @@ impl<'a> McpServer<'a> {
     ///
     /// Frames are read on the runtime instead of a blocked thread, and each tool call
     /// goes through [`tokio::task::block_in_place`]: the core is synchronous by design
-    /// (SQLite, ONNX, file reads — `docs/basic-memory-rs-spec.md` §6), so it is moved
+    /// (SQLite, ONNX, file reads — `docs/auto-memory-rs-spec.md` §6), so it is moved
     /// off the reactor rather than made async, which is what lets this server share a
     /// runtime with other work. That requires a multi-thread runtime; see
     /// [`crate::runtime::executor`].
@@ -405,7 +405,7 @@ impl<'a> McpServer<'a> {
         let request: Value = match serde_json::from_str(line) {
             Ok(request) => request,
             Err(error) => {
-                eprintln!("basic-mem mcp: ignoring malformed frame: {error}");
+                eprintln!("auto-memory mcp: ignoring malformed frame: {error}");
                 return None;
             }
         };
@@ -1782,7 +1782,7 @@ impl<'a> McpServer<'a> {
     /// Project creation through a `--project`-constrained server is refused.
     ///
     /// The reference short-circuits on `BASIC_MEMORY_MCP_PROJECT` before opening any
-    /// routed client; `basic-mem mcp` is always constrained to one project, so this is
+    /// routed client; `auto-memory mcp` is always constrained to one project, so this is
     /// the whole surface rather than an error path. Project lifecycle belongs to the CLI.
     fn create_memory_project(&mut self, arguments: &Value) -> Result<Value> {
         let project_name = required_str(arguments, "project_name")?;
@@ -1857,7 +1857,7 @@ impl<'a> McpServer<'a> {
             "# Basic Memory Diagnostics".to_owned(),
             String::new(),
             "## Version".to_owned(),
-            format!("- basic-mem-rs: {}", env!("CARGO_PKG_VERSION")),
+            format!("- auto-memory-rs: {}", env!("CARGO_PKG_VERSION")),
             format!("- Protocol: {MCP_PROTOCOL_VERSION}"),
             String::new(),
             "## System".to_owned(),

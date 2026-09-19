@@ -8,7 +8,7 @@
 use std::collections::BTreeMap;
 use std::fs;
 
-use basic_mem::indexing::document::markdown_files;
+use auto_memory::indexing::document::markdown_files;
 use serde_json::Value;
 mod common;
 use common::{fixtures_vault, repo_root};
@@ -55,7 +55,7 @@ fn rust_parser_matches_reference_parse_golden() {
             continue;
         };
         let content = fs::read_to_string(&path).expect("read fixture");
-        let actual = basic_mem::markdown::parse_document(&rel, &content).expect("parse fixture");
+        let actual = auto_memory::markdown::parse_document(&rel, &content).expect("parse fixture");
         let actual = serde_json::to_value(&actual).expect("serialize parse result");
 
         let actual_frontmatter = actual.get("frontmatter");

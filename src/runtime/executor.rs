@@ -3,7 +3,7 @@
 //! Only those two commands build a runtime. Every other subcommand is a one-shot
 //! pass over the vault or the index, so it stays synchronous: paying for a worker
 //! pool at startup to run `search` or `status` would be cost without benefit. The
-//! rule behind that split is `docs/basic-memory-rs-spec.md` §6 — CPU- and
+//! rule behind that split is `docs/auto-memory-rs-spec.md` §6 — CPU- and
 //! database-bound work stays synchronous; async covers transport, event loops and
 //! background work. `docs/patterns.md` records where the boundary sits and what
 //! would move it.
@@ -14,7 +14,7 @@ use crate::error::{Error, Result};
 
 /// Name given to the runtime's worker threads, so a stack dump of a stuck server
 /// says which process it came from.
-pub const THREAD_NAME: &str = "basic-mem";
+pub const THREAD_NAME: &str = "auto-memory";
 
 /// Build the runtime the async adapters run on.
 ///

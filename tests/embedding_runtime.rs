@@ -12,8 +12,8 @@
 use std::fs;
 use std::path::PathBuf;
 
-use basic_mem::runtime::{OnnxEmbeddingProvider, find_onnx_runtime};
-use basic_mem::search::embedding::{EmbeddingProvider, cosine_similarity};
+use auto_memory::runtime::{OnnxEmbeddingProvider, find_onnx_runtime};
+use auto_memory::search::embedding::{EmbeddingProvider, cosine_similarity};
 use serde_json::Value;
 mod common;
 use common::repo_root;

@@ -1,6 +1,6 @@
 ---
-name: bm-remember
-description: Quickly save a small fact, reminder, or user preference into Basic Memory from Codex without turning it into a full decision or checkpoint.
+name: am-remember
+description: Quickly save a small fact, reminder, or user preference into Auto Memory from Codex without turning it into a full decision or checkpoint.
 ---
 
 # Remember
@@ -15,7 +15,7 @@ a small fact that should survive the current thread.
    - `primaryProject`, default omitted
    - `rememberFolder`, default `codex/remember`
 
-   Apply the `bm-writing` skill before drafting the note. Match its depth to this
+   Apply the `am-writing` skill before drafting the note. Match its depth to this
    lightweight capture; do not pad a small fact into an essay.
 
 2. Identify the exact text to save. If the user supplied text, preserve their
@@ -32,4 +32,4 @@ a small fact that should survive the current thread.
 4. Confirm in one line with the permalink.
 
 Do not use this for decisions with alternatives or for work handoffs. Use
-`bm-decide` or `bm-checkpoint` for those.
+`am-decide` or `am-checkpoint` for those.

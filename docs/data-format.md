@@ -47,7 +47,7 @@ Uniqueness: `(permalink, project_id)` unique when non-null; `(file_path, project
   **Confirmed by direct measurement** (fresh one-note vault, file written 09:11:50.939554, index
   run 09:11:53.419): `entity.updated_at` = `09:11:50.939554` (the file mtime) while
   `entity.created_at` = `09:11:53.419265` (the row's insert time — later than both the file's
-  ctime and mtime, so it is not a file-time fallback at all). `basic-mem-rs` matches this now:
+  ctime and mtime, so it is not a file-time fallback at all). `auto-memory-rs` matches this now:
   `src/indexing/document.rs` takes "now" for `created` and the file mtime for `modified`, and
   `tests/index_timestamps.rs` pins the ordering plus the "an update does not re-stamp
   `created_at`" rule.
@@ -168,7 +168,7 @@ Semantic rows live beside it: `search_vector_chunks` (one row per chunk, with `e
 `chunk_key` = `type:id:index`, `chunk_text`, `source_hash` = sha256 of the chunk text,
 `entity_fingerprint`, `embedding_model`, `vector_index`, `embedding_status`, `updated_at`) and
 `search_vector_embeddings` (the 384-dim vector keyed by chunk rowid plus its `source_hash`).
-The reference stores the vector in a sqlite-vec `vec0` table; `basic-mem-rs` stores it as a BLOB
+The reference stores the vector in a sqlite-vec `vec0` table; `auto-memory-rs` stores it as a BLOB
 and computes the same exact-KNN cosine in Rust, so the rows are compatible in every column
 except `vector_index` (`blob` instead of `sqlite-vec`) and the table type. `[V+golden]`
 

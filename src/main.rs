@@ -1,4 +1,4 @@
-//! `basic-mem` command-line entry point.
+//! `auto-memory` command-line entry point.
 //!
 //! Phase 6 surface:
 //! - `parse <path>` — serialize the parse layer (compared with the reference parser).
@@ -16,32 +16,32 @@ use std::process::ExitCode;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use basic_mem::adapters::mcp::http::{
+use auto_memory::adapters::mcp::http::{
     DEFAULT_HTTP_HOST, DEFAULT_HTTP_PATH, DEFAULT_HTTP_PORT, HttpServer, serve,
 };
-use basic_mem::adapters::mcp::{McpServer, ensure_project};
-use basic_mem::application::context::{ContextOptions, build_context, render_plain};
-use basic_mem::application::schema::SchemaService;
-use basic_mem::application::schema_tools;
-use basic_mem::domain::permalink::generate_permalink;
-use basic_mem::domain::search::SearchItemType;
-use basic_mem::domain::timeframe;
-use basic_mem::hooks::{
+use auto_memory::adapters::mcp::{McpServer, ensure_project};
+use auto_memory::application::context::{ContextOptions, build_context, render_plain};
+use auto_memory::application::schema::SchemaService;
+use auto_memory::application::schema_tools;
+use auto_memory::domain::permalink::generate_permalink;
+use auto_memory::domain::search::SearchItemType;
+use auto_memory::domain::timeframe;
+use auto_memory::hooks::{
     Harness, HookEvent, build_session_brief, checkpoint_prompt, load_harness_settings, mapping_dir,
     normalize,
 };
-use basic_mem::indexing::{
+use auto_memory::indexing::{
     DEFAULT_WATCH_WINDOW, IndexOptions, IndexService, VaultWatcher, watch_once, watch_vault,
 };
-use basic_mem::runtime::{
+use auto_memory::runtime::{
     DEFAULT_RERANKER_CANDIDATES, DEFAULT_RERANKER_MAX_DOCUMENT_CHARS, OnnxEmbeddingProvider,
     OnnxRerankProvider, RerankProvider, RerankRequest, find_onnx_runtime,
 };
-use basic_mem::search::embedding::{EmbeddingProvider, FixtureEmbeddingProvider};
-use basic_mem::search::rerank::FixtureRerankProvider;
-use basic_mem::search::text::TextSearchOptions;
-use basic_mem::search::vector::{VectorSearchOptions, search_hybrid, search_vector};
-use basic_mem::storage::Store;
+use auto_memory::search::embedding::{EmbeddingProvider, FixtureEmbeddingProvider};
+use auto_memory::search::rerank::FixtureRerankProvider;
+use auto_memory::search::text::TextSearchOptions;
+use auto_memory::search::vector::{VectorSearchOptions, search_hybrid, search_vector};
+use auto_memory::storage::Store;
 use tracing_subscriber::EnvFilter;
 
 fn main() -> ExitCode {
@@ -49,12 +49,12 @@ fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     match args.first().map(String::as_str) {
         Some("--version" | "-v") => {
-            println!("basic-mem {}", env!("CARGO_PKG_VERSION"));
+            println!("auto-memory {}", env!("CARGO_PKG_VERSION"));
             ExitCode::SUCCESS
         }
         Some("parse") => match args.get(1) {
             Some(path) => parse_command(path),
-            None => usage("basic-mem parse <path>"),
+            None => usage("auto-memory parse <path>"),
         },
         Some("reindex") => reindex_command(&args[1..]),
         Some("status") => status_command(&args[1..]),
@@ -67,18 +67,18 @@ fn main() -> ExitCode {
         Some("watch") => async_command(watch_command(&args[1..])),
         Some("mcp") => async_command(mcp_command(&args[1..])),
         _ => usage(&format!(
-            "basic-mem {}\n\nusage:\n  basic-mem --version\n  basic-mem parse <path>\n  \
-             basic-mem reindex --vault <dir> --index <db> [--project <name>] [--full]\n  \
-             basic-mem reindex --vault <dir> --index <db> --embeddings \\\n               [--model-cache DIR] [--onnx-runtime PATH] [--embedding-fixture FILE]\n  \
-             basic-mem watch --vault <dir> --index <db> [--project <name>] [--window-ms N] [--once]\n  \
-             basic-mem mcp --vault <dir> --index <db> [--project <name>] \\\n               [--embedding-fixture FILE | --model-cache DIR] [--onnx-runtime PATH]\n  \
-             basic-mem mcp --vault <dir> --index <db> [--project <name>] --http \\\n               [--host HOST] [--port PORT] [--path PATH] [--read-only]\n  \
-             basic-mem status --index <db> --project <permalink>\n  \
-             basic-mem context <memory://url> --index <db> --project <permalink> \\\n               [--depth N] [--timeframe T] [--page N] [--page-size N] [--max-related N] \\\n               [--json|--plain]\n  \
-             basic-mem schema <validate|infer|diff> [target] --index <db> --project <permalink> \\\n               [--vault <dir>] [--threshold F] [--strict] [--text]\n  \
-             basic-mem hook <session-start|pre-compact> --harness <claude|codex|pi> \\\n               [--index <db>] [--project <permalink>] [--project-dir <dir>]\n  \
-             basic-mem search --index <db> --project <permalink> [--title T] [--type T] \\\n               [--tag TAG] [--status S] [--meta KEY=VALUE] [--after-date WINDOW] \\\n               [--entity-type TYPE] [--category C] [--permalink P] <query>\n  \
-             basic-mem search --index <db> --project <permalink> [--vector|--hybrid] \\\n               [--min-similarity F] [--embedding-fixture FILE] [--reranker] \\\n               [--reranker-candidates N] [--reranker-fixture FILE] <query>",
+            "auto-memory {}\n\nusage:\n  auto-memory --version\n  auto-memory parse <path>\n  \
+             auto-memory reindex --vault <dir> --index <db> [--project <name>] [--full]\n  \
+             auto-memory reindex --vault <dir> --index <db> --embeddings \\\n               [--model-cache DIR] [--onnx-runtime PATH] [--embedding-fixture FILE]\n  \
+             auto-memory watch --vault <dir> --index <db> [--project <name>] [--window-ms N] [--once]\n  \
+             auto-memory mcp --vault <dir> --index <db> [--project <name>] \\\n               [--embedding-fixture FILE | --model-cache DIR] [--onnx-runtime PATH]\n  \
+             auto-memory mcp --vault <dir> --index <db> [--project <name>] --http \\\n               [--host HOST] [--port PORT] [--path PATH] [--read-only]\n  \
+             auto-memory status --index <db> --project <permalink>\n  \
+             auto-memory context <memory://url> --index <db> --project <permalink> \\\n               [--depth N] [--timeframe T] [--page N] [--page-size N] [--max-related N] \\\n               [--json|--plain]\n  \
+             auto-memory schema <validate|infer|diff> [target] --index <db> --project <permalink> \\\n               [--vault <dir>] [--threshold F] [--strict] [--text]\n  \
+             auto-memory hook <session-start|pre-compact> --harness <claude|codex|pi> \\\n               [--index <db>] [--project <permalink>] [--project-dir <dir>]\n  \
+             auto-memory search --index <db> --project <permalink> [--title T] [--type T] \\\n               [--tag TAG] [--status S] [--meta KEY=VALUE] [--after-date WINDOW] \\\n               [--entity-type TYPE] [--category C] [--permalink P] <query>\n  \
+             auto-memory search --index <db> --project <permalink> [--vector|--hybrid] \\\n               [--min-similarity F] [--embedding-fixture FILE] [--reranker] \\\n               [--reranker-candidates N] [--reranker-fixture FILE] <query>",
             env!("CARGO_PKG_VERSION")
         )),
     }
@@ -98,9 +98,9 @@ fn usage(message: &str) -> ExitCode {
 ///
 /// `RUST_LOG` overrides the default, which keeps this crate at `info` (startup,
 /// reconcile summaries, one line per applied watch batch) and everything else at
-/// `warn`, so a default run stays readable and `RUST_LOG=basic_mem=debug` adds the
+/// `warn`, so a default run stays readable and `RUST_LOG=auto_memory=debug` adds the
 /// per-event detail. Filtering is by target, so the environment variable also works
-/// on a per-module basis (`RUST_LOG=basic_mem::indexing=debug`).
+/// on a per-module basis (`RUST_LOG=auto_memory::indexing=debug`).
 fn init_tracing() {
     let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(DEFAULT_LOG));
     // A second initialisation (tests, or a future re-entry) must not abort the
@@ -117,15 +117,15 @@ fn init_tracing() {
 }
 
 /// Default `RUST_LOG` filter: this crate at `info`, dependencies at `warn`.
-const DEFAULT_LOG: &str = "basic_mem=info,warn";
+const DEFAULT_LOG: &str = "auto_memory=info,warn";
 
 /// Run an event-loop subcommand (`mcp`, `watch`) on a fresh tokio runtime.
 ///
 /// The runtime is built here rather than around `main` so the one-shot commands keep
-/// their synchronous startup: a worker pool costs threads, and `basic-mem search` or
+/// their synchronous startup: a worker pool costs threads, and `auto-memory search` or
 /// `status` has nothing to overlap.
 fn async_command(future: impl Future<Output = ExitCode>) -> ExitCode {
-    match basic_mem::runtime::executor::runtime() {
+    match auto_memory::runtime::executor::runtime() {
         Ok(runtime) => runtime.block_on(future),
         Err(error) => {
             eprintln!("failed to start the async runtime: {error}");
@@ -134,7 +134,7 @@ fn async_command(future: impl Future<Output = ExitCode>) -> ExitCode {
     }
 }
 
-/// `basic-mem schema <validate|infer|diff>`.
+/// `auto-memory schema <validate|infer|diff>`.
 ///
 /// Mirrors the reference's `bm tool schema-*` commands, which call the MCP tool with
 /// `output_format="json"` and print the result through
@@ -146,7 +146,7 @@ fn schema_command(args: &[String]) -> ExitCode {
         Some("infer") => schema_infer_command(&args[1..]),
         Some("diff") => schema_diff_command(&args[1..]),
         Some(other) => usage(&format!("unknown schema subcommand: {other}")),
-        None => usage("basic-mem schema <validate|infer|diff> ..."),
+        None => usage("auto-memory schema <validate|infer|diff> ..."),
     }
 }
 
@@ -215,7 +215,7 @@ fn schema_infer_command(args: &[String]) -> ExitCode {
         return usage("schema infer requires a note type");
     };
     let threshold = match options.value("threshold") {
-        None => basic_mem::application::schema::OPTIONAL_THRESHOLD,
+        None => auto_memory::application::schema::OPTIONAL_THRESHOLD,
         Some(value) => match value.parse::<f64>() {
             Ok(threshold) => threshold,
             Err(_) => return usage(&format!("--threshold must be a number, got {value}")),
@@ -257,10 +257,10 @@ fn print_schema_outcome(payload: &serde_json::Value, text: &str, options: &Optio
         println!("{text}");
         return;
     }
-    println!("{}", basic_mem::pycompat::python_json_dumps(payload));
+    println!("{}", auto_memory::pycompat::python_json_dumps(payload));
 }
 
-/// `basic-mem hook <session-start|pre-compact> --harness <name>`.
+/// `auto-memory hook <session-start|pre-compact> --harness <name>`.
 ///
 /// The harness lifecycle entry point. It reads one JSON object on stdin and
 /// prints context on stdout; stdout stays clean because the verb prints exactly
@@ -272,7 +272,7 @@ fn hook_command(args: &[String]) -> ExitCode {
         Err(message) => return usage(&message),
     };
     let Some(verb) = options.positionals.first().map(String::as_str) else {
-        return usage("basic-mem hook <session-start|pre-compact> --harness <claude|codex|pi>");
+        return usage("auto-memory hook <session-start|pre-compact> --harness <claude|codex|pi>");
     };
     let harness = match options.value("harness") {
         None => Harness::Claude,
@@ -289,7 +289,7 @@ fn hook_command(args: &[String]) -> ExitCode {
     // process still exits 0.
     if let Err(message) = run_hook(verb, harness, &options) {
         tracing::warn!("hook {verb} failed: {message}");
-        eprintln!("basic-mem hook {verb}: {message}");
+        eprintln!("auto-memory hook {verb}: {message}");
     }
     ExitCode::SUCCESS
 }
@@ -321,7 +321,7 @@ fn run_hook(verb: &str, harness: Harness, options: &Options) -> Result<(), Strin
     else {
         // No mapping: emit the first-run nudge instead of guessing a project.
         if !configured {
-            println!("# Basic Memory\n\n{}", harness.profile().setup_nudge);
+            println!("# Auto Memory\n\n{}", harness.profile().setup_nudge);
         }
         return Ok(());
     };
@@ -333,7 +333,7 @@ fn run_hook(verb: &str, harness: Harness, options: &Options) -> Result<(), Strin
     let index = options
         .value("index")
         .map(PathBuf::from)
-        .or_else(|| std::env::var_os("BASIC_MEM_INDEX").map(PathBuf::from))
+        .or_else(|| std::env::var_os("AUTO_MEMORY_INDEX").map(PathBuf::from))
         .unwrap_or_else(default_index_path);
     let store = Store::open(&index)
         .map_err(|error| format!("failed to open index {}: {error}", index.display()))?;
@@ -362,7 +362,7 @@ fn run_hook(verb: &str, harness: Harness, options: &Options) -> Result<(), Strin
     );
     let brief: String = brief
         .chars()
-        .take(basic_mem::hooks::profiles::MAX_BRIEF_CHARS)
+        .take(auto_memory::hooks::profiles::MAX_BRIEF_CHARS)
         .collect();
     println!("{brief}");
     Ok(())
@@ -383,11 +383,11 @@ fn read_hook_payload() -> serde_json::Value {
     serde_json::from_str(&text).unwrap_or(empty)
 }
 
-/// Default index path, matching `tools/basic-mem-hook.py`.
+/// Default index path, matching `tools/auto-memory-hook.py`.
 fn default_index_path() -> PathBuf {
     std::env::var_os("HOME").map_or_else(
-        || PathBuf::from(".local/share/basic-mem/memory.db"),
-        |home| PathBuf::from(home).join(".local/share/basic-mem/memory.db"),
+        || PathBuf::from(".local/share/auto-memory/memory.db"),
+        |home| PathBuf::from(home).join(".local/share/auto-memory/memory.db"),
     )
 }
 
@@ -399,7 +399,7 @@ fn parse_command(path: &str) -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    match basic_mem::markdown::parse_document(path, &content) {
+    match auto_memory::markdown::parse_document(path, &content) {
         Ok(document) => print_json(&document),
         Err(error) => {
             eprintln!("failed to parse {path}: {error}");
@@ -689,7 +689,7 @@ async fn shutdown_signal() {
                 tokio::select! {
                     result = tokio::signal::ctrl_c() => {
                         if let Err(error) = result {
-                            eprintln!("basic-mem: could not listen for Ctrl-C: {error}");
+                            eprintln!("auto-memory: could not listen for Ctrl-C: {error}");
                             // Without a signal there is nothing to wait for; park so the
                             // caller's loop keeps running and the default disposition applies.
                             std::future::pending::<()>().await;
@@ -704,7 +704,7 @@ async fn shutdown_signal() {
         }
     }
     if let Err(error) = tokio::signal::ctrl_c().await {
-        eprintln!("basic-mem: could not listen for Ctrl-C: {error}");
+        eprintln!("auto-memory: could not listen for Ctrl-C: {error}");
         std::future::pending::<()>().await;
     }
 }
@@ -728,7 +728,7 @@ async fn watch_command(args: &[String]) -> ExitCode {
     if options.switch("embeddings") {
         return usage(
             "watch does not take --embeddings: it only keeps the markdown index current — \
-             run `basic-mem reindex --vault <dir> --index <db> --embeddings` for the vectors",
+             run `auto-memory reindex --vault <dir> --index <db> --embeddings` for the vectors",
         );
     }
     let Some(vault) = options.value("vault").map(PathBuf::from) else {
@@ -827,8 +827,8 @@ async fn watch_command(args: &[String]) -> ExitCode {
 
 /// Log one applied batch, using the library's formatter so `watch --once` and the
 /// daemon report identically.
-fn log_batch(label: &str, report: &basic_mem::indexing::WatchReport) {
-    basic_mem::indexing::log_watch_report(label, report);
+fn log_batch(label: &str, report: &auto_memory::indexing::WatchReport) {
+    auto_memory::indexing::log_watch_report(label, report);
 }
 fn status_command(args: &[String]) -> ExitCode {
     let options = match Options::parse(args) {
@@ -1031,7 +1031,7 @@ fn search_command(args: &[String]) -> ExitCode {
     } else {
         // The reference's implicit default: a category filter scopes the search to
         // observation rows, because categories only exist there.
-        search.entity_types = basic_mem::search::default_entity_types(&search.categories);
+        search.entity_types = auto_memory::search::default_entity_types(&search.categories);
     }
     if let Some(value) = options.value("permalink") {
         if value.contains('*') {
@@ -1057,7 +1057,7 @@ fn search_command(args: &[String]) -> ExitCode {
     {
         // Search bounds go through `dateparser`, not the timeframe parser the context
         // tools use; see `domain::dateparser` for why the two disagree.
-        let Some(bound) = basic_mem::domain::dateparser::parse_after_date(value) else {
+        let Some(bound) = auto_memory::domain::dateparser::parse_after_date(value) else {
             return usage(&format!("--after-date is not a date or window: {value}"));
         };
         search.after_date = Some(bound);

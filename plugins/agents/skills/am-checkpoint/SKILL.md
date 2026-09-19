@@ -1,6 +1,6 @@
 ---
-name: bm-checkpoint
-description: Create an immutable Codex handoff in Basic Memory and return an exact bm-orient resume command.
+name: am-checkpoint
+description: Create an immutable Codex handoff in Auto Memory and return an exact am-orient resume command.
 ---
 
 # Checkpoint Codex Work
@@ -20,7 +20,7 @@ Read `~/.codex/basic-memory.json`, then the nearest project
 - `sessionProfile`, default `general`
 - `repository`, required when `sessionProfile` is `coding`
 
-Apply the `bm-writing` skill before drafting the note.
+Apply the `am-writing` skill before drafting the note.
 
 Gather repo evidence:
 
@@ -74,7 +74,7 @@ by modifying the existing note.
 
 Call `write_note` with `project=<configured primaryProject>`,
 `overwrite=False`, and `output_format="json"` on every attempt. When
-`primaryProject` is omitted, leave the project argument unset so Basic Memory
+`primaryProject` is omitted, leave the project argument unset so Auto Memory
 uses its default project. The frontmatter `project` field is descriptive
 metadata and does not replace the tool's project argument. The explicit
 non-overwrite flag must win even when the user's
@@ -82,7 +82,7 @@ non-overwrite flag must win even when the user's
 with `action: created`; treat `action: conflict` or `NOTE_ALREADY_EXISTS` as the
 title collision above, and stop on any other action or error.
 
-Write a note to Basic Memory. For the `general` profile:
+Write a note to Auto Memory. For the `general` profile:
 
 - `title`: the timestamped checkpoint title above
 - `directory`: configured `captureFolder`
@@ -211,7 +211,7 @@ Reply with:
 4. exactly one fenced resume command as the final block:
 
 ```text
-$bm-orient "<exact returned resume identifier>"
+$am-orient "<exact returned resume identifier>"
 ```
 
 Choose the first non-empty returned value in this order: `permalink`,

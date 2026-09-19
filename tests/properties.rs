@@ -6,11 +6,11 @@
 
 use std::fs;
 
-use basic_mem::domain::permalink::generate_permalink;
-use basic_mem::indexing::{RebuildOptions, rebuild_vault};
-use basic_mem::markdown::parse_document;
-use basic_mem::markdown::serialize::render;
-use basic_mem::storage::Store;
+use auto_memory::domain::permalink::generate_permalink;
+use auto_memory::indexing::{RebuildOptions, rebuild_vault};
+use auto_memory::markdown::parse_document;
+use auto_memory::markdown::serialize::render;
+use auto_memory::storage::Store;
 mod common;
 use common::Scratch;
 

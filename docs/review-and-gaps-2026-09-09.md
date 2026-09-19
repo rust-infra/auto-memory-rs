@@ -2,8 +2,8 @@
 
 - **Review date:** 2026-09-08 (UTC) / 2026-09-09 (local)
 - **Reviewed docs:**
-  - `docs/basic-memory-rs-spec.md`（规格说明）
-  - `docs/basic-memory-rs-execution-plan.md`（执行计划）
+  - `docs/auto-memory-rs-spec.md`（规格说明）
+  - `docs/auto-memory-rs-execution-plan.md`（执行计划）
 - **Reviewer:** Codex
 - **Status:** Review complete — gaps logged. **P0 contract docs now delivered** (2026-09-09):
   `reference.md`, `data-format.md`, `search-spec.md`, `context-spec.md`, `mcp-spec.md`,

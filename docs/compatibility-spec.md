@@ -1,6 +1,6 @@
 # Compatibility Test Strategy & Canonicalization
 
-Reference: `basic_memory` 0.23.2. This doc defines how `basic-mem-rs` proves "same behavior".
+Reference: `basic_memory` 0.23.2. This doc defines how `auto-memory-rs` proves "same behavior".
 
 ## 1. Compatibility definition
 
@@ -114,4 +114,4 @@ Tracked here; move to `codex/decisions` as they resolve:
 9. CLI command/text parity scope (status/doctor/reindex/orphans/project/config).
 10. `write_note_overwrite_default` default value parity.
 11. Rust crate layout: single crate vs workspace (decision deferred until parser milestone).
-12. Licenses/trademark: AGPL-3.0 obligations and `basic-mem-rs` naming (needs legal review).
+12. Licenses/trademark: AGPL-3.0 obligations and `auto-memory-rs` naming (needs legal review).

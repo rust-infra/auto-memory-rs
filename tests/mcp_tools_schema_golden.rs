@@ -71,7 +71,7 @@ fn every_tool_advertises_the_reference_parameters() {
         .expect("reference tools");
 
     let mut checked = 0;
-    for tool in basic_mem::adapters::mcp::tool_definitions() {
+    for tool in auto_memory::adapters::mcp::tool_definitions() {
         let name = tool["name"].as_str().expect("tool name");
         // `list_workspaces` is reference-only (Web/Cloud stays out of scope).
         let Some(expected) = reference.iter().find(|entry| entry["name"] == name) else {

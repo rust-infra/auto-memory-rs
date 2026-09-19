@@ -2,7 +2,7 @@
 //!
 //! Both surfaces hand their synchronous core work (SQLite, file reads, parsing) to
 //! the blocking pool, so these tests run on a multi-thread runtime — the same shape
-//! `basic_mem::runtime::executor` builds for the CLI. What is pinned here is the
+//! `auto_memory::runtime::executor` builds for the CLI. What is pinned here is the
 //! behavior the async rewrite had to preserve: stdout stays a sequence of compact
 //! newline-delimited frames, frame order follows request order, a shutdown request
 //! stops the loop between frames, and the watcher still applies the pending debounce
@@ -14,10 +14,10 @@ use std::time::{Duration, Instant};
 use serde_json::{Value, json};
 use tokio::io::{AsyncWriteExt, BufReader, duplex};
 
-use basic_mem::adapters::mcp::McpServer;
-use basic_mem::indexing::{IndexOptions, IndexService, VaultWatcher, shutdown_when, watch_vault};
-use basic_mem::runtime::block_on;
-use basic_mem::storage::Store;
+use auto_memory::adapters::mcp::McpServer;
+use auto_memory::indexing::{IndexOptions, IndexService, VaultWatcher, shutdown_when, watch_vault};
+use auto_memory::runtime::block_on;
+use auto_memory::storage::Store;
 
 mod common;
 use common::{Scratch, fixture};
@@ -92,7 +92,7 @@ async fn async_transport_emits_one_compact_frame_per_request() {
         vec![1, 2, 3, 4],
         "responses keep request order"
     );
-    assert_eq!(frames[0]["result"]["serverInfo"]["name"], "basic-mem-rs");
+    assert_eq!(frames[0]["result"]["serverInfo"]["name"], "auto-memory-rs");
     assert_eq!(frames[3]["error"]["message"], "unsupported method: nope");
     // Tool results keep the reference's text surface as `content[0].text`, and the
     // frame itself stays compact so it renders on exactly one line.
@@ -262,7 +262,7 @@ fn shutdown_when_resolves_once_the_flag_flips() {
     block_on(shutdown_when(|| flag.load(Ordering::Relaxed))).expect("runtime");
 }
 
-/// `basic-mem watch` stops on Ctrl-C and flushes the window it was holding.
+/// `auto-memory watch` stops on Ctrl-C and flushes the window it was holding.
 ///
 /// This is the user-visible payoff of the async loop. The blocking version could only
 /// be killed, so a note edited in the last second before Ctrl-C stayed out of the index
@@ -277,18 +277,18 @@ fn watch_cli_flushes_the_pending_window_on_sigint() {
     fs::create_dir_all(&vault).expect("vault");
     fs::write(vault.join("seed.md"), "# Seed\n").expect("seed");
 
-    let mut child = std::process::Command::new(env!("CARGO_BIN_EXE_basic-mem"))
+    let mut child = std::process::Command::new(env!("CARGO_BIN_EXE_auto-memory"))
         .args(["watch", "--vault"])
         .arg(&vault)
         .arg("--index")
         .arg(&index)
         .args(["--project", "oracle", "--window-ms", "3000"])
         // Pin the filter: a developer's own RUST_LOG must not decide this test.
-        .env("RUST_LOG", "basic_mem=info")
+        .env("RUST_LOG", "auto_memory=info")
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .spawn()
-        .expect("spawn basic-mem watch");
+        .expect("spawn auto-memory watch");
 
     // Let the initial reconcile finish and the notify watch install.
     std::thread::sleep(Duration::from_millis(800));
@@ -318,7 +318,7 @@ fn watch_cli_flushes_the_pending_window_on_sigint() {
     let Some(status) = status else {
         let _ = child.kill();
         let _ = child.wait();
-        panic!("basic-mem watch kept running after SIGINT");
+        panic!("auto-memory watch kept running after SIGINT");
     };
     let mut stdout = String::new();
     let mut stderr = String::new();
@@ -369,7 +369,7 @@ fn watch_cli_flushes_the_pending_window_on_sigint() {
     );
 }
 
-/// `basic-mem watch` also stops on SIGTERM, which is what `systemctl stop`, `docker
+/// `auto-memory watch` also stops on SIGTERM, which is what `systemctl stop`, `docker
 /// stop` and a plain `kill` send.
 ///
 /// Before this was handled the process died mid-window: no flush, no report, and no
@@ -384,17 +384,17 @@ fn watch_cli_stops_on_sigterm_and_logs_its_batches() {
     fs::create_dir_all(&vault).expect("vault");
     fs::write(vault.join("seed.md"), "# Seed\n").expect("seed");
 
-    let mut child = std::process::Command::new(env!("CARGO_BIN_EXE_basic-mem"))
+    let mut child = std::process::Command::new(env!("CARGO_BIN_EXE_auto-memory"))
         .args(["watch", "--vault"])
         .arg(&vault)
         .arg("--index")
         .arg(&index)
         .args(["--project", "oracle", "--window-ms", "300"])
-        .env("RUST_LOG", "basic_mem=info")
+        .env("RUST_LOG", "auto_memory=info")
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .spawn()
-        .expect("spawn basic-mem watch");
+        .expect("spawn auto-memory watch");
 
     std::thread::sleep(Duration::from_millis(800));
     fs::write(vault.join("during.md"), "# During\n\n- [fact] watched\n").expect("write");
@@ -420,7 +420,7 @@ fn watch_cli_stops_on_sigterm_and_logs_its_batches() {
     let Some(status) = status else {
         let _ = child.kill();
         let _ = child.wait();
-        panic!("basic-mem watch kept running after SIGTERM");
+        panic!("auto-memory watch kept running after SIGTERM");
     };
     let mut stdout = String::new();
     let mut stderr = String::new();

@@ -10,13 +10,13 @@ mod common;
 use std::fs;
 use std::path::Path;
 
-use basic_mem::application::context::{
+use auto_memory::application::context::{
     ContextOptions, MAX_RELATED_RESULTS, build_context, render_markdown, render_plain,
 };
-use basic_mem::domain::timeframe;
-use basic_mem::graph::resolve_entity_path;
-use basic_mem::indexing::{RebuildOptions, rebuild_vault};
-use basic_mem::storage::Store;
+use auto_memory::domain::timeframe;
+use auto_memory::graph::resolve_entity_path;
+use auto_memory::indexing::{RebuildOptions, rebuild_vault};
+use auto_memory::storage::Store;
 use common::{
     Scratch, canonicalize_text, canonicalize_timestamps, canonicalize_uuids, copy_dir,
     fixtures_vault, repo_root,
@@ -489,9 +489,9 @@ fn unresolved_memory_urls_return_an_empty_graph() {
 fn memory_urls_are_validated_and_resolved() {
     let vault = temp_vault();
     let (store, project_id) = store_for(vault.path());
-    assert!(basic_mem::graph::normalize_memory_url("notes/relations").is_ok());
-    assert!(basic_mem::graph::normalize_memory_url("memory//bad").is_err());
-    assert!(basic_mem::graph::normalize_memory_url("bad?query").is_err());
+    assert!(auto_memory::graph::normalize_memory_url("notes/relations").is_ok());
+    assert!(auto_memory::graph::normalize_memory_url("memory//bad").is_err());
+    assert!(auto_memory::graph::normalize_memory_url("bad?query").is_err());
 
     let entity = resolve_entity_path(&store, project_id, "notes/relations")
         .expect("resolve")

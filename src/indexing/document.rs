@@ -184,7 +184,7 @@ mod tests {
         let nanos = SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map_or(0, |duration| duration.as_nanos());
-        let root = std::env::temp_dir().join(format!("basic-mem-rs-markdown-files-{nanos}"));
+        let root = std::env::temp_dir().join(format!("auto-memory-rs-markdown-files-{nanos}"));
         let write = |relative: &str| {
             let path = root.join(relative);
             fs::create_dir_all(path.parent().expect("parent")).expect("parent dir");

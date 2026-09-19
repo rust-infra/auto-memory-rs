@@ -1,4 +1,4 @@
-//! Harness lifecycle hooks (`basic-mem hook ...`).
+//! Harness lifecycle hooks (`auto-memory hook ...`).
 //!
 //! Agents (Codex, Claude Code, Pi) call a hook command at session boundaries:
 //! `SessionStart` on startup/resume/after-compaction, `PreCompact` before the

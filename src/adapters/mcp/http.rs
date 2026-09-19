@@ -400,7 +400,7 @@ mod tests {
     /// A server over the fixture vault, backed by an in-memory index.
     fn server(read_only: bool, tag: &str) -> (tempfile::TempDir, HttpServer) {
         let dir = tempfile::Builder::new()
-            .prefix(&format!("basic-mem-rs-http-{tag}-"))
+            .prefix(&format!("auto-memory-rs-http-{tag}-"))
             .tempdir()
             .expect("scratch dir");
         let vault = dir.path().join("vault");

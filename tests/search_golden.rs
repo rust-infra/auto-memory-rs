@@ -6,8 +6,8 @@
 
 use std::collections::BTreeMap;
 
-use basic_mem::domain::search::{SearchItemType, SearchResult};
-use basic_mem::search::text::{SearchPage, TextSearchOptions};
+use auto_memory::domain::search::{SearchItemType, SearchResult};
+use auto_memory::search::text::{SearchPage, TextSearchOptions};
 use serde_json::Value;
 mod common;
 use common::{indexed_store, load_golden_json};
@@ -207,7 +207,7 @@ fn observation_category_filter_matches_reference() {
             project_id,
             &TextSearchOptions {
                 query: Some("rust".to_owned()),
-                entity_types: basic_mem::search::default_entity_types(&["decision".to_owned()]),
+                entity_types: auto_memory::search::default_entity_types(&["decision".to_owned()]),
                 categories: vec!["decision".to_owned()],
                 ..TextSearchOptions::default()
             },
@@ -249,7 +249,7 @@ fn observation_category_filter_matches_reference() {
             project_id,
             &TextSearchOptions {
                 query: Some("rust".to_owned()),
-                after_date: basic_mem::domain::dateparser::parse_after_date("2026-09-01"),
+                after_date: auto_memory::domain::dateparser::parse_after_date("2026-09-01"),
                 ..TextSearchOptions::default()
             },
         )
@@ -262,7 +262,7 @@ fn observation_category_filter_matches_reference() {
             project_id,
             &TextSearchOptions {
                 query: Some("rust".to_owned()),
-                after_date: basic_mem::domain::dateparser::parse_after_date("2030-01-01"),
+                after_date: auto_memory::domain::dateparser::parse_after_date("2030-01-01"),
                 ..TextSearchOptions::default()
             },
         )

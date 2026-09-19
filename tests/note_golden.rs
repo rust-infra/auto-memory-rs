@@ -10,9 +10,9 @@
 use std::fs;
 use std::path::Path;
 
-use basic_mem::markdown::serialize::merge_frontmatter;
-use basic_mem::markdown::split_frontmatter;
-use basic_mem::markdown::{
+use auto_memory::markdown::serialize::merge_frontmatter;
+use auto_memory::markdown::split_frontmatter;
+use auto_memory::markdown::{
     EditOperation, EditOptions, apply_edit_operation, merge_metadata_into_markdown,
 };
 use serde_yaml_ng::Value;
@@ -20,7 +20,7 @@ mod common;
 use common::repo_root;
 
 fn markdown_files(root: &Path) -> Vec<String> {
-    basic_mem::indexing::document::markdown_files(root)
+    auto_memory::indexing::document::markdown_files(root)
         .into_iter()
         .map(|(relative, _)| relative)
         .collect()

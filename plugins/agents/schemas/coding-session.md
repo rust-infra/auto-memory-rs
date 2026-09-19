@@ -14,7 +14,7 @@ schema:
 settings:
   validation: warn
   frontmatter:
-    project: string, the Basic Memory project this session belongs to
+    project: string, the Auto Memory project this session belongs to
     started: string, when the session began or checkpoint was created
     repository: string, stable repository identifier such as owner/name
     repo_root: string, Git repository root for this checkout

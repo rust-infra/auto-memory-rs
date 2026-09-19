@@ -1,13 +1,13 @@
 ---
-name: bm-orient
-description: Resume from an exact Basic Memory checkpoint or orient Codex from current graph and repository evidence.
+name: am-orient
+description: Resume from an exact Auto Memory checkpoint or orient Codex from current graph and repository evidence.
 ---
 
-# Orient From Basic Memory
+# Orient From Auto Memory
 
 Use this before substantial work in a repo, before resuming an old thread, or when
-the user asks where things stand. Accept an optional Basic Memory identifier,
-permalink, or topic after `$bm-orient`.
+the user asks where things stand. Accept an optional Auto Memory identifier,
+permalink, or topic after `$am-orient`.
 
 ## Resolve Configuration
 
@@ -15,7 +15,7 @@ Read `~/.codex/basic-memory.json`, then the nearest project
 `.codex/basic-memory.json`; project keys override user keys. Use
 `primaryProject`, `secondaryProjects`, `recallTimeframe`, `sessionProfile`,
 `repository`, and `placementConventions`. If the file is missing, continue
-against the default Basic Memory project and mention that setup has not been
+against the default Auto Memory project and mention that setup has not been
 run.
 
 ## Choose One Recall Route
@@ -24,7 +24,7 @@ Choose exactly one route from the invocation.
 
 ### Exact checkpoint
 
-When the user supplies an exact Basic Memory identifier or permalink, read that note directly.
+When the user supplies an exact Auto Memory identifier or permalink, read that note directly.
 When `primaryProject` is configured, call `read_note` with both the exact
 identifier and `project=<configured primaryProject>`. The explicit project is
 required even when the identifier is a permalink, file path, or title. If setup
@@ -53,7 +53,7 @@ omit `coding_session` results and report that setup is incomplete.
 
 Do not ingest an arbitrary filesystem path, folder, HTTP URL, or pasted handoff
 as the memory source. A repository path may be used only as a search signal
-against Basic Memory and current repository evidence.
+against Auto Memory and current repository evidence.
 
 ### Current repository
 

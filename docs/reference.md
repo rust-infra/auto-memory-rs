@@ -18,7 +18,7 @@
 
 Local mode uses **SQLite** (aiosqlite) with FTS5; the app-level database `memory.db` lives in the
 config directory, not inside the project. Projects registered in `config.json` under `projects`.
-Cloud/Postgres paths are out of scope for `basic-mem-rs`.
+Cloud/Postgres paths are out of scope for `auto-memory-rs`.
 
 ## 2. Verification status legend
 
@@ -84,7 +84,7 @@ Cloud/Postgres paths are out of scope for `basic-mem-rs`.
 1. **Index DB location**: reference stores the derived SQLite index in the **app config dir**
    (`~/.config/basic-memory/memory.db`), **not** inside `.basic-memory/index.sqlite3` in the vault.
    A project folder holds markdown plus `.basic-memory/config.json` (project config/logs only).
-   `basic-mem-rs` must decide whether to mirror this or document a deliberate deviation.
+   `auto-memory-rs` must decide whether to mirror this or document a deliberate deviation.
 2. **Entity per note file**: each markdown file is one entity; observations/relations are parsed
    from the file body (not separate files). `title` defaults to file stem; `type` defaults to `note`.
 3. **Search modes**: exact permalink, glob permalink (`*`), title, and full-text are distinct query
@@ -102,7 +102,7 @@ Captured by `tools/export_reference.py` into `tests/golden/` (16 markdown fixtur
    files without frontmatter are rewritten with `title` (file stem), `type: note`, and a
    generated permalink. The normalized vault is captured at `tests/golden/vault/`.
    This means the reference mutates user markdown during indexing — a decision point for
-   `basic-mem-rs` (mirror vs. read-only default).
+   `auto-memory-rs` (mirror vs. read-only default).
 3. **Malformed YAML frontmatter files are skipped** (parser warns, batch normalization
    fails); they are absent from the entity table.
 4. Observation `category` defaults to `note` when the bracket form is absent;
@@ -123,7 +123,7 @@ Captured by `tools/export_reference.py` into `tests/golden/` (16 markdown fixtur
   and get the project prefix; explicit frontmatter permalinks stay verbatim.
 - Relation targets are stored raw (`to_name`), then resolved to `to_id` when a matching
   permalink/file path exists.
-- `external_id` in `basic-mem-rs` is a deterministic UUID-v4-shaped value derived from
+- `external_id` in `auto-memory-rs` is a deterministic UUID-v4-shaped value derived from
   `project_permalink + file_path`. The reference uses random UUIDs persisted in the DB; numeric
   and external ids are explicitly outside the compatibility contract (see
   `docs/compatibility-spec.md`).
@@ -142,7 +142,7 @@ Captured by `tools/export_reference.py` into `tests/golden/` (16 markdown fixtur
 
 - The reference search runs **directly against the FTS5 table** (no join) because SQLite cannot
   use column-scoped `MATCH` with a join in the same query level; entity lookups are filled in
-  afterwards. `basic-mem-rs` mirrors this with subquery filters plus a result lookup.
+  afterwards. `auto-memory-rs` mirrors this with subquery filters plus a result lookup.
 - `content_stems` is a legacy name: the value is a concatenation of text variants
   (`_generate_variants`: original, lowercase, path segments, words) plus the body, permalink,
   file path, and tags — no stemming. Truncated at 6000 chars.
@@ -201,7 +201,7 @@ Captured by `tools/export_reference.py` into `tests/golden/` (16 markdown fixtur
   `observations` keep document order.
 - **`find_related` is a single recursive CTE** (`_build_sqlite_query`) that emits relations at
   odd depths and entities at even depths, dedupes with `MIN(depth)`, and returns
-  `ORDER BY depth, type, id LIMIT max_related`. `basic-mem-rs` ports this query verbatim
+  `ORDER BY depth, type, id LIMIT max_related`. `auto-memory-rs` ports this query verbatim
   (`Store::find_related`) and a golden replays it against the reference ids.
 - **Related-results order is run-dependent.** The reference indexes files concurrently, so
   entity/relation ids differ between runs (two runs of the same vault produced different
@@ -394,7 +394,7 @@ in `tests/mcp_golden.rs`. `[V]` unless noted.
 - **Project tools are disabled in a constrained server.** `create_memory_project` and
   `delete_project` short-circuit on `BASIC_MEMORY_MCP_PROJECT` and return
   `# Error\n\nProject creation/deletion disabled …`, with a `PROJECT_CONSTRAINED` JSON variant for
-  create. Since `basic-mem mcp` is always constrained, that refusal *is* the surface.
+  create. Since `auto-memory mcp` is always constrained, that refusal *is* the surface.
 - **`recent_activity` is `build_context` with no `memory_url`.** The `/v2/.../memory/recent`
   route calls `ContextService.build_context(types=…, since=…, limit=page_size, offset=(page-1)*page_size,
   max_related=10)`; the primary rows come from `search(search_item_types=types, after_date=since,

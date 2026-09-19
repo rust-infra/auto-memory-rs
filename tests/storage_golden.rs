@@ -22,21 +22,21 @@ fn golden(name: &str) -> Vec<Value> {
 }
 
 fn rebuild(
-    store: &mut basic_mem::storage::Store,
+    store: &mut auto_memory::storage::Store,
     project_id: i64,
-) -> basic_mem::indexing::RebuildReport {
-    let options = basic_mem::indexing::RebuildOptions::new("oracle");
-    basic_mem::indexing::rebuild_vault(store, project_id, &fixtures_vault(), &options)
+) -> auto_memory::indexing::RebuildReport {
+    let options = auto_memory::indexing::RebuildOptions::new("oracle");
+    auto_memory::indexing::rebuild_vault(store, project_id, &fixtures_vault(), &options)
         .expect("rebuild")
 }
 
-fn project(store: &basic_mem::storage::Store) -> i64 {
+fn project(store: &auto_memory::storage::Store) -> i64 {
     store
         .upsert_project("oracle", "oracle", &fixtures_vault().to_string_lossy())
         .expect("project")
 }
 
-fn entity_key(entity: &basic_mem::storage::EntityRow) -> String {
+fn entity_key(entity: &auto_memory::storage::EntityRow) -> String {
     format!(
         "{}|{}|{}|{}",
         entity.file_path,
@@ -46,7 +46,7 @@ fn entity_key(entity: &basic_mem::storage::EntityRow) -> String {
     )
 }
 
-fn observation_keys(store: &basic_mem::storage::Store, project_id: i64) -> Vec<String> {
+fn observation_keys(store: &auto_memory::storage::Store, project_id: i64) -> Vec<String> {
     let entities: BTreeMap<i64, String> = store
         .entities(project_id)
         .expect("entities")
@@ -76,7 +76,7 @@ fn observation_keys(store: &basic_mem::storage::Store, project_id: i64) -> Vec<S
     keys
 }
 
-fn relation_keys(store: &basic_mem::storage::Store, project_id: i64) -> Vec<String> {
+fn relation_keys(store: &auto_memory::storage::Store, project_id: i64) -> Vec<String> {
     let entities: BTreeMap<i64, String> = store
         .entities(project_id)
         .expect("entities")
@@ -104,7 +104,7 @@ fn relation_keys(store: &basic_mem::storage::Store, project_id: i64) -> Vec<Stri
 
 #[test]
 fn rebuild_matches_reference_projection() {
-    let mut store = basic_mem::storage::Store::open_in_memory().expect("store");
+    let mut store = auto_memory::storage::Store::open_in_memory().expect("store");
     let project_id = project(&store);
     let report = rebuild(&mut store, project_id);
 
@@ -190,7 +190,7 @@ fn rebuild_matches_reference_projection() {
 
 #[test]
 fn rebuild_is_idempotent() {
-    let mut store = basic_mem::storage::Store::open_in_memory().expect("store");
+    let mut store = auto_memory::storage::Store::open_in_memory().expect("store");
     let project_id = project(&store);
     rebuild(&mut store, project_id);
     let first_counts = store.counts(project_id).expect("counts");
@@ -227,7 +227,7 @@ fn rebuild_recovers_after_database_is_deleted() {
     let db = dir.join("index.sqlite3");
 
     let first_counts = {
-        let mut store = basic_mem::storage::Store::open(&db).expect("open");
+        let mut store = auto_memory::storage::Store::open(&db).expect("open");
         let project_id = project(&store);
         rebuild(&mut store, project_id);
         store.counts(project_id).expect("counts")
@@ -237,7 +237,7 @@ fn rebuild_recovers_after_database_is_deleted() {
     fs::remove_file(&db).expect("delete derived index");
     assert!(!db.exists());
 
-    let mut store = basic_mem::storage::Store::open(&db).expect("reopen");
+    let mut store = auto_memory::storage::Store::open(&db).expect("reopen");
     let project_id = project(&store);
     rebuild(&mut store, project_id);
     let second_counts = store.counts(project_id).expect("counts");
@@ -249,7 +249,7 @@ fn rebuild_recovers_after_database_is_deleted() {
 
 #[test]
 fn rebuilt_index_resolves_relation_targets() {
-    let mut store = basic_mem::storage::Store::open_in_memory().expect("store");
+    let mut store = auto_memory::storage::Store::open_in_memory().expect("store");
     let project_id = project(&store);
     let report = rebuild(&mut store, project_id);
     assert!(
@@ -274,12 +274,12 @@ fn markdown_files_are_discovered_recursively_but_not_dot_dirs() {
     fs::write(dir.join("a/note.md"), "# A\n").expect("write");
     fs::write(dir.join(".obsidian/hidden.md"), "# Hidden\n").expect("write");
 
-    let mut store = basic_mem::storage::Store::open_in_memory().expect("store");
+    let mut store = auto_memory::storage::Store::open_in_memory().expect("store");
     let project_id = store
         .upsert_project("scan", "scan", &dir.path().to_string_lossy())
         .expect("project");
-    let options = basic_mem::indexing::RebuildOptions::new("scan");
-    let report = basic_mem::indexing::rebuild_vault(&mut store, project_id, dir.path(), &options)
+    let options = auto_memory::indexing::RebuildOptions::new("scan");
+    let report = auto_memory::indexing::rebuild_vault(&mut store, project_id, dir.path(), &options)
         .expect("rebuild");
 
     assert_eq!(report.files_seen, 1);

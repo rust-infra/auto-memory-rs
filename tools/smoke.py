@@ -28,7 +28,7 @@ import tempfile
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-RELEASE_BIN = REPO_ROOT / "target" / "release" / "basic-mem"
+RELEASE_BIN = REPO_ROOT / "target" / "release" / "auto-memory"
 FIXTURE_VAULT = REPO_ROOT / "tests" / "fixtures" / "vault"
 
 
@@ -109,7 +109,7 @@ def main() -> int:
     if not RELEASE_BIN.is_file():
         fail(f"missing {RELEASE_BIN}")
 
-    work = Path(tempfile.mkdtemp(prefix="basic-mem-rs-smoke-"))
+    work = Path(tempfile.mkdtemp(prefix="auto-memory-rs-smoke-"))
     try:
         vault = work / "vault"
         index = work / "memory.db"

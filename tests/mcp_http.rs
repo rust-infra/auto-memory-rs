@@ -16,7 +16,7 @@ use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::sync::{Arc, Mutex};
 
-use basic_mem::adapters::mcp::http::{HttpServer, bind, serve_on};
+use auto_memory::adapters::mcp::http::{HttpServer, bind, serve_on};
 use common::indexed_store;
 use serde_json::{Value, json};
 
@@ -193,7 +193,7 @@ async fn session_lists_and_calls_tools_over_streamable_http() {
     let result = initialized.frame(1);
     assert_eq!(
         result["result"]["serverInfo"]["name"],
-        json!("basic-mem-rs")
+        json!("auto-memory-rs")
     );
     assert_eq!(result["result"]["protocolVersion"], json!("2024-11-05"));
 

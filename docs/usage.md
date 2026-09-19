@@ -1,4 +1,4 @@
-# Using `basic-mem-rs`
+# Using `auto-memory-rs`
 
 Local-only core of Basic Memory, behavior-compatible with the reference 0.23.2 release. There is
 no Web UI and no cloud sync: **Obsidian is the management interface**, the vault of markdown files
@@ -8,12 +8,12 @@ is the only durable state, and everything else (the SQLite index, the embeddings
 
 ```bash
 cargo build --release            # add --offline when the registry cache is warm
-./target/release/basic-mem --version
+./target/release/auto-memory --version
 ```
 
 The embedding runtime (`search --vector` / `--hybrid`, `reindex --embeddings`) needs the fastembed
 cache and the ONNX Runtime shared library; text search, context, schema, and the MCP server work
-without either. See `docs/basic-memory-rs-execution-plan.md` Phase 8b for the model details.
+without either. See `docs/auto-memory-rs-execution-plan.md` Phase 8b for the model details.
 
 ## 2. The vault
 
@@ -44,8 +44,8 @@ lines) become relations, and frontmatter is normalized the way the reference doe
 The index is a SQLite file **outside** the vault, so it never shows up in Obsidian:
 
 ```bash
-basic-mem reindex --vault ~/vault --index ~/.local/share/basic-mem/memory.db --project oracle
-basic-mem status  --index ~/.local/share/basic-mem/memory.db --project oracle
+auto-memory reindex --vault ~/vault --index ~/.local/share/auto-memory/memory.db --project oracle
+auto-memory status  --index ~/.local/share/auto-memory/memory.db --project oracle
 ```
 
 `reindex` is incremental (only changed files are rewritten); `--full` prunes stale rows and
@@ -54,7 +54,7 @@ rebuilds the whole project; `--embeddings` additionally refreshes the semantic c
 ## 4. Keep it current while Obsidian is open
 
 ```bash
-basic-mem watch --vault ~/vault --index ~/.local/share/basic-mem/memory.db --project oracle
+auto-memory watch --vault ~/vault --index ~/.local/share/auto-memory/memory.db --project oracle
 ```
 
 The watcher applies the reference ignore rules (dot-directories such as `.obsidian/` and
@@ -74,9 +74,9 @@ and a run that silently skipped it would look semantic when it was not.
 ## 5. Query
 
 ```bash
-basic-mem search --index ~/.local/share/basic-mem/memory.db --project oracle "rust"
-basic-mem context memory://notes/simple --index ~/.local/share/basic-mem/memory.db --project oracle
-basic-mem schema validate person --index ~/.local/share/basic-mem/memory.db --project oracle
+auto-memory search --index ~/.local/share/auto-memory/memory.db --project oracle "rust"
+auto-memory context memory://notes/simple --index ~/.local/share/auto-memory/memory.db --project oracle
+auto-memory schema validate person --index ~/.local/share/auto-memory/memory.db --project oracle
 ```
 
 `search` supports `--title`, `--permalink`, `--type`, `--tag`, `--category`, `--status`,
@@ -100,7 +100,7 @@ validate|infer|diff` prints the same payloads as the reference's `bm tool schema
 ## 6. MCP clients
 
 ```bash
-basic-mem mcp --vault ~/vault --index ~/.local/share/basic-mem/memory.db --project oracle
+auto-memory mcp --vault ~/vault --index ~/.local/share/auto-memory/memory.db --project oracle
 ```
 
 Newline-delimited JSON-RPC 2.0 on stdout, diagnostics on stderr. Example client configuration:
@@ -109,11 +109,11 @@ Newline-delimited JSON-RPC 2.0 on stdout, diagnostics on stderr. Example client 
 {
   "mcpServers": {
     "basic-memory": {
-      "command": "/path/to/basic-mem",
+      "command": "/path/to/auto-memory",
       "args": [
         "mcp",
         "--vault", "/home/me/vault",
-        "--index", "/home/me/.local/share/basic-mem/memory.db",
+        "--index", "/home/me/.local/share/auto-memory/memory.db",
         "--project", "oracle"
       ]
     }
@@ -124,7 +124,7 @@ Newline-delimited JSON-RPC 2.0 on stdout, diagnostics on stderr. Example client 
 The same tools are served over the MCP **Streamable HTTP** transport:
 
 ```bash
-basic-mem mcp --vault ~/vault --index ~/.local/share/basic-mem/memory.db --project oracle \
+auto-memory mcp --vault ~/vault --index ~/.local/share/auto-memory/memory.db --project oracle \
   --http --host 127.0.0.1 --port 8765 --path /mcp
 ```
 
@@ -157,14 +157,14 @@ Add `--reranker` to rescore the top candidates with a cross-encoder
 sliced — the reference ships this **off by default** ("adds latency and a first-run model
 download"). `--reranker-candidates N` (default 20) sets the rescored window, and
 `--reranker-fixture FILE` supplies deterministic scores for tests and offline runs. The
-same flags work on `basic-mem mcp`.
+same flags work on `auto-memory mcp`.
 
 Semantic search types (`search_type="vector"` / `"semantic"` / `"hybrid"`) need the embedding
 runtime: start the server with `--embedding-fixture FILE` (deterministic test vectors) or
 `--model-cache DIR` (the fastembed model, `~/.config/basic-memory/fastembed_cache` by default).
 Without either, those requests answer with the reference's "Semantic Search Disabled" guidance
 instead of falling back to text. The vector index itself is built by
-`basic-mem reindex --embeddings`.
+`auto-memory reindex --embeddings`.
 
 ## 7. Recovery
 
@@ -172,8 +172,8 @@ There is nothing to recover beyond the markdown: delete the index file (or the w
 directory) and rebuild.
 
 ```bash
-rm ~/.local/share/basic-mem/memory.db
-basic-mem reindex --vault ~/vault --index ~/.local/share/basic-mem/memory.db --project oracle --full --embeddings
+rm ~/.local/share/auto-memory/memory.db
+auto-memory reindex --vault ~/vault --index ~/.local/share/auto-memory/memory.db --project oracle --full --embeddings
 ```
 
 A full rebuild reproduces the same projection the incremental index had, including links whose
@@ -183,7 +183,7 @@ link-before-target paths; `tests/incremental_golden.rs` pins incremental/full co
 
 ## 8. Deliberate differences from the reference
 
-- `basic-mem` creates the index file's parent directory when it is missing and
+- `auto-memory` creates the index file's parent directory when it is missing and
   refuses a `--vault` that is not a directory; the reference expects the first to exist and
   silently indexes nothing for the second.
 

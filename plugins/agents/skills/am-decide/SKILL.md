@@ -1,6 +1,6 @@
 ---
-name: bm-decide
-description: Capture a durable engineering decision in Basic Memory with rationale, alternatives, consequences, and affected work.
+name: am-decide
+description: Capture a durable engineering decision in Auto Memory with rationale, alternatives, consequences, and affected work.
 ---
 
 # Capture A Decision
@@ -16,7 +16,7 @@ choice with rationale and consequences, not a casual preference.
    - follow `placementConventions` for the directory when they are specific
    - otherwise use `codex/decisions`
 
-   Apply the `bm-writing` skill before drafting the note.
+   Apply the `am-writing` skill before drafting the note.
 
 2. Clarify only if the choice itself is ambiguous. Do not ask for every field if
    the conversation already contains the rationale.

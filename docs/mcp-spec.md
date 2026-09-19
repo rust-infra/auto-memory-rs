@@ -10,10 +10,10 @@ golden-capture items **[G]**.
 - Protocol purity: stdout carries MCP frames only; logs go to stderr/files.
 - CLI parity: `basic-memory tool <tool> …` exposes the same tools via CLI.
 
-### 1b. `basic-mem-rs` implementation status
+### 1b. `auto-memory-rs` implementation status
 
-`basic-mem mcp --vault <dir> --index <db> [--project <name>]` serves newline-delimited
-JSON-RPC 2.0 on stdout: `initialize` (protocol `2024-11-05`, `serverInfo.name = basic-mem-rs`),
+`auto-memory mcp --vault <dir> --index <db> [--project <name>]` serves newline-delimited
+JSON-RPC 2.0 on stdout: `initialize` (protocol `2024-11-05`, `serverInfo.name = auto-memory-rs`),
 `notifications/initialized` (no response), `ping`, `tools/list`, and `tools/call`. Tool results
 use the MCP content convention (`content: [{type: "text", text: <json>}]`, `isError: false`);
 protocol errors (unknown method/tool, bad arguments, missing notes) come back as JSON-RPC
@@ -30,14 +30,14 @@ names: it drives `tools/list` (each variant carries its description and input sc
 `tools/call` dispatch (an exhaustive match, so a variant cannot go unhandled), the diagnostics
 report's `tools` array, and the `unknown tool: <name>` error path. `list_workspaces`
 is the one reference tool this port does not expose (Web/Cloud surfaces stay out of scope).
-`basic-mem mcp --read-only` is this port's own addition (not in the reference): it
+`auto-memory mcp --read-only` is this port's own addition (not in the reference): it
 hides the six mutating tools (`write_note`, `edit_note`, `move_note`, `delete_note`,
 `create_memory_project`, `delete_project`) from `tools/list` and refuses them with
 `tool not available in read-only mode: <name>`.
 
 ### 1b-ii. Streamable HTTP transport
 
-`basic-mem mcp --http [--host HOST] [--port PORT] [--path PATH]` serves the same session over
+`auto-memory mcp --http [--host HOST] [--port PORT] [--path PATH]` serves the same session over
 the MCP **Streamable HTTP** transport (`--host` default `127.0.0.1`, `--port` default `8765`,
 `--path` default `/mcp`). This is the specification's HTTP transport, not a bespoke endpoint:
 `POST` carries a JSON-RPC frame with `Accept: application/json, text/event-stream`, the
@@ -144,7 +144,7 @@ Known divergences, each with a reason:
 | `schema_diff` | schema | schema drift report |
 | `basic_memory_diagnostics` | diagnostics | version/config report |
 
-Cloud/workspace-only surfaces (out of scope for `basic-mem-rs`): `list_workspaces` and any
+Cloud/workspace-only surfaces (out of scope for `auto-memory-rs`): `list_workspaces` and any
 `chatgpt`/`ui` variants.
 
 ## 3. Note tools — parameters (V surface)
@@ -188,7 +188,7 @@ miss renders `No results found for '<query>' in project '<project>'. …` pointi
 (vector-only), `hybrid` (fused). An unknown type returns the generic `# Search Failed` guidance
 whose message names the valid options in sorted order. The semantic modes need an embedding
 runtime; without one the tool answers `# Search Failed - Semantic Search Disabled` rather than
-falling back to a text search. `basic-mem mcp --embedding-fixture FILE` (or `--model-cache DIR`)
+falling back to a text search. `auto-memory mcp --embedding-fixture FILE` (or `--model-cache DIR`)
 attaches the runtime.
 
 `entity_types` defaults to `["observation"]` when a `categories` filter is present and to

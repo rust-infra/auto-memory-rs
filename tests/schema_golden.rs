@@ -6,8 +6,8 @@
 //! Rust port, including the two ordered outputs — `suggested_schema` and
 //! `unmatched_observations` — whose key order is observable.
 
-use basic_mem::schema::inference::{NoteData, ObservationData, RelationData};
-use basic_mem::schema::{
+use auto_memory::schema::inference::{NoteData, ObservationData, RelationData};
+use auto_memory::schema::{
     diff_schema, infer_schema, parse_picoschema, parse_schema_note, resolve_schema, validate_note,
 };
 use serde_json::{Map, Value, json};
