@@ -12,7 +12,9 @@ use std::path::Path;
 
 use serde_json::Value;
 mod common;
-use common::{Scratch, Session, SessionOutput, copy_dir, load_golden_json, repo_root};
+use common::{
+    Scratch, Session, SessionOutput, canonicalize_renames, copy_dir, load_golden_json, repo_root,
+};
 
 fn golden() -> Value {
     load_golden_json("mcp/schema.json")
@@ -96,8 +98,8 @@ fn mcp_schema_tools_replay_the_reference_frames() {
                 continue;
             }
             let request_id = case["request"]["id"].as_u64().expect("id");
-            let ours = text_payload(frame_of(&frames, request_id));
-            let expected = text_payload(&case["frame"]);
+            let ours = canonicalize_renames(text_payload(frame_of(&frames, request_id)));
+            let expected = canonicalize_renames(text_payload(&case["frame"]));
             assert_eq!(
                 ours,
                 expected,

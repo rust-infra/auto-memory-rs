@@ -39,6 +39,12 @@ tests/
 Numeric DB ids are **not** part of the compatibility contract. Compare permalinks,
 `external_id`, titles, ordering, scores (epsilon), and error output instead.
 
+A second, smaller exemption: this port ships its own name, so a handful of user-visible
+phrases (the diagnostics title, two tool descriptions, the activity/search guidance that names
+the product, and the CLI binary named in the schema guidance) are mapped back to the
+reference's wording by `tests/common/mod.rs::canonicalize_renames` before comparing. The
+corpus itself is never edited for this — it stays reproducible from `tools/export_reference.py`.
+
 One exception is worth naming: the reference assigns ids while indexing files
 **concurrently**, so its id order differs between runs. For `build_context` that changes the
 `max_related` cut and hence the tail of `related_results`. `index/graph-rows.json` +

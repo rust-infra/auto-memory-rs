@@ -100,9 +100,9 @@ pub enum ToolName {
     RecentActivity,
     /// `list_memory_projects` — list projects with their status.
     ListMemoryProjects,
-    /// `create_memory_project` — create a Basic Memory project.
+    /// `create_memory_project` — create an Auto Memory project.
     CreateMemoryProject,
-    /// `delete_project` — delete a Basic Memory project.
+    /// `delete_project` — delete an Auto Memory project.
     DeleteProject,
 }
 
@@ -1801,7 +1801,7 @@ impl<'a> McpServer<'a> {
             }));
         }
         Ok(text_result(format!(
-            "# Error\n\nProject creation disabled - MCP server is constrained to project '{}'.\nUse the CLI to create projects: `basic-memory project add \"{project_name}\" \"{}\"`",
+            "# Error\n\nProject creation disabled - MCP server is constrained to project '{}'.\nIndex the project with the CLI instead: `auto-memory reindex --vault \"{}\" --index <index> --project \"{project_name}\"`, or run the server without `--project`.",
             self.project_name,
             arguments["project_path"].as_str().unwrap_or_default()
         )))
@@ -1809,9 +1809,10 @@ impl<'a> McpServer<'a> {
 
     /// Project deletion through a `--project`-constrained server is refused.
     fn delete_project(&mut self, arguments: &Value) -> Result<Value> {
-        let project_name = required_str(arguments, "project_name")?;
+        // The reference requires the argument even though this refusal does not echo it.
+        required_str(arguments, "project_name")?;
         Ok(text_result(format!(
-            "# Error\n\nProject deletion disabled - MCP server is constrained to project '{}'.\nUse the CLI to delete projects: `basic-memory project remove \"{project_name}\"`",
+            "# Error\n\nProject deletion disabled - MCP server is constrained to project '{}'.\nThe CLI cannot remove projects; run the server without `--project` to enable deletion.",
             self.project_name
         )))
     }
@@ -1854,7 +1855,7 @@ impl<'a> McpServer<'a> {
             "tools": ToolName::iter().map(<&str>::from).collect::<Vec<_>>(),
         });
         let report = [
-            "# Basic Memory Diagnostics".to_owned(),
+            "# Auto Memory Diagnostics".to_owned(),
             String::new(),
             "## Version".to_owned(),
             format!("- auto-memory-rs: {}", env!("CARGO_PKG_VERSION")),

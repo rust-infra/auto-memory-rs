@@ -13,8 +13,8 @@ use std::process::Command;
 use serde_json::{Value, json};
 mod common;
 use common::{
-    Scratch, Session, SessionOutput, canonicalize_uuids, copy_dir_with_mtimes, fixtures_vault,
-    frame_of, load_golden_json, repo_root, text_payload,
+    Scratch, Session, SessionOutput, canonicalize_renames, canonicalize_uuids,
+    copy_dir_with_mtimes, fixtures_vault, frame_of, load_golden_json, repo_root, text_payload,
 };
 
 fn golden() -> Value {
@@ -52,8 +52,8 @@ fn mcp_search_types_replay_the_reference() {
         let search_type = arguments["search_type"].as_str().unwrap_or("text");
         let ours = frame_of(&frames, id);
         let expected = text_payload(&case["frame"]);
-        let ours_text = canonicalize_uuids(&text_payload(ours));
-        let expected_text = canonicalize_uuids(&expected);
+        let ours_text = canonicalize_renames(&canonicalize_uuids(&text_payload(ours)));
+        let expected_text = canonicalize_renames(&canonicalize_uuids(&expected));
 
         if matches!(search_type, "vector" | "hybrid" | "semantic" | "nonsense") {
             // Guidance is a plain string, whatever `output_format` asked for.
@@ -118,7 +118,8 @@ fn semantic_search_types_without_a_runtime_are_refused() {
             )),
             "{search_type}: {text}"
         );
-        // The reference's wording, captured verbatim.
+        // The reference's wording, captured verbatim (this port's renamed surface is
+        // mapped back before comparing, see [`common::canonicalize_renames`]).
         let expected = reference["responses"]
             .as_array()
             .expect("responses")
@@ -126,7 +127,11 @@ fn semantic_search_types_without_a_runtime_are_refused() {
             .find(|case| case["request"]["id"] == serde_json::json!(id))
             .map(|case| case["frame"]["result"]["content"][0]["text"].clone())
             .expect("reference guidance");
-        assert_eq!(serde_json::json!(text), expected, "{search_type}");
+        assert_eq!(
+            serde_json::json!(canonicalize_renames(&text)),
+            expected,
+            "{search_type}"
+        );
     }
 }
 

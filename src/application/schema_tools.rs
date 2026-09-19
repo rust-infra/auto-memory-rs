@@ -182,7 +182,7 @@ impl ValidationOutcome {
                  ## Troubleshooting\n\
                  1. Ensure schema notes exist (type: schema) for the target note type\n\
                  2. Check that notes have the correct type in frontmatter\n\
-                 3. Verify the project has been indexed: `basic-memory status`\n"
+                 3. Verify the project has been indexed: `auto-memory status`\n"
             ),
         }
     }
@@ -240,7 +240,7 @@ impl InferenceOutcome {
                  1. Ensure notes of type '{note_type}' exist in the project\n\
                  2. Try searching: `search_notes(\"{note_type}\", \
                  note_types=[\"{note_type}\"])`\n\
-                 3. Verify the project has been indexed: `basic-memory status`\n"
+                 3. Verify the project has been indexed: `auto-memory status`\n"
             ),
         }
     }
@@ -272,7 +272,7 @@ impl DriftOutcome {
                  ## Troubleshooting\n\
                  1. Ensure a schema note exists for type '{note_type}'\n\
                  2. Ensure notes of type '{note_type}' exist in the project\n\
-                 3. Verify the project has been indexed: `basic-memory status`\n"
+                 3. Verify the project has been indexed: `auto-memory status`\n"
             ),
         }
     }

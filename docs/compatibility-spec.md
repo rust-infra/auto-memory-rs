@@ -70,6 +70,14 @@ Before diffing, both sides are canonicalized (policy recorded in `tests/golden/r
   reference itself is scale-dependent. Default epsilon: `1e-6` [decision needed].
 - Ordering: rank order must match exactly; tie-breaking rules pinned by fixture.
 - Text markdown outputs: compare after trailing-whitespace normalization only.
+- **Renamed product surface** (`tests/common/mod.rs::canonicalize_renames`): the corpus is a
+  faithful capture of `basic-memory` 0.23.2 and is never edited for this, but this port ships
+  its own identity, so a handful of user-visible phrases differ and are mapped back before
+  comparing — the diagnostics title, the `create_memory_project`/`delete_project` tool
+  descriptions, the activity/search guidance that names the product, and the CLI binary named
+  in the schema guidance (`auto-memory status`, `auto-memory reindex`). The mapping is a table
+  of whole phrases, so it cannot silently swallow an unrelated difference: everything else in a
+  payload still has to match the reference character for character.
 
 ## 4b. Generated corpus (Phase 1 status)
 

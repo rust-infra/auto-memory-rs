@@ -338,7 +338,7 @@ pub fn render_activity_text(
         lines.push(String::new());
         lines.push(
             "If the user is just getting started and has no notes yet, briefly explain that \
-             Basic Memory keeps notes that persist across conversations and are shared between \
+             Auto Memory keeps notes that persist across conversations and are shared between \
              the user and their AI, then offer to save something useful from this conversation \
              as their first note — wait for them to agree before writing:"
                 .to_owned(),

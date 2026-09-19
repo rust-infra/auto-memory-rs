@@ -12,8 +12,8 @@ use std::time::{Duration, SystemTime};
 use serde_json::{Value, json};
 mod common;
 use common::{
-    Scratch, Session, SessionOutput, canonicalize_uuids, copy_dir_with_mtimes, fixtures_vault,
-    frame_of, repo_root, text_payload,
+    Scratch, Session, SessionOutput, canonicalize_renames, canonicalize_uuids,
+    copy_dir_with_mtimes, fixtures_vault, frame_of, repo_root, text_payload,
 };
 
 /// Run one scripted MCP session and return the parsed stdout frames plus stderr.
@@ -210,7 +210,7 @@ fn mcp_session_exposes_tools_and_keeps_stdout_clean() {
     let diagnostics = frame_of(&frames, 5)["result"].clone();
     let report = diagnostics["content"][0]["text"].as_str().expect("text");
     assert!(
-        report.starts_with("# Basic Memory Diagnostics\n"),
+        report.starts_with("# Auto Memory Diagnostics\n"),
         "{report}"
     );
     assert!(
@@ -287,8 +287,12 @@ fn mcp_list_directory_replays_the_reference_listing_text() {
 
     for (offset, id) in cases.iter().enumerate() {
         let request_id = requests[offset]["id"].as_u64().expect("id");
-        let ours = canonicalize_uuids(&text_payload(frame_of(&frames, request_id)));
-        let expected = canonicalize_uuids(&text_payload(golden_case(&reference, id)));
+        let ours = canonicalize_renames(&canonicalize_uuids(&text_payload(frame_of(
+            &frames, request_id,
+        ))));
+        let expected = canonicalize_renames(&canonicalize_uuids(&text_payload(golden_case(
+            &reference, id,
+        ))));
         assert_eq!(ours, expected, "list_directory text differs for {id}");
     }
     assert!(!stderr.contains("\"jsonrpc\""));
@@ -387,8 +391,12 @@ fn mcp_recent_activity_and_project_list_replay_the_reference() {
         let request_id = golden_case(&reference, id)["request"]["id"]
             .as_u64()
             .expect("id");
-        let ours = canonicalize_uuids(&text_payload(frame_of(&frames, request_id)));
-        let expected = canonicalize_uuids(&text_payload(golden_case(&reference, id)));
+        let ours = canonicalize_renames(&canonicalize_uuids(&text_payload(frame_of(
+            &frames, request_id,
+        ))));
+        let expected = canonicalize_renames(&canonicalize_uuids(&text_payload(golden_case(
+            &reference, id,
+        ))));
         assert_eq!(ours, expected, "activity/project text differs for {id}");
     }
 

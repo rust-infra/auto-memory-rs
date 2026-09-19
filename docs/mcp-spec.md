@@ -77,12 +77,16 @@ closing fence (so it keeps the blank separator line unless `include_frontmatter=
 - `recent_activity` text output matches character for character, including the
   `📄 Recent Notes & Documents (n):` heading with its two-space `•` rows, the
   `**Activity Summary:** Showing n items (page p). Use page=p+1 to see more.` footer, and the
-  empty/next-page guidance branches.
+  empty/next-page guidance branches (the binary's name inside that guidance is this port's —
+  see §4 of `compatibility-spec.md`).
 - `list_memory_projects` in a `--project`-constrained server returns the pinned
   `Project: <name>` notice, and its JSON form matches field for field.
-- `create_memory_project` and `delete_project` return the reference's constrained-server
-  refusals verbatim (`# Error\n\nProject creation/deletion disabled - MCP server is constrained
-  to project '<name>'…`), including the `PROJECT_CONSTRAINED` JSON variant.
+- `create_memory_project` and `delete_project` keep the reference's constrained-server refusal
+  wording (`# Error\n\nProject creation/deletion disabled - MCP server is constrained to
+  project '<name>'…`), including the `PROJECT_CONSTRAINED` JSON variant. The `Use the CLI …`
+  hint is deliberately **not** verbatim: the reference points at `basic-memory project
+  add|remove`, which this CLI does not implement, so it names `auto-memory reindex` and the
+  unconstrained-server route instead.
 - Every tool except `read_content` nests its structured payload under
   `structuredContent.result`; `read_content` (a plain `dict` return type) exposes the payload
   directly. The reference's `_meta.fastmcp.wrap_result` marker is server-specific and is
@@ -92,7 +96,10 @@ closing fence (so it keeps the blank separator line unless `include_frontmatter=
   `tests/golden/mcp/schema.json` (30 `tools/call` frames plus 14 `bm tool schema-*` CLI runs).
   `tests/schema_mcp_golden.rs` and `tests/schema_cli_golden.rs` replay all of them byte for byte,
   which pins the report shapes, the dropped `null`s, the guidance wording, the percent rounding,
-  and the CLI's `json.dumps(indent=2, ensure_ascii=True)` rendering.
+  and the CLI's `json.dumps(indent=2, ensure_ascii=True)` rendering. The one phrase exempted
+  from the byte comparison is the CLI named in the guidance (`auto-memory status`,
+  `auto-memory reindex` instead of the reference's `basic-memory …`) — see §4 of
+  `compatibility-spec.md`.
 - `tools/dump_reference_chatgpt_mcp.py` captures `search`/`fetch` twice — once from a neutral
   client and once from a client reporting `openai-mcp` — into `tests/golden/mcp/chatgpt.json`
   (9 calls). `tests/chatgpt_mcp_golden.rs` replays every frame byte for byte, including the

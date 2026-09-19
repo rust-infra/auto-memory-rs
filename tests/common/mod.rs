@@ -383,3 +383,42 @@ pub fn canonicalize_text(input: &str) -> String {
         .trim_end()
         .to_owned()
 }
+
+/// Bridge this port's deliberately renamed surface back to the reference's wording.
+///
+/// `tests/golden/**` is a faithful capture of `basic-memory` 0.23.2 and stays
+/// byte-for-byte reproducible from `tools/export_reference.py`; this port renames the
+/// user-visible surface (`Auto Memory`, and its own binary in the guidance text), so
+/// comparisons map that surface back before asserting equality. Each pair is a whole
+/// phrase rather than a word swap, so the mapping stays unambiguous. Every other
+/// byte of a payload still has to match the reference.
+const RENAMED_SURFACE: &[(&str, &str)] = &[
+    ("# Auto Memory Diagnostics", "# Basic Memory Diagnostics"),
+    (
+        "Create a new Auto Memory project.",
+        "Create a new Basic Memory project.",
+    ),
+    (
+        "Delete an Auto Memory project.",
+        "Delete a Basic Memory project.",
+    ),
+    ("Auto Memory keeps notes", "Basic Memory keeps notes"),
+    (
+        "Restart the Auto Memory server/process",
+        "Restart the Basic Memory server/process",
+    ),
+    ("`auto-memory status`", "`basic-memory status`"),
+    (
+        "run `auto-memory reindex`",
+        "run `basic-memory db reindex --search`",
+    ),
+];
+
+/// Map the renamed surface back to the reference wording (see [`RENAMED_SURFACE`]).
+pub fn canonicalize_renames(input: &str) -> String {
+    let mut out = input.to_owned();
+    for (ours, reference) in RENAMED_SURFACE {
+        out = out.replace(ours, reference);
+    }
+    out
+}

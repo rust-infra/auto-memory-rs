@@ -14,7 +14,7 @@ use std::process::Command;
 
 use serde_json::Value;
 mod common;
-use common::{Scratch, copy_dir, load_golden_json, repo_root};
+use common::{Scratch, canonicalize_renames, copy_dir, load_golden_json, repo_root};
 
 fn golden() -> Value {
     load_golden_json("mcp/schema.json")
@@ -90,8 +90,8 @@ fn schema_cli_replays_the_reference_json_output() {
 
             let stdout = String::from_utf8(output.stdout).expect("utf8 stdout");
             assert_eq!(
-                stdout,
-                case["stdout"].as_str().expect("golden stdout"),
+                canonicalize_renames(&stdout),
+                canonicalize_renames(case["stdout"].as_str().expect("golden stdout")),
                 "{} :: {} differs",
                 suite["name"].as_str().unwrap_or("?"),
                 case["id"]

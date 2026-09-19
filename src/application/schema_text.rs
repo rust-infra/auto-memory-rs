@@ -242,7 +242,7 @@ pub fn no_schema_guidance(note_type: &str, tool_name: &str) -> String {
          - `field_name: type, description` — required field\n\
          - `field_name?: type, description` — optional field\n\
          - Supported types: `string`, `number`, `boolean`, `string[]`\n\n\
-         3. **Index** — run `basic-memory db reindex --search` or wait for the file \
+         3. **Index** — run `auto-memory reindex` or wait for the file \
          watcher to pick up the new schema note\n\
          4. **Re-run** — call `{tool_name}(\"{note_type}\")` again\n",
         title = python_title(note_type)

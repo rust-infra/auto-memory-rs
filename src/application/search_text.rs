@@ -104,7 +104,7 @@ pub fn semantic_disabled_guidance(project: &str, query: &str, search_type: &str)
          disabled.\n\n\
          ## How to enable\n\
          1. Set `BASIC_MEMORY_SEMANTIC_SEARCH_ENABLED=true`\n\
-         2. Restart the Basic Memory server/process\n\n\
+         2. Restart the Auto Memory server/process\n\n\
          ## Alternative now\n\
          - Run FTS search instead:\n  \
          `search_notes(\"{project}\", \"{query}\", search_type=\"text\")`"

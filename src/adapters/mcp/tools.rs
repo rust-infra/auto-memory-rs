@@ -202,7 +202,7 @@ impl ToolName {
                 json!({ "output_format": { "type": "string", "enum": ["text", "json"] } }),
             ),
             Self::CreateMemoryProject => (
-                "Create a new Basic Memory project.",
+                "Create a new Auto Memory project.",
                 &["project_name", "project_path"],
                 json!({
                     "project_name": { "type": "string" },
@@ -212,7 +212,7 @@ impl ToolName {
                 }),
             ),
             Self::DeleteProject => (
-                "Delete a Basic Memory project.",
+                "Delete an Auto Memory project.",
                 &["project_name"],
                 json!({
                     "project_name": { "type": "string" },
