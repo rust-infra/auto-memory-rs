@@ -15,7 +15,10 @@ env:
   CARGO_TERM_COLOR: always
   # A loopback proxy in the environment breaks the tests that drive a mock HTTP server,
   # so the loopback addresses never go through one.
-  no_proxy: 127.0.0.1,localhost
+  #
+  # Only the uppercase name: GitHub treats `env` keys case-insensitively, so declaring
+  # both `no_proxy` and `NO_PROXY` makes the workflow unparseable ("'NO_PROXY' is already
+  # defined") and the run fails at startup with no jobs. `actionlint` catches it locally.
   NO_PROXY: 127.0.0.1,localhost
 
 jobs:
