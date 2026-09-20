@@ -4,12 +4,31 @@ Local-only core of Basic Memory, behavior-compatible with the reference 0.23.2 r
 no Web UI and no cloud sync: **Obsidian is the management interface**, the vault of markdown files
 is the only durable state, and everything else (the SQLite index, the embeddings) is derived.
 
-## 1. Build
+## 1. Install
+
+Prebuilt binaries are attached to each release; the installer picks the asset for this
+platform, verifies its SHA-256 against the release's `SHA256SUMS`, and drops the binary
+into `~/.local/bin` (override with `--prefix` or `$PREFIX`):
+
+```bash
+./scripts/install.sh                    # latest release
+./scripts/install.sh --version v0.1.0   # a specific tag
+./scripts/install.sh --dry-run          # say what it would do
+```
+
+The repository is private, so a release asset is not downloadable without a token: set
+`GITHUB_TOKEN` (or `GH_TOKEN`) to a token with `Contents: Read`. Without one the script
+uses the public download path and reports the failure.
+
+### Build from source
 
 ```bash
 cargo build --release            # add --offline when the registry cache is warm
 ./target/release/auto-memory --version
 ```
+
+Either way, the first thing to run afterwards is `auto-memory doctor`, which reports
+whether the index, the embedding runtime, and the model cache are usable.
 
 The embedding runtime (`search --vector` / `--hybrid`, `reindex --embeddings`) needs the fastembed
 cache and the ONNX Runtime shared library; text search, context, schema, and the MCP server work
@@ -39,9 +58,23 @@ See also [[people/grace-hopper]].
 `[category] content` lines become observations, `[[wikilinks]]` (and `relation_type [[target]]`
 lines) become relations, and frontmatter is normalized the way the reference does.
 
-## 3. Index
+## 3. Projects and the index
 
-The index is a SQLite file **outside** the vault, so it never shows up in Obsidian:
+A *project* is a registered vault: a name, a permalink, and the vault path. The index (one
+SQLite file) can hold several of them. The index lives **outside** the vault, so it never shows
+up in Obsidian:
+
+```bash
+auto-memory project add oracle ~/vault --index ~/.local/share/auto-memory/memory.db
+auto-memory project list           --index ~/.local/share/auto-memory/memory.db
+auto-memory project remove oracle  --index ~/.local/share/auto-memory/memory.db
+```
+
+`project add` registers the vault **and indexes it**, which is the same work `reindex` does;
+`--no-index` registers without scanning, and `--permalink` decouples the generated-permalink
+prefix from the display name. `project remove` deletes the project's derived rows and leaves the
+markdown alone — the vault is the source of truth, and a lifecycle command should never delete
+your notes. `--index` defaults to `~/.local/share/auto-memory/memory.db` everywhere.
 
 ```bash
 auto-memory reindex --vault ~/vault --index ~/.local/share/auto-memory/memory.db --project oracle
@@ -50,6 +83,23 @@ auto-memory status  --index ~/.local/share/auto-memory/memory.db --project oracl
 
 `reindex` is incremental (only changed files are rewritten); `--full` prunes stale rows and
 rebuilds the whole project; `--embeddings` additionally refreshes the semantic chunks.
+
+## 3b. `auto-memory doctor`
+
+Run this first when something is missing, and after any install:
+
+```bash
+auto-memory doctor --index ~/.local/share/auto-memory/memory.db --vault ~/vault --project oracle
+```
+
+It reports the index, its schema version, the registered projects, the vault, the project's
+counts, and the two pieces of semantic search that are deliberately *not* in the box — the ONNX
+Runtime shared library and the fastembed model cache. Both are discovered at run time; `doctor`
+prints the exact path it chose, or the list of locations it searched. `--json` gives the same
+report as `{ok, checks[{name, status, detail}]}`, and the exit code is non-zero when a check
+*failed* — an index or vault that was named and is unusable, or a named project that is not
+registered. Missing semantic search is a warning: text search, context, schema, and the MCP
+server do not need it.
 
 ## 4. Keep it current while Obsidian is open
 
@@ -199,9 +249,10 @@ link-before-target paths; `tests/incremental_golden.rs` pins incremental/full co
   marker reads `blob` instead of `sqlite-vec`); only the reference's `bm inspect` diagnostic
   reports it, and that subsystem is not part of this port.
 - The reference CLI's retrieval-inspection diagnostics (`bm inspect query` / `bm inspect
-  chunks`, and the `doctor`/`orphans` reports) are not ported: they trace and render internal
-  retrieval stages, which this port's tests cover directly against captured reference output
-  instead.
+  chunks`, and the `orphans` report) are not ported: they trace and render internal retrieval
+  stages, which this port's tests cover directly against captured reference output instead.
+  `auto-memory doctor` is **not** that command — it is new, and reports the local environment
+  (index, schema, vault, projects, ONNX Runtime, model cache) rather than retrieval internals.
 
 Everything else is pinned against captured reference behavior; see `docs/reference.md` for the
 per-phase evidence and `tests/golden/README.md` for the corpus.

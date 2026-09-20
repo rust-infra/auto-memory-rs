@@ -303,6 +303,16 @@ impl Store {
         Ok(())
     }
 
+    /// Rows in the FTS5 `search_index` table, across every project.
+    ///
+    /// Only used to prove the index carries no stranded rows (an FTS table has no
+    /// foreign keys, so it is the one place a delete cannot cascade).
+    pub fn search_index_count(&self) -> Result<i64> {
+        Ok(self
+            .conn
+            .query_row("SELECT count(*) FROM search_index", [], |row| row.get(0))?)
+    }
+
     /// Register a project (or refresh its path/permalink) and return its row id.
     pub fn upsert_project(&self, name: &str, permalink: &str, path: &str) -> Result<i64> {
         let external_id = deterministic_uuid(&format!("project:{permalink}"));
@@ -559,6 +569,32 @@ impl Store {
             params![project_id, file_path],
         )?;
         Ok(())
+    }
+
+    /// Unregister a project and drop its derived rows. Returns whether it existed.
+    ///
+    /// Only the *index* is touched: the markdown vault is the source of truth and is
+    /// never deleted, so the same directory can be re-registered with `project add`.
+    /// `entity`, `observation`, `relation`, and `search_vector_chunks` cascade from
+    /// `project`, but `search_index` is an FTS5 table with no foreign keys, so its rows
+    /// are removed explicitly — otherwise a removed project would keep answering text
+    /// searches whose target rows no longer exist.
+    pub fn delete_project(&mut self, permalink: &str) -> Result<bool> {
+        let Some(project) = self.project_by_permalink(permalink)? else {
+            return Ok(false);
+        };
+        let transaction = self.conn.transaction()?;
+        transaction.execute(
+            "DELETE FROM search_index WHERE project_id = ?1",
+            [project.id],
+        )?;
+        transaction.execute(
+            "DELETE FROM search_vector_chunks WHERE project_id = ?1",
+            [project.id],
+        )?;
+        transaction.execute("DELETE FROM project WHERE id = ?1", [project.id])?;
+        transaction.commit()?;
+        Ok(true)
     }
 
     /// Resolve relation targets to entity ids after a rebuild.

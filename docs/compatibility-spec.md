@@ -74,10 +74,20 @@ Before diffing, both sides are canonicalized (policy recorded in `tests/golden/r
   faithful capture of `basic-memory` 0.23.2 and is never edited for this, but this port ships
   its own identity, so a handful of user-visible phrases differ and are mapped back before
   comparing — the diagnostics title, the `create_memory_project`/`delete_project` tool
-  descriptions, the activity/search guidance that names the product, and the CLI binary named
-  in the schema guidance (`auto-memory status`, `auto-memory reindex`). The mapping is a table
-  of whole phrases, so it cannot silently swallow an unrelated difference: everything else in a
-  payload still has to match the reference character for character.
+  descriptions, the activity/search guidance that names the product, the CLI binary named in
+  the schema guidance (`auto-memory status`, `auto-memory reindex`), and the binary named in
+  the constrained-server project hints (`auto-memory project add|remove`). The mapping is a
+  table of whole phrases, so it cannot silently swallow an unrelated difference: everything
+  else in a payload still has to match the reference character for character. Adding
+  `project add|remove` to the CLI is what turned the last two entries from *divergences* into
+  renames — a message that names a command has to name one that exists.
+- **Corpus time is pinned, not inherited.** Two surfaces derive from file mtimes
+  (`list_directory`'s timestamp column and `updated_desc` ordering, `recent_activity`'s
+  recency list) and two windows are wall-clock relative (`context_golden`'s `since_days`,
+  the `1d` recency case). `tests/common::copy_fixture_vault` restores the captured mtimes
+  from `tests/golden/index/graph-rows.json`, and the two windows are anchored to instants
+  recorded in the corpus, so the captures reproduce on a fresh clone and do not expire.
+  See `docs/release-checklist.md` §2.
 
 ## 4b. Generated corpus (Phase 1 status)
 
@@ -122,4 +132,5 @@ Tracked here; move to `codex/decisions` as they resolve:
 9. CLI command/text parity scope (status/doctor/reindex/orphans/project/config).
 10. `write_note_overwrite_default` default value parity.
 11. Rust crate layout: single crate vs workspace (decision deferred until parser milestone).
-12. Licenses/trademark: AGPL-3.0 obligations and `auto-memory-rs` naming (needs legal review).
+12. Licenses/trademark: AGPL-3.0 obligations and `auto-memory-rs` naming. **Answered
+    2026-09-19** — see `docs/licensing.md`; only the final legal sign-off remains.

@@ -11,13 +11,16 @@ corpus captured from it (`tests/golden/`) — see [`docs/reference.md`](docs/ref
 ## Quick start
 
 ```bash
-cargo build --release
-
-./target/release/auto-memory reindex --vault ~/vault \
+./scripts/install.sh                      # prebuilt binary from the latest release
+auto-memory doctor                        # what is usable on this machine
+auto-memory reindex --vault ~/vault \
     --index ~/.local/share/auto-memory/memory.db --project oracle
-./target/release/auto-memory mcp --vault ~/vault \
+auto-memory mcp --vault ~/vault \
     --index ~/.local/share/auto-memory/memory.db --project oracle
 ```
+
+The repository is private, so downloading a release asset needs `GITHUB_TOKEN`; building
+from source needs only a Rust toolchain (`cargo build --release`).
 
 `reindex` is incremental; text search, context and the MCP server work without the embedding
 runtime. See [`docs/usage.md`](docs/usage.md) for the full walkthrough.
@@ -38,4 +41,7 @@ context, MCP, usage, hooks, architecture, and the 中文 integration guide.
 
 ## License
 
-AGPL-3.0-or-later.
+AGPL-3.0-or-later — the full text is in [`LICENSE`](LICENSE). This is a derivative work of
+[Basic Memory](https://github.com/basicmachines-co/basic-memory) (also AGPL-3.0-or-later), so
+the AGPL's network clause applies: see [`docs/licensing.md`](docs/licensing.md) for what that
+permits and what it rules out.

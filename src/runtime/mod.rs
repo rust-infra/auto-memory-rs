@@ -8,7 +8,11 @@ pub mod embedding;
 pub mod executor;
 pub mod rerank;
 
-pub use embedding::{OnnxEmbeddingProvider, find_onnx_runtime, reference_model_dir};
+pub use embedding::{
+    MODEL_CACHE_ENV, ONNX_RUNTIME_ENV, OnnxEmbeddingProvider, REFERENCE_MODEL_REPO,
+    default_model_cache, find_onnx_runtime, model_cache_search_paths, onnx_runtime_search_paths,
+    reference_model_dir,
+};
 pub use executor::{THREAD_NAME, block_on};
 pub use rerank::{
     DEFAULT_RERANKER_CANDIDATES, DEFAULT_RERANKER_MAX_DOCUMENT_CHARS, OnnxRerankProvider,

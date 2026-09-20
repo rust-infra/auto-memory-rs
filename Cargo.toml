@@ -74,3 +74,7 @@ lto = "thin"
 
 [dev-dependencies]
 tempfile = "3.27.0"
+# Golden tests anchor wall-clock-relative windows (the `since_days` bounds of the
+# captured traversal, the mtimes `updated_at` is derived from) to instants recorded in
+# the corpus instead of the machine clock, so the assertions do not expire.
+chrono = { version = "0.4.45", features = ["clock", "std"] }

@@ -1801,7 +1801,7 @@ impl<'a> McpServer<'a> {
             }));
         }
         Ok(text_result(format!(
-            "# Error\n\nProject creation disabled - MCP server is constrained to project '{}'.\nIndex the project with the CLI instead: `auto-memory reindex --vault \"{}\" --index <index> --project \"{project_name}\"`, or run the server without `--project`.",
+            "# Error\n\nProject creation disabled - MCP server is constrained to project '{}'.\nUse the CLI to create projects: `auto-memory project add \"{project_name}\" \"{}\"`",
             self.project_name,
             arguments["project_path"].as_str().unwrap_or_default()
         )))
@@ -1809,10 +1809,10 @@ impl<'a> McpServer<'a> {
 
     /// Project deletion through a `--project`-constrained server is refused.
     fn delete_project(&mut self, arguments: &Value) -> Result<Value> {
-        // The reference requires the argument even though this refusal does not echo it.
-        required_str(arguments, "project_name")?;
+        // The reference requires the argument and echoes it in the hint.
+        let project_name = required_str(arguments, "project_name")?;
         Ok(text_result(format!(
-            "# Error\n\nProject deletion disabled - MCP server is constrained to project '{}'.\nThe CLI cannot remove projects; run the server without `--project` to enable deletion.",
+            "# Error\n\nProject deletion disabled - MCP server is constrained to project '{}'.\nUse the CLI to delete projects: `auto-memory project remove \"{project_name}\"`",
             self.project_name
         )))
     }

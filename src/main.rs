@@ -11,8 +11,10 @@
 use std::collections::BTreeMap;
 use std::future::Future;
 use std::io::IsTerminal;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
+
+use serde_json::{Value, json};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -34,8 +36,10 @@ use auto_memory::indexing::{
     DEFAULT_WATCH_WINDOW, IndexOptions, IndexService, VaultWatcher, watch_once, watch_vault,
 };
 use auto_memory::runtime::{
-    DEFAULT_RERANKER_CANDIDATES, DEFAULT_RERANKER_MAX_DOCUMENT_CHARS, OnnxEmbeddingProvider,
-    OnnxRerankProvider, RerankProvider, RerankRequest, find_onnx_runtime,
+    DEFAULT_RERANKER_CANDIDATES, DEFAULT_RERANKER_MAX_DOCUMENT_CHARS, MODEL_CACHE_ENV,
+    OnnxEmbeddingProvider, OnnxRerankProvider, REFERENCE_MODEL_REPO, RerankProvider, RerankRequest,
+    default_model_cache, find_onnx_runtime, model_cache_search_paths, onnx_runtime_search_paths,
+    reference_model_dir,
 };
 use auto_memory::search::embedding::{EmbeddingProvider, FixtureEmbeddingProvider};
 use auto_memory::search::rerank::FixtureRerankProvider;
@@ -58,6 +62,8 @@ fn main() -> ExitCode {
         },
         Some("reindex") => reindex_command(&args[1..]),
         Some("status") => status_command(&args[1..]),
+        Some("doctor") => doctor_command(&args[1..]),
+        Some("project") => project_command(&args[1..]),
         Some("search") => search_command(&args[1..]),
         Some("context") => context_command(&args[1..]),
         Some("schema") => schema_command(&args[1..]),
@@ -74,6 +80,8 @@ fn main() -> ExitCode {
              auto-memory mcp --vault <dir> --index <db> [--project <name>] \\\n               [--embedding-fixture FILE | --model-cache DIR] [--onnx-runtime PATH]\n  \
              auto-memory mcp --vault <dir> --index <db> [--project <name>] --http \\\n               [--host HOST] [--port PORT] [--path PATH] [--read-only]\n  \
              auto-memory status --index <db> --project <permalink>\n  \
+             auto-memory doctor [--index <db>] [--vault <dir>] [--project <permalink>] [--json]\n  \
+             auto-memory project <add|list|remove> ...\n               add <name> <path> [--index <db>] [--permalink <slug>] [--no-index]\n               list [--index <db>] [--json]\n               remove <name|permalink> [--index <db>] [--json]\n  \
              auto-memory context <memory://url> --index <db> --project <permalink> \\\n               [--depth N] [--timeframe T] [--page N] [--page-size N] [--max-related N] \\\n               [--json|--plain]\n  \
              auto-memory schema <validate|infer|diff> [target] --index <db> --project <permalink> \\\n               [--vault <dir>] [--threshold F] [--strict] [--text]\n  \
              auto-memory hook <session-start|pre-compact> --harness <claude|codex|pi> \\\n               [--index <db>] [--project <permalink>] [--project-dir <dir>]\n  \
@@ -389,6 +397,510 @@ fn default_index_path() -> PathBuf {
         || PathBuf::from(".local/share/auto-memory/memory.db"),
         |home| PathBuf::from(home).join(".local/share/auto-memory/memory.db"),
     )
+}
+
+/// `auto-memory project <add|list|remove>`.
+///
+/// Project lifecycle was the one gap the MCP surface pointed at but the CLI did not
+/// have: `create_memory_project` and `delete_project` refuse on a `--project`-constrained
+/// server and tell the caller to use the CLI, and until now that meant hand-editing the
+/// index. The argument shape is the reference's (`project add <name> <path>`) so the
+/// refusal text only has to differ by the binary name.
+fn project_command(args: &[String]) -> ExitCode {
+    match args.first().map(String::as_str) {
+        Some("add") => project_add_command(&args[1..]),
+        Some("list") => project_list_command(&args[1..]),
+        Some("remove") => project_remove_command(&args[1..]),
+        Some(other) => usage(&format!("unknown project subcommand: {other}")),
+        None => usage("auto-memory project <add|list|remove> ..."),
+    }
+}
+
+/// `project add <name> <path>` — register a vault, then index it.
+fn project_add_command(args: &[String]) -> ExitCode {
+    let options = match Options::parse(args) {
+        Ok(options) => options,
+        Err(message) => return usage(&message),
+    };
+    let mut positionals = options.positionals.iter();
+    let (Some(name), Some(path)) = (positionals.next(), positionals.next()) else {
+        return usage("project add <name> <path> [--index <db>] [--permalink <slug>] [--no-index]");
+    };
+    let vault = PathBuf::from(path);
+    if !vault.is_dir() {
+        return usage(&format!("project path is not a directory: {path}"));
+    }
+    let permalink = options
+        .value("permalink")
+        .map_or_else(|| generate_permalink(name), str::to_owned);
+    let index = options
+        .value("index")
+        .map_or_else(default_index_path, PathBuf::from);
+
+    let mut store = match Store::open(&index) {
+        Ok(store) => store,
+        Err(error) => {
+            eprintln!("failed to open index {}: {error}", index.display());
+            return ExitCode::FAILURE;
+        }
+    };
+    let existed = matches!(store.project_by_permalink(&permalink), Ok(Some(_)));
+
+    // Registering without indexing leaves a project that every query reports as empty,
+    // which reads as a bug; index by default and let `--no-index` opt out.
+    let indexed = if options.switch("no-index") {
+        store
+            .upsert_project(name, &permalink, path)
+            .map(|_| None::<Value>)
+    } else {
+        ensure_project(&mut store, name, &permalink, &vault).and_then(|project_id| {
+            store
+                .counts(project_id)
+                .map(|counts| Some(serde_json::to_value(counts).unwrap_or(Value::Null)))
+        })
+    };
+    let indexed = match indexed {
+        Ok(indexed) => indexed,
+        Err(error) => {
+            eprintln!("failed to register project: {error}");
+            return ExitCode::FAILURE;
+        }
+    };
+
+    if options.switch("json") {
+        print_json(&json!({
+            "name": name,
+            "permalink": permalink,
+            "path": path,
+            "index": index.to_string_lossy(),
+            "action": if existed { "updated" } else { "added" },
+            "indexed": indexed,
+        }))
+    } else {
+        println!(
+            "{} project '{name}' ({permalink}) -> {path}",
+            if existed { "updated" } else { "added" }
+        );
+        match indexed {
+            Some(counts) => println!(
+                "indexed {} entities / {} observations / {} relations into {}",
+                counts["entities"],
+                counts["observations"],
+                counts["relations"],
+                index.display()
+            ),
+            None => println!("not indexed (--no-index)"),
+        }
+        ExitCode::SUCCESS
+    }
+}
+
+/// `project list` — every registered project with its index counts.
+fn project_list_command(args: &[String]) -> ExitCode {
+    let options = match Options::parse(args) {
+        Ok(options) => options,
+        Err(message) => return usage(&message),
+    };
+    let index = options
+        .value("index")
+        .map_or_else(default_index_path, PathBuf::from);
+    let store = match Store::open(&index) {
+        Ok(store) => store,
+        Err(error) => {
+            eprintln!("failed to open index {}: {error}", index.display());
+            return ExitCode::FAILURE;
+        }
+    };
+    let projects = match store.projects() {
+        Ok(projects) => projects,
+        Err(error) => {
+            eprintln!("failed to read projects: {error}");
+            return ExitCode::FAILURE;
+        }
+    };
+    // Counts come per project; a failure there should not hide the project list.
+    let rows: Vec<Value> = projects
+        .iter()
+        .map(|project| match store.counts(project.id) {
+            Ok(counts) => json!({
+                "name": project.name,
+                "permalink": project.permalink,
+                "path": project.path,
+                "entities": counts.entities,
+                "observations": counts.observations,
+                "relations": counts.relations,
+            }),
+            Err(error) => json!({
+                "name": project.name,
+                "permalink": project.permalink,
+                "path": project.path,
+                "error": error.to_string(),
+            }),
+        })
+        .collect();
+
+    if options.switch("json") {
+        print_json(&json!({ "index": index.to_string_lossy(), "projects": rows }))
+    } else {
+        if rows.is_empty() {
+            println!("no projects registered in {}", index.display());
+            return ExitCode::SUCCESS;
+        }
+        let width = rows
+            .iter()
+            .filter_map(|row| row["name"].as_str())
+            .map(str::len)
+            .max()
+            .unwrap_or(4)
+            .max(4);
+        println!(
+            "{:<width$}  {:>8}  {:<24}  path",
+            "name", "entities", "permalink"
+        );
+        for row in &rows {
+            println!(
+                "{:<width$}  {:>8}  {:<24}  {}",
+                row["name"].as_str().unwrap_or_default(),
+                row["entities"].as_i64().unwrap_or_default(),
+                row["permalink"].as_str().unwrap_or_default(),
+                row["path"].as_str().unwrap_or_default(),
+            );
+        }
+        ExitCode::SUCCESS
+    }
+}
+
+/// `project remove <name>` — unregister a project and drop its derived rows.
+///
+/// The vault is left alone: it is the source of truth, and deleting a user's notes is
+/// not something a project-lifecycle command should ever do.
+fn project_remove_command(args: &[String]) -> ExitCode {
+    let options = match Options::parse(args) {
+        Ok(options) => options,
+        Err(message) => return usage(&message),
+    };
+    let Some(identifier) = options.positionals.first() else {
+        return usage("project remove <name|permalink> [--index <db>]");
+    };
+    let index = options
+        .value("index")
+        .map_or_else(default_index_path, PathBuf::from);
+    let mut store = match Store::open(&index) {
+        Ok(store) => store,
+        Err(error) => {
+            eprintln!("failed to open index {}: {error}", index.display());
+            return ExitCode::FAILURE;
+        }
+    };
+    // Accept either the name or the permalink: the reference's CLI takes the name, but
+    // the permalink is what every other command here uses to identify a project.
+    let permalink = match store.project_by_permalink(identifier) {
+        Ok(Some(_)) => identifier.to_owned(),
+        _ => generate_permalink(identifier),
+    };
+    match store.delete_project(&permalink) {
+        Ok(true) => {
+            if options.switch("json") {
+                print_json(&json!({ "name": identifier, "permalink": permalink, "deleted": true }))
+            } else {
+                println!("removed project '{identifier}' ({permalink}); the vault was not touched");
+                ExitCode::SUCCESS
+            }
+        }
+        Ok(false) => {
+            eprintln!("project not found: {identifier}");
+            ExitCode::FAILURE
+        }
+        Err(error) => {
+            eprintln!("failed to remove project: {error}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+/// One line of the `doctor` report.
+struct Check {
+    /// Stable machine-readable name (`index`, `vault`, `onnx_runtime`, …).
+    name: &'static str,
+    /// `ok`, `warn`, or `fail`.
+    status: &'static str,
+    /// What was found, or what to do about it.
+    detail: String,
+}
+
+impl Check {
+    fn ok(name: &'static str, detail: impl Into<String>) -> Self {
+        Self {
+            name,
+            status: "ok",
+            detail: detail.into(),
+        }
+    }
+
+    fn warn(name: &'static str, detail: impl Into<String>) -> Self {
+        Self {
+            name,
+            status: "warn",
+            detail: detail.into(),
+        }
+    }
+
+    fn fail(name: &'static str, detail: impl Into<String>) -> Self {
+        Self {
+            name,
+            status: "fail",
+            detail: detail.into(),
+        }
+    }
+}
+
+/// `auto-memory doctor` — report what is usable on this machine.
+///
+/// The pieces that make semantic search work are the two that are *not* in the box: an
+/// ONNX Runtime shared library and a fastembed model cache. Both are optional, both are
+/// discovered at run time, and before this command existed there was no way to see what
+/// the discovery had actually chosen — a missing model surfaced as a one-line error
+/// buried in whichever command needed it.
+///
+/// Exit code is `1` when a check *failed* (an index or vault that was named and is
+/// unusable, a named project that is not registered). Missing semantic search is a
+/// warning, not a failure: text search, context, schema, and the MCP server do not need
+/// it, and treating an optional capability as a broken installation would make the
+/// command useless in exactly the setups it exists for.
+fn doctor_command(args: &[String]) -> ExitCode {
+    let options = match Options::parse(args) {
+        Ok(options) => options,
+        Err(message) => return usage(&message),
+    };
+    let mut checks = Vec::new();
+
+    // --- index -----------------------------------------------------------------
+    //
+    // `Store::open` creates a missing index, so `doctor` must not call it on a path that
+    // does not exist: a diagnostic that writes is a diagnostic you cannot trust.
+    let index = options
+        .value("index")
+        .map_or_else(default_index_path, PathBuf::from);
+    let store = if index.exists() {
+        match Store::open(&index) {
+            Ok(store) => {
+                checks.push(Check::ok("index", index.display().to_string()));
+                Some(store)
+            }
+            Err(error) => {
+                checks.push(Check::fail(
+                    "index",
+                    format!("{}: {error}", index.display()),
+                ));
+                None
+            }
+        }
+    } else {
+        checks.push(Check::warn(
+            "index",
+            format!(
+                "{} does not exist yet — run `auto-memory project add <name> <path>` or \
+                 `auto-memory reindex --vault <dir>`",
+                index.display()
+            ),
+        ));
+        None
+    };
+    if let Some(store) = &store {
+        match store.schema_version() {
+            Ok(version) => checks.push(Check::ok(
+                "schema",
+                format!(
+                    "version {version} (this build writes {})",
+                    auto_memory::storage::schema::SCHEMA_VERSION
+                ),
+            )),
+            Err(error) => checks.push(Check::fail("schema", error.to_string())),
+        }
+        match store.projects() {
+            Ok(projects) if projects.is_empty() => checks.push(Check::warn(
+                "projects",
+                "none registered — run `auto-memory project add <name> <path>`",
+            )),
+            Ok(projects) => checks.push(Check::ok(
+                "projects",
+                format!(
+                    "{}: {}",
+                    projects.len(),
+                    projects
+                        .iter()
+                        .map(|project| project.name.as_str())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ),
+            )),
+            Err(error) => checks.push(Check::fail("projects", error.to_string())),
+        }
+    }
+
+    // --- vault and project (only when named) -----------------------------------
+    if let Some(vault) = options.value("vault").map(PathBuf::from) {
+        if vault.is_dir() {
+            let mut files = Vec::new();
+            collect_files(&vault, &mut files);
+            let markdown = files
+                .iter()
+                .filter(|path| path.extension().is_some_and(|ext| ext == "md"))
+                .count();
+            if markdown == 0 {
+                checks.push(Check::warn(
+                    "vault",
+                    format!("{} holds no markdown files", vault.display()),
+                ));
+            } else {
+                checks.push(Check::ok(
+                    "vault",
+                    format!("{}: {markdown} markdown files", vault.display()),
+                ));
+            }
+        } else {
+            checks.push(Check::fail(
+                "vault",
+                format!("{} is not a directory", vault.display()),
+            ));
+        }
+    }
+    if let (Some(permalink), Some(store)) = (options.value("project"), store.as_ref()) {
+        match store.project_by_permalink(&generate_permalink(permalink)) {
+            Ok(Some(project)) => match store.counts(project.id) {
+                Ok(counts) if counts.entities == 0 => checks.push(Check::warn(
+                    "project",
+                    format!("'{}' is registered but its index is empty", project.name),
+                )),
+                Ok(counts) => checks.push(Check::ok(
+                    "project",
+                    format!(
+                        "'{}': {} entities / {} observations / {} relations",
+                        project.name, counts.entities, counts.observations, counts.relations
+                    ),
+                )),
+                Err(error) => checks.push(Check::fail("project", error.to_string())),
+            },
+            Ok(None) => checks.push(Check::fail(
+                "project",
+                format!("'{permalink}' is not registered in {}", index.display()),
+            )),
+            Err(error) => checks.push(Check::fail("project", error.to_string())),
+        }
+    }
+
+    // --- semantic search --------------------------------------------------------
+    match find_onnx_runtime() {
+        Some(path) => checks.push(Check::ok("onnx_runtime", format!("{}", path.display()))),
+        None => {
+            let searched: Vec<String> = onnx_runtime_search_paths()
+                .iter()
+                .map(|path| path.display().to_string())
+                .collect();
+            checks.push(Check::warn(
+                "onnx_runtime",
+                format!(
+                    "not found — semantic search is unavailable. Set {} to the library, or \
+                     searched: {}",
+                    auto_memory::runtime::ONNX_RUNTIME_ENV,
+                    searched.join(", ")
+                ),
+            ));
+        }
+    }
+
+    let cache = model_cache(&options);
+    match reference_model_dir(&cache) {
+        Some(model_dir) => checks.push(Check::ok(
+            "model_cache",
+            format!("{} ({})", cache.display(), model_dir.display()),
+        )),
+        None => {
+            let roots: Vec<String> = model_cache_search_paths()
+                .iter()
+                .map(|path| path.display().to_string())
+                .collect();
+            checks.push(Check::warn(
+                "model_cache",
+                format!(
+                    "no {REFERENCE_MODEL_REPO} snapshot in {} — point --model-cache (or {}) at \
+                     one, or searched: {}",
+                    cache.display(),
+                    auto_memory::runtime::MODEL_CACHE_ENV,
+                    roots.join(", ")
+                ),
+            ));
+        }
+    }
+    // The reranker is off by default, so a missing model is information, not a warning
+    // worth acting on.
+    if auto_memory::runtime::reference_rerank_dir(&cache).is_some() {
+        checks.push(Check::ok("reranker_model", format!("{}", cache.display())));
+    } else {
+        checks.push(Check::warn(
+            "reranker_model",
+            "not installed (only needed for --reranker)",
+        ));
+    }
+
+    // --- report -----------------------------------------------------------------
+    let failed = checks.iter().any(|check| check.status == "fail");
+    if options.switch("json") {
+        let payload = json!({
+            "ok": !failed,
+            "checks": checks
+                .iter()
+                .map(|check| json!({
+                    "name": check.name,
+                    "status": check.status,
+                    "detail": check.detail,
+                }))
+                .collect::<Vec<_>>(),
+        });
+        // The exit code has to survive the JSON surface too: `--json` is what a script
+        // consumes, and it reads the status before it reads the body.
+        let printed = print_json(&payload);
+        return if failed {
+            eprintln!("auto-memory doctor: at least one check failed");
+            ExitCode::FAILURE
+        } else {
+            printed
+        };
+    }
+    let width = checks
+        .iter()
+        .map(|check| check.name.len())
+        .max()
+        .unwrap_or(4);
+    for check in &checks {
+        let marker = match check.status {
+            "ok" => "ok  ",
+            "warn" => "warn",
+            _ => "FAIL",
+        };
+        println!("{marker}  {:<width$}  {}", check.name, check.detail);
+    }
+    if failed {
+        eprintln!("auto-memory doctor: at least one check failed");
+        ExitCode::FAILURE
+    } else {
+        ExitCode::SUCCESS
+    }
+}
+
+/// Every file under `directory`, recursively.
+fn collect_files(directory: &Path, out: &mut Vec<PathBuf>) {
+    let Ok(entries) = std::fs::read_dir(directory) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            collect_files(&path, out);
+        } else {
+            out.push(path);
+        }
+    }
 }
 
 fn parse_command(path: &str) -> ExitCode {
@@ -1184,8 +1696,7 @@ fn search_command(args: &[String]) -> ExitCode {
 /// Build the embedding provider selected by the CLI flags.
 ///
 /// `--embedding-fixture <json>` replays captured reference vectors (offline, no ONNX
-/// runtime needed); otherwise the reference ONNX model is loaded from
-/// `--model-cache` (default `~/.config/basic-memory/fastembed_cache`).
+/// runtime needed); otherwise the reference ONNX model is loaded from `--model-cache`.
 fn embedding_provider(
     options: &Options,
 ) -> Result<Box<dyn EmbeddingProvider + Send + Sync>, String> {
@@ -1196,15 +1707,7 @@ fn embedding_provider(
             .map_err(|error| format!("failed to load {path}: {error}"))?;
         return Ok(Box::new(provider));
     }
-    let cache = options.value("model-cache").map_or_else(
-        || {
-            std::env::var_os("HOME").map_or_else(
-                || PathBuf::from(".config/basic-memory/fastembed_cache"),
-                |home| PathBuf::from(home).join(".config/basic-memory/fastembed_cache"),
-            )
-        },
-        PathBuf::from,
-    );
+    let cache = model_cache(options);
     let runtime = options
         .value("onnx-runtime")
         .map(PathBuf::from)
@@ -1227,15 +1730,7 @@ fn rerank_provider(options: &Options) -> Result<Box<dyn RerankProvider + Send + 
             .map_err(|error| format!("failed to load {path}: {error}"))?;
         return Ok(Box::new(provider));
     }
-    let cache = options.value("model-cache").map_or_else(
-        || {
-            std::env::var_os("HOME").map_or_else(
-                || PathBuf::from(".config/basic-memory/fastembed_cache"),
-                |home| PathBuf::from(home).join(".config/basic-memory/fastembed_cache"),
-            )
-        },
-        PathBuf::from,
-    );
+    let cache = model_cache(options);
     let runtime = options
         .value("onnx-runtime")
         .map(PathBuf::from)
@@ -1243,6 +1738,19 @@ fn rerank_provider(options: &Options) -> Result<Box<dyn RerankProvider + Send + 
     let provider = OnnxRerankProvider::load_from_cache(&cache, runtime.as_deref())
         .map_err(|error| format!("failed to load the reranker: {error}"))?;
     Ok(Box::new(provider))
+}
+
+/// The model cache to read the embedding and reranker models from.
+///
+/// `--model-cache` wins, then `AUTO_MEMORY_MODEL_CACHE`, then the discovered default
+/// (see `default_model_cache`) — which prefers the reference installation's cache so an
+/// existing setup needs no download, and otherwise names this port's own directory.
+fn model_cache(options: &Options) -> PathBuf {
+    options
+        .value("model-cache")
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os(MODEL_CACHE_ENV).map(PathBuf::from))
+        .unwrap_or_else(default_model_cache)
 }
 
 fn print_json<T: serde::Serialize>(value: &T) -> ExitCode {
@@ -1279,6 +1787,7 @@ const SWITCH_FLAGS: &[&str] = &[
     "text",
     "read-only",
     "http",
+    "no-index",
 ];
 
 impl Options {

@@ -180,18 +180,13 @@ fn rerank_flow_replays_the_captured_reranked_orders() {
 /// The model: the reference ONNX cross-encoder through `fastembed`/`ort`.
 #[test]
 fn onnx_reranker_reproduces_the_reference_scores() {
-    let cache = std::env::var_os("BASIC_MEMORY_MODEL_CACHE")
+    let cache = std::env::var_os(auto_memory::runtime::MODEL_CACHE_ENV)
         .map(PathBuf::from)
-        .or_else(|| {
-            std::env::var_os("HOME")
-                .map(|home| PathBuf::from(home).join(".config/basic-memory/fastembed_cache"))
-        });
-    let Some(cache) =
-        cache.filter(|path| auto_memory::runtime::reference_rerank_dir(path).is_some())
-    else {
+        .unwrap_or_else(auto_memory::runtime::default_model_cache);
+    if auto_memory::runtime::reference_rerank_dir(&cache).is_none() {
         eprintln!("skipping: no reranker model in the fastembed cache");
         return;
-    };
+    }
     let runtime = find_onnx_runtime();
     let reranker = match OnnxRerankProvider::load_from_cache(&cache, runtime.as_deref()) {
         Ok(reranker) => reranker,

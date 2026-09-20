@@ -49,14 +49,25 @@
   文本检索、图上下文、schema、MCP 服务**都不需要**。
 
 ```bash
+# 装预编译二进制（从 GitHub release 下载 + 校验 SHA256 + 安装到 ~/.local/bin）
+./scripts/install.sh
+
+# 或者自己编译
 cargo build --release
 ./target/release/auto-memory --version      # auto-memory 0.1.0
+```
+
+装完先跑一次自检，它会告诉你这台机器上什么可用（尤其是语义检索那两个可选项）：
+
+```bash
+auto-memory doctor --index "$INDEX" --vault "$VAULT" --project "$PROJECT"
 ```
 
 可选（只有要用 `--vector` / `--hybrid` / `--reranker` 时才需要）：
 
 ```bash
-# 模型缓存默认 ~/.config/basic-memory/fastembed_cache（与参考实现共用同一份缓存）
+# 模型缓存默认先用参考实现那份 ~/.config/basic-memory/fastembed_cache（已有则免下载），
+# 否则回退到 ~/.cache/auto-memory/models；也可用 --model-cache 或 AUTO_MEMORY_MODEL_CACHE 指定
 ./target/release/auto-memory reindex --vault "$VAULT" --index "$INDEX" --project "$PROJECT" --embeddings
 ```
 
@@ -93,7 +104,14 @@ PROJECT=oracle                                     # 项目名（见 §2）
 
 - `reindex` / `watch` / `mcp` 的 `--project` 是**项目名**；省略时默认取 vault 的目录名。
   项目名会被规范化成 permalink（`generate_permalink`）：`My Vault` → `my-vault`。
+  用 `project add` 注册时可以显式指定 permalink，避免名字里带空格/中文时的歧义：
+
+```bash
+# 名字用于展示，permalink 用于所有读命令
+$BIN project add "My Vault" "$HOME/bm demo2/My Vault" --permalink my-vault --index "$INDEX"
+```
 - `status` / `search` / `context` / `schema` 的 `--project` 是 **permalink**。
+- `project list` 两个都打印（名称 + permalink + 计数），拿不准时先看它。
 
 实测：
 
@@ -445,10 +463,11 @@ MCP 服务始终被约束在**一个项目**内，项目生命周期（建/删�
 
 | 症状 | 原因 | 处理 |
 |---|---|---|
-| `project not found: <name>` | 读命令用了项目名而不是 permalink | 用 `my-vault` 这种规范化形式；或先 `list_memory_projects` 看 permalink |
+| `project not found: <name>` | 读命令用了项目名而不是 permalink | 用 `my-vault` 这种规范化形式；或先 `list_memory_projects` / `auto-memory project list` 看 permalink |
+| 不知道这台机器缺什么（尤其语义检索） | 运行时和模型缓存是运行期发现的，缺了只会在用到时报一行错 | 先跑 `auto-memory doctor`（`--json` 给脚本；退出码非 0 表示**指定了却不可用**，缺语义检索只是 warn） |
 | `vault directory not found` | `reindex` 的 `--vault` 不是目录 | 检查路径；`mcp` 不做此检查，别用它来验证 |
 | 客户端连上了但搜不到东西 | `--vault` 指向的目录里没有笔记（`mcp` 启动时会 reconcile，不是缺 `reindex`） | 跑 §7.1 的 `auto_memory_diagnostics` 看 Project/Vault/counts；路径写错还会 prune 该项目已有行，改对后用 `reindex --full` 恢复 |
-| 同一个 vault 出现两个项目 | 某次命令漏了 `--project`，注册出"目录名"项目 | 每条命令都显式 `--project`；必要时重建索引 |
+| 同一个 vault 出现两个项目 | 某次命令漏了 `--project`，注册出"目录名"项目 | 每条命令都显式 `--project`；用 `auto-memory project remove <name>` 删掉多余的那个（只删索引行，不动笔记） |
 | `--vector` 结果为空 | 没跑过 `reindex --embeddings` | 先建向量索引；MCP 侧还要 `--model-cache` 或 `--embedding-fixture` |
 | `watch --embeddings` 直接退出，退出码 2 | watch 只维护文本索引，不刷新向量；`--embeddings` 是全局开关，不拦就会静默无效 | 向量刷新是单独一趟：`reindex --vault <dir> --index <db> --embeddings` |
 | watch 跑着但看不到任何输出，不知道成功没 | 日志在 **stderr**，默认 `info`（启动 / 初始 reconcile / 有改动的批次 / 停止各一行）；stdout 只有退出时的 `{"batches":N}` | 按 §6.1 看 stderr；要事件级细节用 `RUST_LOG=auto_memory=debug` |

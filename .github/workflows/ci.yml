@@ -1,0 +1,42 @@
+name: CI
+
+# The gates in `docs/release-checklist.md` §1, run on every change instead of only at
+# release time. The semantic-search tests need a fastembed model cache and a loadable
+# ONNX Runtime, neither of which lives in the repository; they report why they skip and
+# the suite stays green, so this job needs no model download and no network.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  # A loopback proxy in the environment breaks the tests that drive a mock HTTP server,
+  # so the loopback addresses never go through one.
+  no_proxy: 127.0.0.1,localhost
+  NO_PROXY: 127.0.0.1,localhost
+
+jobs:
+  check:
+    name: fmt, clippy, test, doc
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Formatting
+        run: cargo fmt --all -- --check
+
+      - name: Lints
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Tests
+        run: cargo test --all-targets --locked
+
+      - name: Documentation
+        run: cargo doc --no-deps --locked

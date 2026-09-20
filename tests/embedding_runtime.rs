@@ -18,14 +18,12 @@ use serde_json::Value;
 mod common;
 use common::repo_root;
 
-/// Reference fastembed cache (override with `BASIC_MEMORY_MODEL_CACHE`).
+/// The fastembed cache to load the real model from, using the same discovery as the CLI
+/// (`--model-cache`, then `AUTO_MEMORY_MODEL_CACHE`, then the default search path).
 fn model_cache() -> Option<PathBuf> {
-    let cache = std::env::var_os("BASIC_MEMORY_MODEL_CACHE")
+    let cache = std::env::var_os(auto_memory::runtime::MODEL_CACHE_ENV)
         .map(PathBuf::from)
-        .or_else(|| {
-            std::env::var_os("HOME")
-                .map(|home| PathBuf::from(home).join(".config/basic-memory/fastembed_cache"))
-        })?;
+        .unwrap_or_else(auto_memory::runtime::default_model_cache);
     cache.is_dir().then_some(cache)
 }
 

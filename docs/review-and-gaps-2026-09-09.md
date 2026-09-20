@@ -116,6 +116,8 @@ Spec §4 的 `.basic-memory/` 是建议而非决定。需要决定并 pin：
 - **无术语表**：permalink vs path vs title、entity vs note、`memory://` 语法、observation category、relation type 需要统一 glossary；
 - **日期不一致**：文档头部写 2026-09-08，review 时为 2026-09-09（UTC 2026-09-08T17:21）；应统一为决定日期并记录修订历史；
 - **License / 商标**：之前讨论过 AGPL 与命名边界，但没有进 repo（README/LICENSE 未建）；
+  **已解决（2026-09-19）**：`LICENSE`（AGPL-3.0-or-later 正文）与 `docs/licensing.md`
+  （派生关系、§13 网络条款的实际边界、可售/不可售清单、命名与商标口径）均已入库。
 - **Reference Harness 未定义**：Plan §3 说"保存 reference output"，但没说用哪个官方命令、哪个版本、什么环境、由哪个脚本生成（建议 `tools/export_reference.py` + 环境快照）；
 - **进度跟踪**：无状态表标记哪些 phase 完成 / 进行中 / 未开始。
 

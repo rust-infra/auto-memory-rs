@@ -477,7 +477,7 @@ in `tests/mcp_golden.rs`. `[V]` unless noted.
   `src/search/rerank.rs` (flow) port it; `tools/dump_reference_rerank.py` captures four reranked
   searches into `tests/golden/search/rerank-*.json`, and `tests/rerank_golden.rs` replays the flow
   with a fixture provider plus the real ONNX model (skipped where the reranker model is not in
-  the cache — set `BASIC_MEMORY_MODEL_CACHE` to point at one).
+  the cache — set `AUTO_MEMORY_MODEL_CACHE` to point at one).
 - **The semantic legs are filtered, and the two halves work differently.** `search` dispatches to
   the vector/hybrid paths with the full filter set. The FTS leg applies filters natively. The
   vector leg ranks its candidates first, then — only when a filter was requested — runs a

@@ -13,12 +13,12 @@ use serde_json::{Value, json};
 mod common;
 use common::{
     Scratch, Session, SessionOutput, canonicalize_renames, canonicalize_uuids,
-    copy_dir_with_mtimes, fixtures_vault, frame_of, repo_root, text_payload,
+    copy_dir_with_mtimes, copy_fixture_vault, frame_of, repo_root, text_payload,
 };
 
 /// Run one scripted MCP session and return the parsed stdout frames plus stderr.
 fn run_session(requests: &[Value]) -> (Vec<Value>, String, Scratch, PathBuf) {
-    run_session_in(&fixtures_vault(), requests)
+    run_fixture_session("session", requests)
 }
 
 /// Run one scripted MCP session against an explicit vault source tree.
@@ -34,17 +34,28 @@ fn run_session_in(
     (frames, stderr, dir, vault)
 }
 
+/// Run one scripted session against the fixture vault with its captured mtimes back.
+fn run_fixture_session(tag: &str, requests: &[Value]) -> (Vec<Value>, String, Scratch, PathBuf) {
+    let dir = Scratch::new(tag);
+    let vault = dir.join("vault");
+    copy_fixture_vault(&vault);
+    let SessionOutput { frames, stderr } =
+        Session::new(&vault, dir.join("memory.db")).run(requests);
+    (frames, stderr, dir, vault)
+}
+
 /// Run one scripted session against a vault whose file mtimes are age-shifted to one
 /// minute before "now", preserving the relative order they were captured with.
 ///
-/// The captured `recent_activity` cases were taken from a vault written moments before
-/// they ran, and one of them uses a `1d` window: replaying them against the checked-in
-/// fixture mtimes stops matching the day after the corpus is generated. Shifting the
-/// whole tree keeps the recency order (and the listing tie-breaks) exact.
+/// The vault the corpus was captured from was written moments before the session ran,
+/// and one of the `recent_activity` cases uses a `1d` window: replaying it against the
+/// capture-time mtimes stops matching once that window slides off them. Shifting the
+/// whole tree keeps the recency order (and the listing tie-breaks) exact while moving
+/// it inside today's window.
 fn run_recent_session(requests: &[Value]) -> (Vec<Value>, String, Scratch, PathBuf) {
     let dir = Scratch::new("session-recent");
     let vault = dir.join("vault");
-    copy_dir_with_mtimes(&fixtures_vault(), &vault);
+    copy_fixture_vault(&vault);
     shift_mtimes(&vault, Duration::from_secs(60));
     let SessionOutput { frames, stderr } =
         Session::new(&vault, dir.join("memory.db")).run(requests);
@@ -266,9 +277,8 @@ fn mcp_session_exposes_tools_and_keeps_stdout_clean() {
 /// `tools/dump_reference_mcp.py`. Every case below is deterministic *except* the
 /// ordering of files whose `updated_at` ties, which is why the tie-break rule
 /// (stable Python `sort(reverse=True)`, so equal keys keep identity order) matters
-/// and is exercised here. The vault is the fixture tree rather than
-/// `tests/golden/vault` because the `updated_*` order is derived from file mtimes,
-/// and only the fixture tree still carries the mtimes the golden was captured with.
+/// and is exercised here. The `updated_*` order is derived from file mtimes, which
+/// `copy_fixture_vault` restores from the capture before the session starts.
 #[test]
 fn mcp_list_directory_replays_the_reference_listing_text() {
     let reference = reference_session();
@@ -360,7 +370,8 @@ fn mcp_directory_json_and_read_content_match_the_reference_shapes() {
 /// `recent_activity` is the orientation call a model makes at session start, so its
 /// recency order and its empty-window guidance both matter. The order is
 /// `updated_at DESC` over *file mtimes*, which is why this runs against the fixture
-/// tree (see the directory-list test for the same reason).
+/// tree restored by `copy_fixture_vault` (see the directory-list test for the same
+/// reason).
 #[test]
 fn mcp_recent_activity_and_project_list_replay_the_reference() {
     let reference = reference_session();

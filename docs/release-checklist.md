@@ -6,6 +6,9 @@ phase in `reference.md`.
 
 ## 1. Quality gates
 
+The same gates run in CI on every push and pull request
+(`.github/workflows/ci.yml`), so a red gate should never reach a tag:
+
 ```bash
 cargo fmt --all -- --check
 cargo check --offline --all-targets
@@ -17,6 +20,23 @@ cargo doc --offline --no-deps
 All five must be clean, and `cargo test` must report no failures. Ignored tests are the opt-in
 benchmarks (`tests/benchmarks.rs`) only; any other `#[ignore]` needs a written reason in
 `reference.md` or the test itself.
+
+## 1b. Shipping
+
+`./scripts/install.sh` is the user-facing install path and is worth running with `--dry-run`
+against a real release before announcing it. Pushing the tag runs
+`.github/workflows/release.yml`, which builds four targets, writes `SHA256SUMS`, and attaches
+the archives to the release:
+
+| Target | Runner |
+|---|---|
+| `x86_64-unknown-linux-gnu` | `ubuntu-latest` |
+| `aarch64-unknown-linux-gnu` | `ubuntu-24.04-arm` |
+| `aarch64-apple-darwin` | `macos-latest` |
+| `x86_64-pc-windows-msvc` | `windows-latest` |
+
+ONNX Runtime is not bundled (the crate builds with `ort`'s `load-dynamic`), which is what makes
+the archives portable; `auto-memory doctor` tells a user whether semantic search is available.
 
 ## 2. Compatibility evidence
 
@@ -31,6 +51,16 @@ benchmarks (`tests/benchmarks.rs`) only; any other `#[ignore]` needs a written r
     vector/hybrid comparisons use a 5e-4 envelope while ranking and `matched_chunk` stay exact;
   - `manifest.json` / `reference-env.json` carry timestamps, durations, and hashes.
   Review the diff for changes *outside* those categories before accepting a regeneration.
+- **File mtimes are restored, not inherited.** `entity.updated_at` falls back to the file
+  mtime, so `list_directory`'s timestamp column and `updated_desc` ordering, and
+  `recent_activity`'s recency list, encode the mtimes of the tree the capture ran against.
+  Git stores no mtimes, so `tests/common::copy_fixture_vault` puts the captured values back
+  from `tests/golden/index/graph-rows.json` before a session starts. A golden that renders a
+  date or a recency order therefore reproduces on a fresh clone.
+- **Wall-clock windows are anchored to the corpus, not to today.** `context_golden`s
+  traversal replay and `mcp_golden`'s `1d` recency case compute their `since`/shift from
+  timestamps recorded in the corpus; deriving them from the machine clock would make those
+  assertions expire a few days after each capture.
 - The MCP captures are current: `tools/dump_reference_mcp.py`, `tools/dump_reference_schema_mcp.py`,
   and `tools/dump_reference_chatgpt_mcp.py` reproduce their committed `tests/golden/mcp/*.json`.
 - Pinned suites are green: parser (16 fixtures), storage projection, incremental/full convergence,
@@ -74,7 +104,7 @@ structural happened.
   and hybrid suites need these; text search, context, schema, and MCP do not.
 - Reranker model cache: `jinaai/jina-reranker-v1-tiny-en` in the same directory, needed by
   `tests/rerank_golden.rs::onnx_reranker_reproduces_the_reference_scores` (it skips without it;
-  point `BASIC_MEMORY_MODEL_CACHE` at a cache that has both models to run it).
+  point `AUTO_MEMORY_MODEL_CACHE` at a cache that has both models to run it).
 
 ## 6. Known parked work
 

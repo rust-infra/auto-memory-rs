@@ -10,7 +10,9 @@ use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::time::{Duration, SystemTime};
 
+use auto_memory::domain::timeframe;
 use auto_memory::indexing::{RebuildOptions, rebuild_vault};
 use auto_memory::storage::Store;
 use serde_json::Value;
@@ -94,6 +96,85 @@ pub fn copy_dir_with_mtimes(from: &Path, to: &Path) {
     }
 }
 
+/// Restore the file mtimes the golden corpus was captured with.
+///
+/// `entity.updated_at` falls back to the file mtime (`src/indexing/document.rs`), so
+/// `list_directory`'s timestamp column and its `updated_desc` ordering — and
+/// `recent_activity`'s recency list — all encode the mtimes of the tree the captures
+/// were taken from. Git stores no mtimes, so a fresh clone sees its checkout time
+/// instead and those three surfaces stop matching, no matter how often the corpus is
+/// regenerated.
+///
+/// `tests/golden/index/graph-rows.json` recorded the capture-time values alongside the
+/// reference's own ids, which makes them restorable rather than guessable. Files the
+/// index skips (`notes/malformed-frontmatter.md`, `.obsidian/app.json`) have no
+/// recorded value and take the oldest recorded instant: they are never rendered, but
+/// leaving them at the copy time would hand any "newest file" computation — such as
+/// `shift_mtimes` — a clock that is not the corpus's.
+pub fn pin_fixture_mtimes(vault: &Path) {
+    let graph = load_golden_json("index/graph-rows.json");
+    let entities = graph["entities"].as_array().expect("entities");
+    // The golden stores the value the way the index does — naive local wall-clock time —
+    // so reading it back with the same parser keeps the local date, and with it the
+    // rendered timestamp, independent of the machine's timezone.
+    let recorded: Vec<(&str, timeframe::Instant)> = entities
+        .iter()
+        .filter_map(|entity| {
+            let path = entity["file_path"].as_str()?;
+            let stamp = entity["updated_at"].as_str()?;
+            Some((path, timeframe::parse_frontmatter_timestamp(stamp).ok()?))
+        })
+        .collect();
+    assert_eq!(
+        recorded.len(),
+        entities.len(),
+        "every graph row must carry a file_path and an updated_at"
+    );
+    let oldest = recorded
+        .iter()
+        .map(|(_, instant)| *instant)
+        .min()
+        .expect("at least one recorded instant");
+
+    let mut files = Vec::new();
+    collect_files(vault, &mut files);
+    for file in &files {
+        let relative = file.strip_prefix(vault).expect("under the vault");
+        let instant = recorded
+            .iter()
+            .find(|(path, _)| Path::new(path) == relative)
+            .map_or(oldest, |(_, instant)| *instant);
+        let modified =
+            SystemTime::UNIX_EPOCH + Duration::from_micros(instant.timestamp_micros() as u64);
+        let Ok(handle) = fs::OpenOptions::new().write(true).open(file) else {
+            continue;
+        };
+        let _ = handle.set_modified(modified);
+    }
+}
+
+/// Every file under `directory`, recursively.
+pub fn collect_files(directory: &Path, out: &mut Vec<PathBuf>) {
+    let Ok(entries) = fs::read_dir(directory) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            collect_files(&path, out);
+        } else {
+            out.push(path);
+        }
+    }
+}
+
+/// Copy the fixture vault into `to` and restore its capture-time mtimes, so surfaces
+/// derived from `updated_at` are reproducible on any clone.
+pub fn copy_fixture_vault(to: &Path) {
+    copy_dir_with_mtimes(&fixtures_vault(), to);
+    pin_fixture_mtimes(to);
+}
+
 /// A temp copy of the fixture vault with an empty in-memory index for project `oracle`.
 pub fn fixture(tag: &str) -> (Scratch, PathBuf, Store, i64) {
     let dir = Scratch::new(tag);
@@ -110,7 +191,7 @@ pub fn fixture(tag: &str) -> (Scratch, PathBuf, Store, i64) {
 pub fn indexed_store(tag: &str) -> (Scratch, Store, i64) {
     let dir = Scratch::new(tag);
     let vault = dir.join("vault");
-    copy_dir_with_mtimes(&fixtures_vault(), &vault);
+    copy_fixture_vault(&vault);
     let mut store = Store::open_in_memory().expect("store");
     let project_id = store
         .upsert_project("oracle", "oracle", &vault.to_string_lossy())
@@ -413,6 +494,13 @@ const RENAMED_SURFACE: &[(&str, &str)] = &[
     (
         "run `auto-memory reindex`",
         "run `basic-memory db reindex --search`",
+    ),
+    // The constrained-server refusals name the CLI that can do the job. Both commands
+    // now exist here, so this is a rename like the others rather than a divergence.
+    ("`auto-memory project add", "`basic-memory project add"),
+    (
+        "`auto-memory project remove",
+        "`basic-memory project remove",
     ),
 ];
 

@@ -340,7 +340,25 @@ fn find_related_replays_the_reference_traversal() {
         }
     }
 
-    let since = timeframe::since_bound(&timeframe::parse_timeframe("7d").expect("since"));
+    // The reference ran this traversal against the wall clock of its capture session, so
+    // replaying it against today's clock slides the window off the corpus: every fixture
+    // mtime is 2026-09-10, and once `now - since_days` passes them the seed expands to
+    // nothing and the case fails with zero rows. Anchor "now" to the newest timestamp the
+    // corpus records — within a day of the capture instant — so the window is
+    // reproducible. The row set is the reference's either way: `notes/frontmatter.md`
+    // (2026-02-03) stays outside the window and every other fixture stays inside it.
+    let since_days = related["since_days"].as_i64().expect("since_days");
+    let newest = graph["entities"]
+        .as_array()
+        .expect("entities")
+        .iter()
+        .filter_map(|entity| {
+            timeframe::parse_frontmatter_timestamp(entity["updated_at"].as_str()?).ok()
+        })
+        .max()
+        .expect("every graph row carries updated_at");
+    let anchor = newest + chrono::Duration::days(1) - chrono::Duration::days(since_days);
+    let since = timeframe::since_bound(&anchor);
     for case in related["cases"].as_array().expect("cases") {
         let seed = case["seed_id"].as_i64().expect("seed");
         let depth = case["depth"].as_u64().expect("depth") as u32;

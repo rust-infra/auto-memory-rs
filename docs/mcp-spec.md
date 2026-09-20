@@ -84,9 +84,9 @@ closing fence (so it keeps the blank separator line unless `include_frontmatter=
 - `create_memory_project` and `delete_project` keep the reference's constrained-server refusal
   wording (`# Error\n\nProject creation/deletion disabled - MCP server is constrained to
   project '<name>'…`), including the `PROJECT_CONSTRAINED` JSON variant. The `Use the CLI …`
-  hint is deliberately **not** verbatim: the reference points at `basic-memory project
-  add|remove`, which this CLI does not implement, so it names `auto-memory reindex` and the
-  unconstrained-server route instead.
+  hint names this port's binary and is otherwise verbatim: the reference points at
+  `basic-memory project add|remove`, and `auto-memory project add|remove` now exist, so the
+  difference is a rename rather than a divergence.
 - Every tool except `read_content` nests its structured payload under
   `structuredContent.result`; `read_content` (a plain `dict` return type) exposes the payload
   directly. The reference's `_meta.fastmcp.wrap_result` marker is server-specific and is
