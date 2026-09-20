@@ -10,6 +10,15 @@ name: Release
 # the fastembed/uv install, or the platform loader). That is what keeps these artifacts
 # portable — semantic search is simply unavailable where no runtime is found, while text
 # search, context, schema, and the MCP server keep working.
+#
+# The musl targets are statically linked, so they carry no glibc floor at all: the gnu
+# artifacts need the host's glibc to be at least as new as the runner's (Ubuntu 24.04 =
+# 2.39), which rules out older distributions and musl-based ones. The price is semantic
+# search — ONNX Runtime is published only as a glibc-linked shared library and a static
+# musl binary cannot `dlopen` it (measured: `failed to load from …: dlopen failed`), so
+# `--vector` and `--hybrid` are unavailable on those two artifacts, while text search,
+# context, schema and the MCP server work everywhere. The container image
+# (`.github/workflows/container.yml`) is where ONNX Runtime *is* bundled.
 
 on:
   push:
@@ -38,9 +47,17 @@ jobs:
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
             archive: tar.gz
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+            archive: tar.gz
+            musl: true
           - target: aarch64-unknown-linux-gnu
             os: ubuntu-24.04-arm
             archive: tar.gz
+          - target: aarch64-unknown-linux-musl
+            os: ubuntu-24.04-arm
+            archive: tar.gz
+            musl: true
           - target: aarch64-apple-darwin
             os: macos-latest
             archive: tar.gz
@@ -56,7 +73,21 @@ jobs:
         with:
           key: ${{ matrix.target }}
 
+      - name: Install the musl toolchain
+        if: matrix.musl
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+
       - name: Build
+        env:
+          # `rusqlite`'s bundled SQLite is C, so the C compiler has to match the target;
+          # `cc` picks `musl-gcc` for a musl target, and the linker has to be told
+          # explicitly or rustc falls back to the host's `cc` and links against glibc.
+          # Both variables are set on every job for simplicity — cargo only reads the
+          # one matching the target it is building.
+          CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER: musl-gcc
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER: musl-gcc
+          CC_x86_64_unknown_linux_musl: musl-gcc
+          CC_aarch64_unknown_linux_musl: musl-gcc
         run: cargo build --release --locked --target ${{ matrix.target }}
 
       - name: Package (unix)

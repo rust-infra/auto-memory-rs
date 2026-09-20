@@ -83,6 +83,32 @@ pub fn default_model_cache() -> PathBuf {
         .unwrap_or_else(|| PathBuf::from("."))
 }
 
+/// Python installations under `home` that may carry ONNX Runtime.
+///
+/// Split out from [`onnx_runtime_search_paths`] and parameterised by `home` so the layout
+/// can be tested against a synthetic tree: a test that walked the real home would pass or
+/// fail depending on what the machine happens to have installed, which is how the first
+/// version of this shipped a bug (it appended `site-packages` twice and matched nothing).
+fn python_onnx_search_paths(home: &Path) -> Vec<PathBuf> {
+    let mut paths = Vec::new();
+
+    // uv tool environments: `~/.local/share/uv/tools/<tool>/lib/python<X.Y>/site-packages`.
+    for environment in sorted_subdirectories(&home.join(".local/share/uv/tools"), 1) {
+        for python in sorted_subdirectories(&environment.join("lib"), 1) {
+            paths.push(python.join("site-packages/onnxruntime/capi"));
+        }
+    }
+
+    // `pip install --user onnxruntime`, and virtualenvs under the home directory.
+    for python in sorted_subdirectories(&home.join(".local/lib"), 1) {
+        paths.push(python.join("site-packages/onnxruntime/capi"));
+    }
+
+    // A bare unpacked runtime.
+    paths.push(home.join(".local/lib/onnxruntime"));
+    paths
+}
+
 /// Directories searched for a dynamically loadable ONNX Runtime.
 ///
 /// Ordered from most specific to most generic: a copy beside the executable (which is
@@ -95,9 +121,12 @@ pub fn default_model_cache() -> PathBuf {
 /// pinning `python3.14` (as this search used to) silently stopped working on the next
 /// interpreter bump, and pinned the *reference implementation's* private layout.
 ///
-/// Entries are the policy, not a filtered listing: a path may not exist, which is what
+/// entries are the policy, not a filtered listing: a path may not exist, which is what
 /// `auto-memory doctor` shows so a missing runtime is diagnosable rather than a silent
-/// `None`.
+/// `None`. The platform directories are always listed for the same reason, even on a
+/// machine where they are empty. On Windows they come from `PROGRAMFILES` / `APPDATA`
+/// instead of the Unix directories — a native Windows install has no `HOME` and no
+/// `/usr/local/lib`, so the layout there is searched explicitly.
 pub fn onnx_runtime_search_paths() -> Vec<PathBuf> {
     let mut paths = Vec::new();
 
@@ -110,29 +139,67 @@ pub fn onnx_runtime_search_paths() -> Vec<PathBuf> {
     }
 
     if let Some(home) = home_dir() {
-        // uv tool environments: `~/.local/share/uv/tools/<tool>/lib/python<X.Y>/site-packages`
-        let tools = home.join(".local/share/uv/tools");
-        for environment in sorted_subdirectories(&tools, 1) {
-            for python in sorted_subdirectories(&environment.join("lib"), 1) {
-                paths.push(python.join("site-packages/onnxruntime/capi"));
-            }
-        }
-        // `pip install --user onnxruntime`, and virtualenvs under the home directory.
-        for python in sorted_subdirectories(&home.join(".local/lib"), 1) {
-            paths.push(python.join("site-packages/onnxruntime/capi"));
-        }
-        paths.push(home.join(".local/lib/onnxruntime"));
+        paths.extend(python_onnx_search_paths(&home));
     }
 
-    for directory in [
-        "/usr/local/lib",
-        "/usr/lib",
-        "/usr/lib/x86_64-linux-gnu",
-        "/usr/lib/aarch64-linux-gnu",
-        "/opt/onnxruntime/lib",
-        "/opt/homebrew/lib",
-    ] {
-        paths.push(PathBuf::from(directory));
+    if cfg!(windows) {
+        // Manual installs of the official release zip extract `lib/onnxruntime.dll`
+        // under Program Files.
+        let program_files: Vec<PathBuf> = ["PROGRAMFILES", "PROGRAMFILES(X86)"]
+            .into_iter()
+            .filter_map(|var| std::env::var_os(var).map(PathBuf::from))
+            .collect();
+        paths.extend(windows_platform_onnx_directories(&program_files));
+
+        // uv tool and `pip --user` wheels live under `%APPDATA%` on Windows.
+        if let Some(appdata) = std::env::var_os("APPDATA") {
+            paths.extend(windows_python_onnx_search_paths(Path::new(&appdata)));
+        }
+    } else {
+        for directory in [
+            "/usr/local/lib",
+            "/usr/lib",
+            "/usr/lib/x86_64-linux-gnu",
+            "/usr/lib/aarch64-linux-gnu",
+            "/opt/onnxruntime/lib",
+            "/opt/homebrew/lib",
+        ] {
+            paths.push(PathBuf::from(directory));
+        }
+    }
+
+    paths
+}
+
+/// Manual installs of the official Windows release zip: `<root>\onnxruntime\lib`.
+///
+/// Parameterised by the Program Files roots so the layout stays testable; the caller
+/// resolves `PROGRAMFILES` / `PROGRAMFILES(X86)` itself.
+fn windows_platform_onnx_directories(program_files: &[PathBuf]) -> Vec<PathBuf> {
+    program_files
+        .iter()
+        .map(|root| root.join("onnxruntime/lib"))
+        .collect()
+}
+
+/// Python `onnxruntime` wheels in the Windows layout under the `%APPDATA%` root.
+///
+/// The Unix layout (`.local/...`) does not apply: `pip install --user` installs under
+/// `%APPDATA%\Python\Python3.X`, and `uv tool install` creates its environments under
+/// `%APPDATA%\uv\tools\<tool>` with a `Lib\site-packages` instead of
+/// `lib/python<X.Y>/site-packages`. Parameterised by `appdata` so the layout can be
+/// tested against a synthetic tree, mirroring [`python_onnx_search_paths`].
+fn windows_python_onnx_search_paths(appdata: &Path) -> Vec<PathBuf> {
+    let mut paths = Vec::new();
+
+    // uv tool environments: `%APPDATA%\uv\tools\<tool>\Lib\site-packages\onnxruntime\capi`.
+    for environment in sorted_subdirectories(&appdata.join("uv/tools"), 1) {
+        paths.push(environment.join("Lib/site-packages/onnxruntime/capi"));
+    }
+
+    // `pip install --user onnxruntime`: `%APPDATA%\Python\Python3.X\site-packages`.
+    for python in sorted_subdirectories(&appdata.join("Python"), 1) {
+        paths.push(python.join("site-packages/onnxruntime/capi"));
     }
 
     paths
@@ -169,7 +236,11 @@ fn onnx_library_in(directory: &Path) -> Option<PathBuf> {
         .filter(|path| {
             path.file_name().is_some_and(|name| {
                 let name = name.to_string_lossy();
-                name.starts_with("libonnxruntime.so") || name.starts_with("libonnxruntime.dylib")
+                // Windows ships `onnxruntime.dll` — no `lib` prefix, `.dll` extension —
+                // while Unix builds are `libonnxruntime.{so,dylib}`.
+                name.starts_with("libonnxruntime.so")
+                    || name.starts_with("libonnxruntime.dylib")
+                    || name.starts_with("onnxruntime.dll")
             })
         })
         .collect();
@@ -318,8 +389,16 @@ pub fn reference_model_dir(cache_root: &Path) -> Option<PathBuf> {
         .find(|revision| revision.join(MODEL_FILE).is_file())
 }
 
+/// The user's home directory: `$HOME`, or `%USERPROFILE%` on Windows, which does not
+/// set `HOME` by default (the shell does, but PowerShell and cmd do not).
 fn home_dir() -> Option<PathBuf> {
-    std::env::var_os("HOME").map(PathBuf::from)
+    if cfg!(windows) {
+        std::env::var_os("USERPROFILE")
+            .or_else(|| std::env::var_os("HOME"))
+            .map(PathBuf::from)
+    } else {
+        std::env::var_os("HOME").map(PathBuf::from)
+    }
 }
 
 fn read_model_file(model_dir: &Path) -> Result<Vec<u8>> {
@@ -365,33 +444,87 @@ mod runtime_discovery_tests {
         );
     }
 
-    /// The Python entries must follow what is installed, not a literal: naming one
-    /// interpreter version (as this search used to) stops matching on the next bump.
-    /// Asserting against the directory walk is also what catches the glob being wrong —
-    /// an early version of this code appended `site-packages` twice and found nothing,
-    /// which no string assertion would have noticed.
+    /// The Python candidates must follow the installed layout exactly — one entry per
+    /// interpreter, with the tail appended once.
+    ///
+    /// This is the regression that started it: an earlier version appended
+    /// `site-packages` twice, so the path never matched and the embedding test silently
+    /// became a skip. It is checked against a synthetic home so it holds on a machine
+    /// with no Python at all (CI).
     #[test]
-    fn onnx_search_paths_glob_the_installed_interpreters() {
-        let Some(home) = home_dir() else {
-            return;
-        };
-        let tools = home.join(".local/share/uv/tools");
-        if !tools.is_dir() {
-            return; // nothing to glob on this machine
-        }
-        let expected: Vec<PathBuf> = sorted_subdirectories(&tools, 1)
-            .into_iter()
-            .flat_map(|environment| sorted_subdirectories(&environment.join("lib"), 1))
-            .map(|python| python.join("site-packages/onnxruntime/capi"))
-            .collect();
-        assert!(
-            !expected.is_empty(),
-            "a uv tools directory with no interpreter under lib/"
-        );
+    fn python_onnx_search_paths_follow_the_installed_layout() {
+        let scratch = tempfile::tempdir().expect("scratch");
+        let home = scratch.path();
+        std::fs::create_dir_all(
+            home.join(".local/share/uv/tools/basic-memory/lib/python3.14/site-packages"),
+        )
+        .expect("uv site-packages");
+        std::fs::create_dir_all(home.join(".local/lib/python3.12/site-packages"))
+            .expect("pip site-packages");
 
+        let paths = python_onnx_search_paths(home);
+        assert_eq!(
+            paths,
+            vec![
+                home.join(
+                    ".local/share/uv/tools/basic-memory/lib/python3.14/site-packages\
+                     /onnxruntime/capi"
+                ),
+                home.join(".local/lib/python3.12/site-packages/onnxruntime/capi"),
+                home.join(".local/lib/onnxruntime"),
+            ],
+            "{paths:?}"
+        );
+    }
+
+    /// Several interpreters are all searched, in sorted order, so two installs cannot
+    /// shadow each other by directory-iteration luck. Only the wheel entries carry an
+    /// interpreter to name — the bare `~/.local/lib/onnxruntime` entry has no `capi`
+    /// directory, so it is filtered out.
+    #[test]
+    fn python_onnx_search_paths_cover_every_installed_interpreter() {
+        let scratch = tempfile::tempdir().expect("scratch");
+        let home = scratch.path();
+        for interpreter in ["python3.11", "python3.14"] {
+            std::fs::create_dir_all(
+                home.join(".local/lib")
+                    .join(interpreter)
+                    .join("site-packages"),
+            )
+            .expect("site-packages");
+        }
+
+        let paths = python_onnx_search_paths(home);
+        let interpreters: Vec<String> = paths
+            .iter()
+            .filter(|path| path.ends_with("onnxruntime/capi"))
+            .filter_map(|path| path.parent()?.parent()?.parent()?.file_name())
+            .map(|name| name.to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(interpreters, ["python3.11", "python3.14"], "{paths:?}");
+    }
+
+    /// The platform directories are part of the policy, so they are listed whether or
+    /// not anything is installed there. `doctor` prints this list to explain a miss, and
+    /// a machine-dependent list would make that explanation wrong. The Unix directories
+    /// do not exist on Windows, so the check only applies off-Windows; the Windows
+    /// layout is covered by the dedicated tests below.
+    #[test]
+    fn onnx_search_paths_include_the_platform_library_directories() {
+        if cfg!(windows) {
+            return;
+        }
         let paths = onnx_runtime_search_paths();
-        for path in expected {
-            assert!(paths.contains(&path), "{path:?} is missing from {paths:?}");
+        for expected in [
+            "/usr/local/lib",
+            "/usr/lib",
+            "/opt/onnxruntime/lib",
+            "/opt/homebrew/lib",
+        ] {
+            assert!(
+                paths.iter().any(|path| path == Path::new(expected)),
+                "{expected} is missing from {paths:?}"
+            );
         }
     }
 
@@ -403,18 +536,6 @@ mod runtime_discovery_tests {
         let executable = std::env::current_exe().expect("current exe");
         let directory = executable.parent().expect("parent");
         assert_eq!(paths.first(), Some(&directory.to_path_buf()), "{paths:?}");
-    }
-
-    /// The Python wheels are the most common source of the library.
-    #[test]
-    fn onnx_search_paths_include_python_wheels() {
-        let paths = onnx_runtime_search_paths();
-        assert!(
-            paths
-                .iter()
-                .any(|path| path.to_string_lossy().contains("onnxruntime/capi")),
-            "{paths:?}"
-        );
     }
 
     /// `sorted_subdirectories` must be sorted (the search is order-sensitive) and must
@@ -455,5 +576,59 @@ mod runtime_discovery_tests {
 
         // An empty (or absent) directory is not an error, just no candidate.
         assert!(onnx_library_in(&scratch.path().join("missing")).is_none());
+    }
+
+    /// Windows ships the runtime as `onnxruntime.dll` — no `lib` prefix, `.dll`
+    /// extension — and the providers DLL must stay excluded, mirroring the `.so` test.
+    /// String matching runs identically off-Windows, so the check holds on any host.
+    #[test]
+    fn onnx_library_in_finds_a_windows_dll() {
+        let scratch = tempfile::tempdir().expect("scratch");
+        std::fs::write(scratch.path().join("onnxruntime.dll"), "").expect("dll");
+        std::fs::write(scratch.path().join("onnxruntime_providers_shared.dll"), "").expect("dll");
+        std::fs::write(scratch.path().join("README"), "").expect("file");
+
+        let found = onnx_library_in(scratch.path()).expect("a library");
+        assert_eq!(found.file_name().unwrap(), "onnxruntime.dll");
+    }
+
+    /// The Windows Python candidates must follow `%APPDATA%` rather than the Unix
+    /// `.local/...` layout: one entry per uv tool (with `Lib\site-packages`), and one
+    /// per `pip --user` interpreter.
+    #[test]
+    fn windows_python_onnx_search_paths_follow_the_installed_layout() {
+        let scratch = tempfile::tempdir().expect("scratch");
+        let appdata = scratch.path();
+        std::fs::create_dir_all(appdata.join("uv/tools/basic-memory/Lib/site-packages"))
+            .expect("uv site-packages");
+        std::fs::create_dir_all(appdata.join("Python/Python312/site-packages"))
+            .expect("pip site-packages");
+
+        let paths = windows_python_onnx_search_paths(appdata);
+        assert_eq!(
+            paths,
+            vec![
+                appdata.join("uv/tools/basic-memory/Lib/site-packages/onnxruntime/capi"),
+                appdata.join("Python/Python312/site-packages/onnxruntime/capi"),
+            ],
+            "{paths:?}"
+        );
+    }
+
+    /// The Program Files candidates map `<root>` to `<root>/onnxruntime/lib`, the
+    /// layout of a manual extraction of the official Windows release zip. The expected
+    /// paths are computed from the same roots so the separator style (`\` on Windows,
+    /// `/` elsewhere) cannot leak into the assertion.
+    #[test]
+    fn windows_platform_directories_map_program_files() {
+        let roots = vec![
+            PathBuf::from(r"C:\Program Files"),
+            PathBuf::from(r"C:\Program Files (x86)"),
+        ];
+        let expected: Vec<PathBuf> = roots
+            .iter()
+            .map(|root| root.join("onnxruntime").join("lib"))
+            .collect();
+        assert_eq!(windows_platform_onnx_directories(&roots), expected);
     }
 }

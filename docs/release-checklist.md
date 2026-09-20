@@ -25,18 +25,63 @@ benchmarks (`tests/benchmarks.rs`) only; any other `#[ignore]` needs a written r
 
 `./scripts/install.sh` is the user-facing install path and is worth running with `--dry-run`
 against a real release before announcing it. Pushing the tag runs
-`.github/workflows/release.yml`, which builds four targets, writes `SHA256SUMS`, and attaches
+`.github/workflows/release.yml`, which builds six targets, writes `SHA256SUMS`, and attaches
 the archives to the release:
 
 | Target | Runner |
 |---|---|
 | `x86_64-unknown-linux-gnu` | `ubuntu-latest` |
+| `x86_64-unknown-linux-musl` | `ubuntu-latest` |
 | `aarch64-unknown-linux-gnu` | `ubuntu-24.04-arm` |
+| `aarch64-unknown-linux-musl` | `ubuntu-24.04-arm` |
 | `aarch64-apple-darwin` | `macos-latest` |
 | `x86_64-pc-windows-msvc` | `windows-latest` |
 
+The musl archives are statically linked and so carry no glibc floor; the gnu ones need a host
+glibc at least as new as the runner's (Ubuntu 24.04 → 2.39). `scripts/install.sh` still maps
+Linux to `unknown-linux-gnu`, so musl is the manual download for now.
+
+**Semantic search does not work on the musl artifacts.** ONNX Runtime is published only as a
+glibc-linked `.so`, and a static musl binary cannot `dlopen` it (measured against 1.29.0:
+`failed to load from …: dlopen failed`); `--vector` and `--hybrid` are therefore unavailable
+there, while text search, context, schema and the MCP server are not affected. `doctor` reports
+`onnx_runtime: ok` on such a host because the search path only locates the file — it does not
+try to load it — so do not read that check as "semantic search works".
+
 ONNX Runtime is not bundled (the crate builds with `ort`'s `load-dynamic`), which is what makes
 the archives portable; `auto-memory doctor` tells a user whether semantic search is available.
+
+## 1c. Container image
+
+The same tag also publishes `ghcr.io/rust-infra/auto-memory-rs` from
+`.github/workflows/container.yml`: `linux/amd64` and `linux/arm64`, each built on a runner of
+that architecture and joined into one manifest by the `merge` job (which is what attaches the
+`vX.Y.Z` and `latest` tags). Unlike the archives, the image **does** bundle semantic search, so
+there is nothing to install and nothing to download at run time:
+
+```bash
+docker run --rm -p 8765:8765 \
+    -v ~/vault:/vault -v auto-memory-index:/index \
+    ghcr.io/rust-infra/auto-memory-rs:latest
+```
+
+- `Dockerfile` — `rust:bookworm` builds the binary; a `python:3.13-slim` stage extracts
+  `libonnxruntime.so` (1.29.0, the version `reference.md` §6f validated) and downloads the
+  `qdrant/bge-small-en-v1.5-onnx-q` snapshot in the huggingface-hub cache layout;
+  `debian:bookworm-slim` carries all three. Nothing is fetched at run time.
+- Defaults: streamable HTTP on `0.0.0.0:8765` (`/mcp`), vault `/vault`, index
+  `/index/memory.db`. Override the command for stdio (`docker run -i --rm … mcp --vault …`) or
+  add `--read-only` to serve without writing back.
+- `--model-cache` in that default command is load-bearing, not decoration: `mcp` only builds the
+  embedding provider when `--model-cache`, `--onnx-runtime` or `--embedding-fixture` is passed,
+  so `AUTO_MEMORY_MODEL_CACHE` alone would leave semantic search reporting itself unavailable.
+- The workflow's smoke test asserts `doctor --json` reports `onnx_runtime` and `model_cache` as
+  `ok` — per architecture, against the pushed digest, before the tags exist. The reranker model
+  is not bundled (only needed for `--reranker`).
+- Both halves are fetched at build time over the network (PyPI and huggingface.co), so a local
+  build needs a route to them: behind a proxy,
+  `docker build --network=host --build-arg HTTPS_PROXY=… --build-arg HTTP_PROXY=… .` — BuildKit
+  passes the proxy build args to `RUN` without an `ARG` declaration.
 
 ## 2. Compatibility evidence
 

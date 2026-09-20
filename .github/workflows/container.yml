@@ -1,0 +1,140 @@
+name: Container
+
+# Tag `vX.Y.Z` and this publishes the image `scripts/install.sh` does not, alongside the
+# archives the release workflow builds. The two run in parallel: the image is built from
+# source, not from the release assets, so neither waits on the other.
+#
+# The image bundles what the archives deliberately leave out — ONNX Runtime and the
+# embedding model — which is what `Dockerfile` explains.
+#
+# ONNX Runtime and pip wheels are both per-architecture, so each platform is built on a
+# runner of that architecture. Emulating the Rust build under QEMU would multiply the
+# slowest step by roughly an order of magnitude.
+#
+# The workflow that runs is the one in the tagged commit, so the tag has to point at a
+# commit that already contains this file.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to publish (for example v0.1.0)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE: ghcr.io/${{ github.repository }}
+
+jobs:
+  build:
+    name: ${{ matrix.platform }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-latest
+            name: linux-amd64
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+            name: linux-arm64
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: ${{ matrix.platform }}
+          # Pushed by digest only: a tag cannot carry both platforms until both digests
+          # exist, and tagging here would race the other architecture. `merge` is what
+          # gives these digests names.
+          outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+
+      # The image's promise is that semantic search works without a network, and the
+      # half of that promise the archives make no claim to — the ONNX Runtime and the
+      # model cache — is exactly what a Dockerfile edit can silently break. `doctor`
+      # reports both, so assert on them rather than trusting the build.
+      - name: Smoke test
+        env:
+          REF: ${{ env.IMAGE }}@${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          docker run --rm --entrypoint auto-memory "$REF" --version
+          docker run --rm --entrypoint auto-memory "$REF" doctor --json > doctor.json
+          jq -r '.checks[] | select(.name == "onnx_runtime" or .name == "model_cache")
+                 | "\(.name): \(.status): \(.detail)"' doctor.json
+          jq -e '[.checks[] | select(.name == "onnx_runtime" or .name == "model_cache")]
+                 | length == 2 and all(.status == "ok")' doctor.json > /dev/null
+
+      - name: Record digest
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/digests
+          touch "/tmp/digests/${DIGEST#sha256:}"
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: digests-${{ matrix.name }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  merge:
+    name: tags
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: /tmp/digests
+          pattern: digests-*
+          merge-multiple: true
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=raw,value=${{ inputs.tag || github.ref_name }}
+            type=raw,value=latest
+
+      - name: Create the multi-architecture manifest
+        working-directory: /tmp/digests
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          set -euo pipefail
+          # One `-t` per tag, one `image@sha256:<digest>` per architecture; the unquoted
+          # expansions are the point, since `imagetools create` takes them as argv.
+          # shellcheck disable=SC2086
+          docker buildx imagetools create \
+            $(printf -- '-t %s ' ${TAGS}) \
+            $(for digest in *; do printf '%s@sha256:%s ' "${IMAGE}" "${digest}"; done)
+
+      - name: Report
+        run: docker buildx imagetools inspect "$IMAGE:${{ inputs.tag || github.ref_name }}"

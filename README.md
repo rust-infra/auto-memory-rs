@@ -27,6 +27,18 @@ needs only a Rust toolchain (`cargo build --release`).
 `reindex` is incremental; text search, context and the MCP server work without the embedding
 runtime. See [`docs/usage.md`](docs/usage.md) for the full walkthrough.
 
+The container image published on the same tags bundles that runtime and the embedding model, so
+semantic search needs nothing installed:
+
+```bash
+docker run --rm -p 8765:8765 \
+    -v ~/vault:/vault -v auto-memory-index:/index \
+    ghcr.io/rust-infra/auto-memory-rs:latest
+```
+
+It serves streamable HTTP MCP on `/mcp`; see [`docs/release-checklist.md`](docs/release-checklist.md)
+§1c for the image's defaults and how to run it over stdio instead.
+
 ## Layout
 
 | Path | Contents |

@@ -1,0 +1,21 @@
+# The Docker build context is `.` and the only inputs the image needs are `Cargo.toml`,
+# `Cargo.lock` and `src/`. Everything else is either rebuilt, irrelevant to a release
+# build, or large — `target/` alone is tens of gigabytes.
+#
+# Unlike `.gitignore`, a pattern without a slash matches one level only, so the
+# directory patterns below are anchored with a leading slash on purpose.
+/target
+/.git
+/.tact
+
+/docs
+/examples
+/plugins
+/scripts
+/tests
+/tools
+
+# A local `.env` must never reach an image (nothing here reads one, but the next
+# `COPY . .` would not be so lucky).
+.env
+.env.*
