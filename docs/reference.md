@@ -2,7 +2,7 @@
 
 - **Status:** Verified (code-read) + partial golden capture pending
 - **Date captured:** 2026-09-08 (UTC) / 2026-09-09 (local)
-- **Version:** `Basic Memory version: 0.23.2`
+- **Version:** 0.23.2
 - **Captured from:** the locally installed reference implementation (offline oracle)
 
 ## 1. Where the reference lives
@@ -15,6 +15,14 @@
 | Config dir (local) | `~/.config/basic-memory/` (`config.json`, `memory.db`(+WAL), `.bmignore`, `fastembed_cache/`, logs) |
 | Project layout | Markdown vault + `.basic-memory/config.json` (project config only) |
 | Python | 3.14 (uv tool venv) |
+
+The names in that table — and the `BASIC_MEMORY_*` variables and `.basic-memory/` directory used
+below — are the upstream project's **own identifiers**, recorded verbatim. They are not this
+project's naming and are renamed nowhere: the oracle harness sets `BASIC_MEMORY_CONFIG_DIR` and
+reads the model cache under the reference config dir, `tests/common` maps our renamed surfaces
+back onto the reference wording, and the file references in §3 are paths inside the installed
+Python package. Renaming them here would break the trail this document exists to preserve; only
+the prose around them is ours.
 
 Local mode uses **SQLite** (aiosqlite) with FTS5; the app-level database `memory.db` lives in the
 config directory, not inside the project. Projects registered in `config.json` under `projects`.
