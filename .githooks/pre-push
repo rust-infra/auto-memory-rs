@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Runs the CI gates before a push. Enabled per clone with
+# `git config core.hooksPath .githooks`; `git push --no-verify` skips it.
+set -euo pipefail
+
+ROOT="$(git rev-parse --show-toplevel)"
+# Git exports GIT_DIR / GIT_WORK_TREE into hook processes; the checks clear them again so
+# they see the working tree they were invoked from rather than the hook's repository
+# context (the script also does this when run by hand).
+unset GIT_DIR GIT_WORK_TREE
+exec "${ROOT}/scripts/check-rust.sh"

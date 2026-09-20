@@ -48,6 +48,25 @@ It serves streamable HTTP MCP on `/mcp`; see [`docs/release-checklist.md`](docs/
 | `tools/` | the oracle harness that captures it (needs the reference CLI) |
 | `plugins/agents/` | the Codex plugin package (hooks, skills, schemas) |
 
+## Development
+
+The gates CI runs are available locally as one script — formatting, lints, the test suite and
+the doc build:
+
+```bash
+./scripts/check-rust.sh
+```
+
+The same script is wired as a `pre-push` hook under `.githooks/`, so a push runs it before
+anything leaves the machine. Git only reads hooks from `.git/hooks` by default, so opt in once
+per clone:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+`git push --no-verify` skips it.
+
 ## Documentation
 
 [`docs/README.md`](docs/README.md) is the index: spec, execution plan, data format, search,
