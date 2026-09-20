@@ -8,12 +8,12 @@
 //! - `context <memory://url>` — build graph context (JSON, or the reference's
 //!   undecorated `--plain` outline).
 
-use std::collections::BTreeMap;
 use std::future::Future;
 use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
+use clap::{Args, Parser, Subcommand};
 use serde_json::{Value, json};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -48,47 +48,438 @@ use auto_memory::search::vector::{VectorSearchOptions, search_hybrid, search_vec
 use auto_memory::storage::Store;
 use tracing_subscriber::EnvFilter;
 
+// One subcommand per verb. `clap` owns parsing, required arguments, `--help`, and the
+// exit-2 usage error; the dispatched functions receive typed values instead of the
+// untyped `--key value` bag this binary used to carry.
+#[derive(Parser)]
+#[command(
+    name = "auto-memory",
+    version,
+    about = "Local-first Rust knowledge base with markdown notes, a derived SQLite index, and an MCP server"
+)]
+struct Cli {
+    #[command(subcommand)]
+    command: Command,
+}
+
+/// Every verb this binary implements.
+#[derive(Subcommand)]
+enum Command {
+    /// Serialize the parse layer for one markdown file.
+    Parse {
+        /// Markdown file to parse.
+        path: PathBuf,
+    },
+    /// Rebuild or reconcile the derived index.
+    Reindex(ReindexArgs),
+    /// Keep the markdown index in sync with the vault.
+    Watch(WatchArgs),
+    /// Serve the MCP tools on stdio or Streamable HTTP.
+    Mcp(McpArgs),
+    /// Print index counts for one project.
+    Status(StatusArgs),
+    /// Report what is usable on this machine.
+    Doctor(DoctorArgs),
+    /// Register, list, or remove vaults.
+    #[command(subcommand)]
+    Project(ProjectCommand),
+    /// Resolve a `memory://` URL and print its graph context.
+    Context(ContextArgs),
+    /// Validate, infer, or diff note schemas.
+    #[command(subcommand)]
+    Schema(SchemaCommand),
+    /// Harness lifecycle hook entry point.
+    Hook(HookArgs),
+    /// Search the index (text, `--vector`, or `--hybrid`).
+    Search(SearchArgs),
+}
+
+/// Flags selecting the embedding runtime: fixture, model cache, ONNX library.
+#[derive(Args, Clone)]
+struct EmbeddingArgs {
+    /// Replay captured reference vectors instead of loading ONNX Runtime.
+    #[arg(long, value_name = "FILE")]
+    embedding_fixture: Option<PathBuf>,
+    /// Directory holding the fastembed model cache.
+    #[arg(long, value_name = "DIR")]
+    model_cache: Option<PathBuf>,
+    /// Path to the ONNX Runtime shared library.
+    #[arg(long, value_name = "PATH")]
+    onnx_runtime: Option<PathBuf>,
+}
+
+/// Cross-encoder reranking flags, opt-in like the reference's `reranker_enabled`.
+#[derive(Args, Clone)]
+struct RerankArgs {
+    /// Rerank vector/hybrid results with the cross-encoder.
+    #[arg(long)]
+    reranker: bool,
+    /// Deterministic reranker scores instead of the ONNX model.
+    #[arg(long, value_name = "FILE")]
+    reranker_fixture: Option<PathBuf>,
+    /// Number of candidates fed to the reranker.
+    #[arg(long, value_name = "N")]
+    reranker_candidates: Option<usize>,
+    /// Maximum document length handed to the reranker.
+    #[arg(long, value_name = "N")]
+    reranker_max_chars: Option<usize>,
+}
+
+/// `auto-memory reindex --vault <dir> --index <db>`.
+#[derive(Args)]
+struct ReindexArgs {
+    /// Vault directory to index.
+    #[arg(long, value_name = "DIR")]
+    vault: PathBuf,
+    /// Index database.
+    #[arg(long, value_name = "DB")]
+    index: PathBuf,
+    /// Project name (defaults to the vault directory name).
+    #[arg(long, value_name = "NAME")]
+    project: Option<String>,
+    /// Rebuild every note instead of reconciling.
+    #[arg(long)]
+    full: bool,
+    /// Refresh the vector index instead of the markdown index.
+    #[arg(long)]
+    embeddings: bool,
+    #[command(flatten)]
+    embed: EmbeddingArgs,
+}
+
+/// `auto-memory watch --vault <dir> --index <db>`.
+#[derive(Args)]
+struct WatchArgs {
+    /// Vault directory to watch.
+    #[arg(long, value_name = "DIR")]
+    vault: PathBuf,
+    /// Index database.
+    #[arg(long, value_name = "DB")]
+    index: PathBuf,
+    /// Project name (defaults to the vault directory name).
+    #[arg(long, value_name = "NAME")]
+    project: Option<String>,
+    /// Debounce window in milliseconds.
+    #[arg(long, value_name = "N")]
+    window_ms: Option<u64>,
+    /// Apply a single batch and exit.
+    #[arg(long)]
+    once: bool,
+    /// Not a `watch` flag. Declared only so the command can refuse it with the
+    /// `reindex --embeddings` alternative instead of clap's generic error.
+    #[arg(long, hide = true)]
+    embeddings: bool,
+}
+
+/// `auto-memory mcp --vault <dir> --index <db>`.
+#[derive(Args)]
+struct McpArgs {
+    /// Vault directory to serve.
+    #[arg(long, value_name = "DIR")]
+    vault: PathBuf,
+    /// Index database.
+    #[arg(long, value_name = "DB")]
+    index: PathBuf,
+    /// Project name (defaults to the vault directory name).
+    #[arg(long, value_name = "NAME")]
+    project: Option<String>,
+    /// Serve the Streamable HTTP transport instead of stdio.
+    #[arg(long)]
+    http: bool,
+    /// HTTP bind host.
+    #[arg(long, value_name = "HOST")]
+    host: Option<String>,
+    /// HTTP bind port.
+    #[arg(long, value_name = "PORT")]
+    port: Option<u16>,
+    /// HTTP path of the MCP endpoint.
+    #[arg(long, value_name = "PATH")]
+    path: Option<String>,
+    /// Refuse the tools that write.
+    #[arg(long)]
+    read_only: bool,
+    #[command(flatten)]
+    embed: EmbeddingArgs,
+    #[command(flatten)]
+    rerank: RerankArgs,
+}
+
+/// `auto-memory status --index <db> --project <permalink>`.
+#[derive(Args)]
+struct StatusArgs {
+    /// Index database.
+    #[arg(long, value_name = "DB")]
+    index: PathBuf,
+    /// Project permalink.
+    #[arg(long, value_name = "NAME")]
+    project: String,
+}
+
+/// `auto-memory doctor`.
+#[derive(Args)]
+struct DoctorArgs {
+    /// Index database (defaults to the standard per-user path).
+    #[arg(long, value_name = "DB")]
+    index: Option<PathBuf>,
+    /// Vault to inspect.
+    #[arg(long, value_name = "DIR")]
+    vault: Option<PathBuf>,
+    /// Project permalink to report counts for.
+    #[arg(long, value_name = "NAME")]
+    project: Option<String>,
+    /// Model cache directory to report on.
+    #[arg(long, value_name = "DIR")]
+    model_cache: Option<PathBuf>,
+    /// Emit the report as JSON.
+    #[arg(long)]
+    json: bool,
+}
+
+/// `auto-memory project <add|list|remove>`.
+#[derive(Subcommand)]
+enum ProjectCommand {
+    /// Register a vault and index it.
+    Add(ProjectAddArgs),
+    /// List every registered project.
+    List(ProjectListArgs),
+    /// Unregister a project; the vault is left alone.
+    Remove(ProjectRemoveArgs),
+}
+
+/// `project add <name> <path>`.
+#[derive(Args)]
+struct ProjectAddArgs {
+    /// Display name.
+    name: String,
+    /// Vault directory.
+    path: PathBuf,
+    /// Index database (defaults to the standard per-user path).
+    #[arg(long, value_name = "DB")]
+    index: Option<PathBuf>,
+    /// Permalink slug (defaults to one generated from the name).
+    #[arg(long, value_name = "SLUG")]
+    permalink: Option<String>,
+    /// Register without indexing.
+    #[arg(long)]
+    no_index: bool,
+    /// Emit the result as JSON.
+    #[arg(long)]
+    json: bool,
+}
+
+/// `project list`.
+#[derive(Args)]
+struct ProjectListArgs {
+    /// Index database (defaults to the standard per-user path).
+    #[arg(long, value_name = "DB")]
+    index: Option<PathBuf>,
+    /// Emit the result as JSON.
+    #[arg(long)]
+    json: bool,
+}
+
+/// `project remove <name|permalink>`.
+#[derive(Args)]
+struct ProjectRemoveArgs {
+    /// Project name or permalink.
+    identifier: String,
+    /// Index database (defaults to the standard per-user path).
+    #[arg(long, value_name = "DB")]
+    index: Option<PathBuf>,
+    /// Emit the result as JSON.
+    #[arg(long)]
+    json: bool,
+}
+
+/// `auto-memory context <url> --index <db> --project <permalink>`.
+#[derive(Args)]
+struct ContextArgs {
+    /// `memory://` URL to resolve.
+    url: String,
+    /// Index database.
+    #[arg(long, value_name = "DB")]
+    index: PathBuf,
+    /// Project permalink.
+    #[arg(long, value_name = "NAME")]
+    project: String,
+    /// Traversal depth.
+    #[arg(long, value_name = "N")]
+    depth: Option<u32>,
+    /// Timeframe window (default `7d`).
+    #[arg(long, value_name = "WINDOW")]
+    timeframe: Option<String>,
+    /// Page number.
+    #[arg(long, value_name = "N")]
+    page: Option<u32>,
+    /// Results per page.
+    #[arg(long, value_name = "N")]
+    page_size: Option<u32>,
+    /// Related rows per entity.
+    #[arg(long, value_name = "N")]
+    max_related: Option<u32>,
+    /// Print the reference's undecorated outline instead of JSON.
+    #[arg(long)]
+    plain: bool,
+    /// JSON is already the default; accepted for symmetry with `--plain`.
+    #[arg(long)]
+    json: bool,
+}
+
+/// `auto-memory schema <validate|infer|diff>`.
+#[derive(Subcommand)]
+enum SchemaCommand {
+    /// Validate a note type or a note file.
+    Validate(SchemaArgs),
+    /// Infer a schema definition from existing notes.
+    Infer(SchemaInferArgs),
+    /// Detect drift between a schema and actual note usage.
+    Diff(SchemaArgs),
+}
+
+/// Index/project/vault selection shared by the schema verbs.
+#[derive(Args)]
+struct SchemaCommonArgs {
+    /// Index database.
+    #[arg(long, value_name = "DB")]
+    index: PathBuf,
+    /// Project permalink.
+    #[arg(long, value_name = "NAME")]
+    project: String,
+    /// Vault override (defaults to the project's indexed path).
+    #[arg(long, value_name = "DIR")]
+    vault: Option<PathBuf>,
+}
+
+/// `schema validate` / `schema diff`.
+#[derive(Args)]
+struct SchemaArgs {
+    /// Note type, or a note path (contains `/` or `.`).
+    target: Option<String>,
+    #[command(flatten)]
+    common: SchemaCommonArgs,
+    /// Exit non-zero when validation reports errors.
+    #[arg(long)]
+    strict: bool,
+    /// Print the MCP text surface instead of the reference JSON.
+    #[arg(long)]
+    text: bool,
+}
+
+/// `schema infer <note_type>`.
+#[derive(Args)]
+struct SchemaInferArgs {
+    /// Note type to infer from.
+    note_type: String,
+    #[command(flatten)]
+    common: SchemaCommonArgs,
+    /// Optional-field threshold.
+    #[arg(long, value_name = "F")]
+    threshold: Option<f64>,
+    /// Print the MCP text surface instead of the reference JSON.
+    #[arg(long)]
+    text: bool,
+}
+
+/// `auto-memory hook <session-start|pre-compact>`.
+#[derive(Args)]
+struct HookArgs {
+    /// Hook verb: `session-start` or `pre-compact`.
+    verb: String,
+    /// Harness emitting the hook (`claude`, `codex`, or `pi`).
+    #[arg(long, value_name = "NAME")]
+    harness: Option<String>,
+    /// Index database (defaults to `AUTO_MEMORY_INDEX`, then the standard path).
+    #[arg(long, value_name = "DB")]
+    index: Option<PathBuf>,
+    /// Project permalink (overrides the harness mapping).
+    #[arg(long, value_name = "NAME")]
+    project: Option<String>,
+    /// Project directory the mapping is resolved against.
+    #[arg(long, value_name = "DIR")]
+    project_dir: Option<PathBuf>,
+}
+
+/// `auto-memory search --index <db> --project <permalink> [filters] <query>`.
+#[derive(Args)]
+struct SearchArgs {
+    /// Query terms; omit them for a filter-only search.
+    #[arg(value_name = "QUERY", num_args = 0..)]
+    query: Vec<String>,
+    /// Index database.
+    #[arg(long, value_name = "DB")]
+    index: PathBuf,
+    /// Project permalink.
+    #[arg(long, value_name = "NAME")]
+    project: String,
+    /// Title filter.
+    #[arg(long, value_name = "T")]
+    title: Option<String>,
+    /// Note type filter.
+    #[arg(long = "type", value_name = "T")]
+    note_type: Option<String>,
+    /// Tag filter.
+    #[arg(long, value_name = "TAG")]
+    tag: Option<String>,
+    /// Status filter.
+    #[arg(long, value_name = "S")]
+    status: Option<String>,
+    /// Category filter.
+    #[arg(long, value_name = "C")]
+    category: Option<String>,
+    /// Entity type filter (`entity`, `observation`, or `relation`).
+    #[arg(long, value_name = "TYPE")]
+    entity_type: Option<String>,
+    /// Permalink or permalink glob.
+    #[arg(long, value_name = "P")]
+    permalink: Option<String>,
+    /// Metadata filter, `key=value`.
+    #[arg(long, value_name = "KEY=VALUE")]
+    meta: Option<String>,
+    /// Date or window bound (also accepted as `--after_date`).
+    #[arg(long = "after-date", alias = "after_date", value_name = "WINDOW")]
+    after_date: Option<String>,
+    /// Page number.
+    #[arg(long, value_name = "N")]
+    page: Option<u32>,
+    /// Results per page.
+    #[arg(long, value_name = "N")]
+    page_size: Option<u32>,
+    /// Rank against the vector index only.
+    #[arg(long)]
+    vector: bool,
+    /// Fuse text and vector retrieval.
+    #[arg(long)]
+    hybrid: bool,
+    /// Minimum semantic score.
+    #[arg(long, value_name = "F")]
+    min_similarity: Option<f32>,
+    #[command(flatten)]
+    embed: EmbeddingArgs,
+    #[command(flatten)]
+    rerank: RerankArgs,
+}
+
 fn main() -> ExitCode {
     init_tracing();
-    let args: Vec<String> = std::env::args().skip(1).collect();
-    match args.first().map(String::as_str) {
-        Some("--version" | "-v") => {
-            println!("auto-memory {}", env!("CARGO_PKG_VERSION"));
-            ExitCode::SUCCESS
-        }
-        Some("parse") => match args.get(1) {
-            Some(path) => parse_command(path),
-            None => usage("auto-memory parse <path>"),
-        },
-        Some("reindex") => reindex_command(&args[1..]),
-        Some("status") => status_command(&args[1..]),
-        Some("doctor") => doctor_command(&args[1..]),
-        Some("project") => project_command(&args[1..]),
-        Some("search") => search_command(&args[1..]),
-        Some("context") => context_command(&args[1..]),
-        Some("schema") => schema_command(&args[1..]),
-        Some("hook") => hook_command(&args[1..]),
+    // `clap` owns `--version` (and `-V`); keep the historical `-v` spelling working.
+    if std::env::args().nth(1).is_some_and(|arg| arg == "-v") {
+        println!("auto-memory {}", env!("CARGO_PKG_VERSION"));
+        return ExitCode::SUCCESS;
+    }
+    match Cli::parse().command {
+        Command::Parse { path } => parse_command(&path),
+        Command::Reindex(args) => reindex_command(args),
+        Command::Status(args) => status_command(args),
+        Command::Doctor(args) => doctor_command(args),
+        Command::Project(command) => project_command(command),
+        Command::Search(args) => search_command(args),
+        Command::Context(args) => context_command(args),
+        Command::Schema(command) => schema_command(command),
+        Command::Hook(args) => hook_command(args),
         // The two event-loop surfaces run on a tokio runtime; everything else is a
         // one-shot pass over the vault or the index and stays synchronous.
-        Some("watch") => async_command(watch_command(&args[1..])),
-        Some("mcp") => async_command(mcp_command(&args[1..])),
-        _ => usage(&format!(
-            "auto-memory {}\n\nusage:\n  auto-memory --version\n  auto-memory parse <path>\n  \
-             auto-memory reindex --vault <dir> --index <db> [--project <name>] [--full]\n  \
-             auto-memory reindex --vault <dir> --index <db> --embeddings \\\n               [--model-cache DIR] [--onnx-runtime PATH] [--embedding-fixture FILE]\n  \
-             auto-memory watch --vault <dir> --index <db> [--project <name>] [--window-ms N] [--once]\n  \
-             auto-memory mcp --vault <dir> --index <db> [--project <name>] \\\n               [--embedding-fixture FILE | --model-cache DIR] [--onnx-runtime PATH]\n  \
-             auto-memory mcp --vault <dir> --index <db> [--project <name>] --http \\\n               [--host HOST] [--port PORT] [--path PATH] [--read-only]\n  \
-             auto-memory status --index <db> --project <permalink>\n  \
-             auto-memory doctor [--index <db>] [--vault <dir>] [--project <permalink>] [--json]\n  \
-             auto-memory project <add|list|remove> ...\n               add <name> <path> [--index <db>] [--permalink <slug>] [--no-index]\n               list [--index <db>] [--json]\n               remove <name|permalink> [--index <db>] [--json]\n  \
-             auto-memory context <memory://url> --index <db> --project <permalink> \\\n               [--depth N] [--timeframe T] [--page N] [--page-size N] [--max-related N] \\\n               [--json|--plain]\n  \
-             auto-memory schema <validate|infer|diff> [target] --index <db> --project <permalink> \\\n               [--vault <dir>] [--threshold F] [--strict] [--text]\n  \
-             auto-memory hook <session-start|pre-compact> --harness <claude|codex|pi> \\\n               [--index <db>] [--project <permalink>] [--project-dir <dir>]\n  \
-             auto-memory search --index <db> --project <permalink> [--title T] [--type T] \\\n               [--tag TAG] [--status S] [--meta KEY=VALUE] [--after-date WINDOW] \\\n               [--entity-type TYPE] [--category C] [--permalink P] <query>\n  \
-             auto-memory search --index <db> --project <permalink> [--vector|--hybrid] \\\n               [--min-similarity F] [--embedding-fixture FILE] [--reranker] \\\n               [--reranker-candidates N] [--reranker-fixture FILE] <query>",
-            env!("CARGO_PKG_VERSION")
-        )),
+        Command::Watch(args) => async_command(watch_command(args)),
+        Command::Mcp(args) => async_command(mcp_command(args)),
     }
 }
 
@@ -148,120 +539,103 @@ fn async_command(future: impl Future<Output = ExitCode>) -> ExitCode {
 /// `output_format="json"` and print the result through
 /// `json.dumps(..., indent=2, ensure_ascii=True, default=str)`. `--text` prints the
 /// MCP text surface instead (the markdown report or the guidance block).
-fn schema_command(args: &[String]) -> ExitCode {
-    match args.first().map(String::as_str) {
-        Some("validate") => schema_validate_command(&args[1..]),
-        Some("infer") => schema_infer_command(&args[1..]),
-        Some("diff") => schema_diff_command(&args[1..]),
-        Some(other) => usage(&format!("unknown schema subcommand: {other}")),
-        None => usage("auto-memory schema <validate|infer|diff> ..."),
+fn schema_command(command: SchemaCommand) -> ExitCode {
+    match command {
+        SchemaCommand::Validate(args) => schema_validate_command(args),
+        SchemaCommand::Infer(args) => schema_infer_command(args),
+        SchemaCommand::Diff(args) => schema_diff_command(args),
     }
 }
 
 /// Open the index and resolve the project (and vault) a schema command runs against.
-fn schema_context(options: &Options) -> Result<(Store, i64, PathBuf), String> {
-    let index = options
-        .value("index")
-        .map(PathBuf::from)
-        .ok_or_else(|| "schema requires --index <db>".to_owned())?;
-    let permalink = options
-        .value("project")
-        .ok_or_else(|| "schema requires --project <permalink>".to_owned())?
-        .to_owned();
-    let store = Store::open(&index)
+fn schema_context(
+    index: &Path,
+    permalink: &str,
+    vault: Option<&Path>,
+) -> Result<(Store, i64, PathBuf), String> {
+    let store = Store::open(index)
         .map_err(|error| format!("failed to open index {}: {error}", index.display()))?;
     let project = store
-        .project_by_permalink(&permalink)
+        .project_by_permalink(permalink)
         .map_err(|error| format!("failed to read project: {error}"))?
         .ok_or_else(|| format!("project not found: {permalink}"))?;
     // Schema definitions are read from their files, so the vault matters: it defaults
     // to the path the project was indexed from.
-    let vault = options
-        .value("vault")
-        .map_or_else(|| PathBuf::from(&project.path), PathBuf::from);
+    let vault = vault.map_or_else(|| PathBuf::from(&project.path), Path::to_path_buf);
     Ok((store, project.id, vault))
 }
 
-fn schema_validate_command(args: &[String]) -> ExitCode {
-    let options = match Options::parse(args) {
-        Ok(options) => options,
-        Err(message) => return usage(&message),
-    };
-    let (store, project_id, vault) = match schema_context(&options) {
+fn schema_validate_command(args: SchemaArgs) -> ExitCode {
+    let (store, project_id, vault) = match schema_context(
+        &args.common.index,
+        &args.common.project,
+        args.common.vault.as_deref(),
+    ) {
         Ok(context) => context,
         Err(message) => return usage(&message),
     };
 
     // Reference heuristic: a target containing `/` or `.` is an identifier, anything
     // else is a note type.
-    let (note_type, identifier) = match options.positionals.first() {
-        Some(target) if target.contains('/') || target.contains('.') => {
-            (None, Some(target.as_str()))
-        }
-        Some(target) => (Some(target.as_str()), None),
+    let (note_type, identifier) = match args.target.as_deref() {
+        Some(target) if target.contains('/') || target.contains('.') => (None, Some(target)),
+        Some(target) => (Some(target), None),
         None => (None, None),
     };
 
     let service = SchemaService::new(&store, project_id, &vault);
     let outcome = schema_tools::validate(&service, note_type, identifier);
     let payload = outcome.payload();
-    let status = if options.switch("strict") && payload["error_count"].as_u64().unwrap_or(0) > 0 {
+    let status = if args.strict && payload["error_count"].as_u64().unwrap_or(0) > 0 {
         ExitCode::FAILURE
     } else {
         ExitCode::SUCCESS
     };
-    print_schema_outcome(&payload, &outcome.text(), &options);
+    print_schema_outcome(&payload, &outcome.text(), args.text);
     status
 }
 
-fn schema_infer_command(args: &[String]) -> ExitCode {
-    let options = match Options::parse(args) {
-        Ok(options) => options,
-        Err(message) => return usage(&message),
-    };
-    let Some(note_type) = options.positionals.first().cloned() else {
-        return usage("schema infer requires a note type");
-    };
-    let threshold = match options.value("threshold") {
-        None => auto_memory::application::schema::OPTIONAL_THRESHOLD,
-        Some(value) => match value.parse::<f64>() {
-            Ok(threshold) => threshold,
-            Err(_) => return usage(&format!("--threshold must be a number, got {value}")),
-        },
-    };
-    let (store, project_id, vault) = match schema_context(&options) {
+fn schema_infer_command(args: SchemaInferArgs) -> ExitCode {
+    let threshold = args
+        .threshold
+        .unwrap_or(auto_memory::application::schema::OPTIONAL_THRESHOLD);
+    let (store, project_id, vault) = match schema_context(
+        &args.common.index,
+        &args.common.project,
+        args.common.vault.as_deref(),
+    ) {
         Ok(context) => context,
         Err(message) => return usage(&message),
     };
 
     let service = SchemaService::new(&store, project_id, &vault);
-    let outcome = schema_tools::infer(&service, &note_type, threshold);
-    print_schema_outcome(&outcome.payload(), &outcome.text(), &options);
+    let outcome = schema_tools::infer(&service, &args.note_type, threshold);
+    print_schema_outcome(&outcome.payload(), &outcome.text(), args.text);
     ExitCode::SUCCESS
 }
 
-fn schema_diff_command(args: &[String]) -> ExitCode {
-    let options = match Options::parse(args) {
-        Ok(options) => options,
-        Err(message) => return usage(&message),
-    };
-    let Some(note_type) = options.positionals.first().cloned() else {
+fn schema_diff_command(args: SchemaArgs) -> ExitCode {
+    let Some(note_type) = args.target.clone() else {
         return usage("schema diff requires a note type");
     };
-    let (store, project_id, vault) = match schema_context(&options) {
+    let (store, project_id, vault) = match schema_context(
+        &args.common.index,
+        &args.common.project,
+        args.common.vault.as_deref(),
+    ) {
         Ok(context) => context,
         Err(message) => return usage(&message),
     };
 
     let service = SchemaService::new(&store, project_id, &vault);
     let outcome = schema_tools::diff(&service, &note_type);
-    print_schema_outcome(&outcome.payload(), &outcome.text(), &options);
+    print_schema_outcome(&outcome.payload(), &outcome.text(), args.text);
     ExitCode::SUCCESS
 }
 
 /// Print a schema outcome as the reference CLI does, or as the MCP text surface.
-fn print_schema_outcome(payload: &serde_json::Value, text: &str, options: &Options) {
-    if options.switch("text") {
+fn print_schema_outcome(payload: &serde_json::Value, text: &str, text_surface: bool) {
+    if text_surface {
         println!("{text}");
         return;
     }
@@ -274,15 +648,8 @@ fn print_schema_outcome(payload: &serde_json::Value, text: &str, options: &Optio
 /// prints context on stdout; stdout stays clean because the verb prints exactly
 /// once. Every failure is **fail-open** (exit 0): a hook is advisory and must
 /// never disrupt an agent session.
-fn hook_command(args: &[String]) -> ExitCode {
-    let options = match Options::parse(args) {
-        Ok(options) => options,
-        Err(message) => return usage(&message),
-    };
-    let Some(verb) = options.positionals.first().map(String::as_str) else {
-        return usage("auto-memory hook <session-start|pre-compact> --harness <claude|codex|pi>");
-    };
-    let harness = match options.value("harness") {
+fn hook_command(args: HookArgs) -> ExitCode {
+    let harness = match args.harness.as_deref() {
         None => Harness::Claude,
         Some(value) => match Harness::parse(value) {
             Some(harness) => harness,
@@ -295,15 +662,15 @@ fn hook_command(args: &[String]) -> ExitCode {
     };
     // A hook verb never fails the caller; diagnostics go to stderr and the
     // process still exits 0.
-    if let Err(message) = run_hook(verb, harness, &options) {
-        tracing::warn!("hook {verb} failed: {message}");
-        eprintln!("auto-memory hook {verb}: {message}");
+    if let Err(message) = run_hook(&args.verb, harness, &args) {
+        tracing::warn!("hook {} failed: {message}", args.verb);
+        eprintln!("auto-memory hook {}: {message}", args.verb);
     }
     ExitCode::SUCCESS
 }
 
 /// Run one hook verb. `Err` is a diagnostic, not a failure.
-fn run_hook(verb: &str, harness: Harness, options: &Options) -> Result<(), String> {
+fn run_hook(verb: &str, harness: Harness, args: &HookArgs) -> Result<(), String> {
     let hook_event = match verb {
         "session-start" => HookEvent::SessionStarted,
         "pre-compact" => HookEvent::CompactionImminent,
@@ -312,8 +679,7 @@ fn run_hook(verb: &str, harness: Harness, options: &Options) -> Result<(), Strin
     let payload = read_hook_payload();
     let event = normalize(harness, hook_event, &payload);
 
-    let project_dir = options.value("project-dir").map(PathBuf::from);
-    let mapping = mapping_dir(project_dir.as_deref(), &event.cwd);
+    let mapping = mapping_dir(args.project_dir.as_deref(), &event.cwd);
     let (settings, configured) = load_harness_settings(harness, &mapping);
 
     // Codex ignores PreCompact stdout and asks for the checkpoint from the
@@ -322,9 +688,9 @@ fn run_hook(verb: &str, harness: Harness, options: &Options) -> Result<(), Strin
         return Ok(());
     }
 
-    let Some(permalink) = options
-        .value("project")
-        .map(str::to_owned)
+    let Some(permalink) = args
+        .project
+        .clone()
         .or_else(|| settings.primary_project.clone())
     else {
         // No mapping: emit the first-run nudge instead of guessing a project.
@@ -338,9 +704,9 @@ fn run_hook(verb: &str, harness: Harness, options: &Options) -> Result<(), Strin
     let mut settings = settings;
     settings.primary_project = Some(permalink.clone());
 
-    let index = options
-        .value("index")
-        .map(PathBuf::from)
+    let index = args
+        .index
+        .clone()
         .or_else(|| std::env::var_os("AUTO_MEMORY_INDEX").map(PathBuf::from))
         .unwrap_or_else(default_index_path);
     let store = Store::open(&index)
@@ -406,36 +772,32 @@ fn default_index_path() -> PathBuf {
 /// server and tell the caller to use the CLI, and until now that meant hand-editing the
 /// index. The argument shape is the reference's (`project add <name> <path>`) so the
 /// refusal text only has to differ by the binary name.
-fn project_command(args: &[String]) -> ExitCode {
-    match args.first().map(String::as_str) {
-        Some("add") => project_add_command(&args[1..]),
-        Some("list") => project_list_command(&args[1..]),
-        Some("remove") => project_remove_command(&args[1..]),
-        Some(other) => usage(&format!("unknown project subcommand: {other}")),
-        None => usage("auto-memory project <add|list|remove> ..."),
+fn project_command(command: ProjectCommand) -> ExitCode {
+    match command {
+        ProjectCommand::Add(args) => project_add_command(args),
+        ProjectCommand::List(args) => project_list_command(args),
+        ProjectCommand::Remove(args) => project_remove_command(args),
     }
 }
 
 /// `project add <name> <path>` — register a vault, then index it.
-fn project_add_command(args: &[String]) -> ExitCode {
-    let options = match Options::parse(args) {
-        Ok(options) => options,
-        Err(message) => return usage(&message),
-    };
-    let mut positionals = options.positionals.iter();
-    let (Some(name), Some(path)) = (positionals.next(), positionals.next()) else {
-        return usage("project add <name> <path> [--index <db>] [--permalink <slug>] [--no-index]");
-    };
-    let vault = PathBuf::from(path);
-    if !vault.is_dir() {
-        return usage(&format!("project path is not a directory: {path}"));
+fn project_add_command(args: ProjectAddArgs) -> ExitCode {
+    let ProjectAddArgs {
+        name,
+        path,
+        index,
+        permalink,
+        no_index,
+        json,
+    } = args;
+    if !path.is_dir() {
+        return usage(&format!(
+            "project path is not a directory: {}",
+            path.display()
+        ));
     }
-    let permalink = options
-        .value("permalink")
-        .map_or_else(|| generate_permalink(name), str::to_owned);
-    let index = options
-        .value("index")
-        .map_or_else(default_index_path, PathBuf::from);
+    let permalink = permalink.unwrap_or_else(|| generate_permalink(&name));
+    let index = index.unwrap_or_else(default_index_path);
 
     let mut store = match Store::open(&index) {
         Ok(store) => store,
@@ -448,12 +810,12 @@ fn project_add_command(args: &[String]) -> ExitCode {
 
     // Registering without indexing leaves a project that every query reports as empty,
     // which reads as a bug; index by default and let `--no-index` opt out.
-    let indexed = if options.switch("no-index") {
+    let indexed = if no_index {
         store
-            .upsert_project(name, &permalink, path)
+            .upsert_project(&name, &permalink, &path.to_string_lossy())
             .map(|_| None::<Value>)
     } else {
-        ensure_project(&mut store, name, &permalink, &vault).and_then(|project_id| {
+        ensure_project(&mut store, &name, &permalink, &path).and_then(|project_id| {
             store
                 .counts(project_id)
                 .map(|counts| Some(serde_json::to_value(counts).unwrap_or(Value::Null)))
@@ -467,19 +829,20 @@ fn project_add_command(args: &[String]) -> ExitCode {
         }
     };
 
-    if options.switch("json") {
+    if json {
         print_json(&json!({
             "name": name,
             "permalink": permalink,
-            "path": path,
+            "path": path.to_string_lossy(),
             "index": index.to_string_lossy(),
             "action": if existed { "updated" } else { "added" },
             "indexed": indexed,
         }))
     } else {
         println!(
-            "{} project '{name}' ({permalink}) -> {path}",
-            if existed { "updated" } else { "added" }
+            "{} project '{name}' ({permalink}) -> {}",
+            if existed { "updated" } else { "added" },
+            path.display()
         );
         match indexed {
             Some(counts) => println!(
@@ -496,14 +859,9 @@ fn project_add_command(args: &[String]) -> ExitCode {
 }
 
 /// `project list` — every registered project with its index counts.
-fn project_list_command(args: &[String]) -> ExitCode {
-    let options = match Options::parse(args) {
-        Ok(options) => options,
-        Err(message) => return usage(&message),
-    };
-    let index = options
-        .value("index")
-        .map_or_else(default_index_path, PathBuf::from);
+fn project_list_command(args: ProjectListArgs) -> ExitCode {
+    let ProjectListArgs { index, json } = args;
+    let index = index.unwrap_or_else(default_index_path);
     let store = match Store::open(&index) {
         Ok(store) => store,
         Err(error) => {
@@ -539,7 +897,7 @@ fn project_list_command(args: &[String]) -> ExitCode {
         })
         .collect();
 
-    if options.switch("json") {
+    if json {
         print_json(&json!({ "index": index.to_string_lossy(), "projects": rows }))
     } else {
         if rows.is_empty() {
@@ -574,17 +932,13 @@ fn project_list_command(args: &[String]) -> ExitCode {
 ///
 /// The vault is left alone: it is the source of truth, and deleting a user's notes is
 /// not something a project-lifecycle command should ever do.
-fn project_remove_command(args: &[String]) -> ExitCode {
-    let options = match Options::parse(args) {
-        Ok(options) => options,
-        Err(message) => return usage(&message),
-    };
-    let Some(identifier) = options.positionals.first() else {
-        return usage("project remove <name|permalink> [--index <db>]");
-    };
-    let index = options
-        .value("index")
-        .map_or_else(default_index_path, PathBuf::from);
+fn project_remove_command(args: ProjectRemoveArgs) -> ExitCode {
+    let ProjectRemoveArgs {
+        identifier,
+        index,
+        json,
+    } = args;
+    let index = index.unwrap_or_else(default_index_path);
     let mut store = match Store::open(&index) {
         Ok(store) => store,
         Err(error) => {
@@ -594,13 +948,13 @@ fn project_remove_command(args: &[String]) -> ExitCode {
     };
     // Accept either the name or the permalink: the reference's CLI takes the name, but
     // the permalink is what every other command here uses to identify a project.
-    let permalink = match store.project_by_permalink(identifier) {
-        Ok(Some(_)) => identifier.to_owned(),
-        _ => generate_permalink(identifier),
+    let permalink = match store.project_by_permalink(&identifier) {
+        Ok(Some(_)) => identifier.clone(),
+        _ => generate_permalink(&identifier),
     };
     match store.delete_project(&permalink) {
         Ok(true) => {
-            if options.switch("json") {
+            if json {
                 print_json(&json!({ "name": identifier, "permalink": permalink, "deleted": true }))
             } else {
                 println!("removed project '{identifier}' ({permalink}); the vault was not touched");
@@ -667,20 +1021,21 @@ impl Check {
 /// warning, not a failure: text search, context, schema, and the MCP server do not need
 /// it, and treating an optional capability as a broken installation would make the
 /// command useless in exactly the setups it exists for.
-fn doctor_command(args: &[String]) -> ExitCode {
-    let options = match Options::parse(args) {
-        Ok(options) => options,
-        Err(message) => return usage(&message),
-    };
+fn doctor_command(args: DoctorArgs) -> ExitCode {
+    let DoctorArgs {
+        index,
+        vault,
+        project,
+        model_cache: cache_dir,
+        json,
+    } = args;
     let mut checks = Vec::new();
 
     // --- index -----------------------------------------------------------------
     //
     // `Store::open` creates a missing index, so `doctor` must not call it on a path that
     // does not exist: a diagnostic that writes is a diagnostic you cannot trust.
-    let index = options
-        .value("index")
-        .map_or_else(default_index_path, PathBuf::from);
+    let index = index.unwrap_or_else(default_index_path);
     let store = if index.exists() {
         match Store::open(&index) {
             Ok(store) => {
@@ -739,7 +1094,7 @@ fn doctor_command(args: &[String]) -> ExitCode {
     }
 
     // --- vault and project (only when named) -----------------------------------
-    if let Some(vault) = options.value("vault").map(PathBuf::from) {
+    if let Some(vault) = vault {
         if vault.is_dir() {
             let mut files = Vec::new();
             collect_files(&vault, &mut files);
@@ -765,7 +1120,7 @@ fn doctor_command(args: &[String]) -> ExitCode {
             ));
         }
     }
-    if let (Some(permalink), Some(store)) = (options.value("project"), store.as_ref()) {
+    if let (Some(permalink), Some(store)) = (project.as_deref(), store.as_ref()) {
         match store.project_by_permalink(&generate_permalink(permalink)) {
             Ok(Some(project)) => match store.counts(project.id) {
                 Ok(counts) if counts.entities == 0 => checks.push(Check::warn(
@@ -809,7 +1164,7 @@ fn doctor_command(args: &[String]) -> ExitCode {
         }
     }
 
-    let cache = model_cache(&options);
+    let cache = model_cache(cache_dir.as_deref());
     match reference_model_dir(&cache) {
         Some(model_dir) => checks.push(Check::ok(
             "model_cache",
@@ -845,7 +1200,7 @@ fn doctor_command(args: &[String]) -> ExitCode {
 
     // --- report -----------------------------------------------------------------
     let failed = checks.iter().any(|check| check.status == "fail");
-    if options.switch("json") {
+    if json {
         let payload = json!({
             "ok": !failed,
             "checks": checks
@@ -903,41 +1258,39 @@ fn collect_files(directory: &Path, out: &mut Vec<PathBuf>) {
     }
 }
 
-fn parse_command(path: &str) -> ExitCode {
+fn parse_command(path: &Path) -> ExitCode {
     let content = match std::fs::read_to_string(path) {
         Ok(content) => content,
         Err(error) => {
-            eprintln!("failed to read {path}: {error}");
+            eprintln!("failed to read {}: {error}", path.display());
             return ExitCode::FAILURE;
         }
     };
     match auto_memory::markdown::parse_document(path, &content) {
         Ok(document) => print_json(&document),
         Err(error) => {
-            eprintln!("failed to parse {path}: {error}");
+            eprintln!("failed to parse {}: {error}", path.display());
             ExitCode::FAILURE
         }
     }
 }
 
-fn reindex_command(args: &[String]) -> ExitCode {
-    let options = match Options::parse(args) {
-        Ok(options) => options,
-        Err(message) => return usage(&message),
-    };
-    let Some(vault) = options.value("vault").map(PathBuf::from) else {
-        return usage("reindex requires --vault <dir>");
-    };
-    let Some(index) = options.value("index").map(PathBuf::from) else {
-        return usage("reindex requires --index <db>");
-    };
+fn reindex_command(args: ReindexArgs) -> ExitCode {
+    let ReindexArgs {
+        vault,
+        index,
+        project,
+        full,
+        embeddings,
+        embed,
+    } = args;
     // A missing vault used to look like an empty one (`read_dir` failure is tolerated),
     // which is indistinguishable from "indexed nothing" in the summary output.
     if !vault.is_dir() {
         return usage(&format!("vault directory not found: {}", vault.display()));
     }
-    let name = match options.value("project") {
-        Some(name) => name.to_owned(),
+    let name = match project {
+        Some(name) => name,
         None => vault.file_name().map_or_else(
             || "default".to_owned(),
             |name| name.to_string_lossy().into_owned(),
@@ -965,12 +1318,12 @@ fn reindex_command(args: &[String]) -> ExitCode {
     // `reindex --embeddings` refreshes only the vector index; the markdown index
     // is reconciled first so an embeddings-only run still sees the vault (the
     // reference runs `reindex --full --search` followed by `--embeddings`).
-    if options.switch("embeddings") {
+    if embeddings {
         if let Err(error) = service.reconcile() {
             eprintln!("incremental reindex failed: {error}");
             return ExitCode::FAILURE;
         }
-        let provider = match embedding_provider(&options) {
+        let provider = match embedding_provider(&embed) {
             Ok(provider) => provider,
             Err(message) => {
                 eprintln!("Error: {message}");
@@ -986,7 +1339,7 @@ fn reindex_command(args: &[String]) -> ExitCode {
         };
     }
 
-    if options.switch("full") {
+    if full {
         match service.full_rebuild() {
             Ok(report) => print_json(&report),
             Err(error) => {
@@ -1012,19 +1365,21 @@ fn reindex_command(args: &[String]) -> ExitCode {
 /// so the signal handler can stop the loop between frames instead of killing a
 /// request mid-write. `--http` swaps in the Streamable HTTP transport (served by
 /// `rmcp` + `axum`), which stays up until the same shutdown signal arrives.
-async fn mcp_command(args: &[String]) -> ExitCode {
-    let options = match Options::parse(args) {
-        Ok(options) => options,
-        Err(message) => return usage(&message),
-    };
-    let Some(vault) = options.value("vault").map(PathBuf::from) else {
-        return usage("mcp requires --vault <dir>");
-    };
-    let Some(index) = options.value("index").map(PathBuf::from) else {
-        return usage("mcp requires --index <db>");
-    };
-    let name = match options.value("project") {
-        Some(name) => name.to_owned(),
+async fn mcp_command(args: McpArgs) -> ExitCode {
+    let McpArgs {
+        vault,
+        index,
+        project,
+        http,
+        host,
+        port,
+        path,
+        read_only,
+        embed,
+        rerank,
+    } = args;
+    let name = match project {
+        Some(name) => name,
         None => vault.file_name().map_or_else(
             || "default".to_owned(),
             |name| name.to_string_lossy().into_owned(),
@@ -1058,25 +1413,24 @@ async fn mcp_command(args: &[String]) -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    let read_only = options.switch("read-only");
     tracing::info!(
         project = %name,
         permalink = %permalink,
         vault = %vault.display(),
         index = %index.display(),
         read_only,
-        transport = if options.switch("http") { "http" } else { "stdio" },
+        transport = if http { "http" } else { "stdio" },
         "mcp server starting"
     );
     // The providers are built once and handed to whichever transport runs, so the two
     // transports share one ONNX runtime instead of loading the model twice.
     // Semantic `search_type`s need the embedding runtime; without these flags the tool
     // reports that semantic search is unavailable instead of falling back to text.
-    let provider = if options.value("embedding-fixture").is_some()
-        || options.value("model-cache").is_some()
-        || options.value("onnx-runtime").is_some()
+    let provider = if embed.embedding_fixture.is_some()
+        || embed.model_cache.is_some()
+        || embed.onnx_runtime.is_some()
     {
-        match embedding_provider(&options) {
+        match embedding_provider(&embed) {
             Ok(provider) => Some(provider),
             Err(message) => {
                 eprintln!("Error: {message}");
@@ -1087,8 +1441,8 @@ async fn mcp_command(args: &[String]) -> ExitCode {
         None
     };
     // The reranker is opt-in, like the reference's `reranker_enabled=False` default.
-    let reranker = if options.switch("reranker") || options.value("reranker-fixture").is_some() {
-        match rerank_provider(&options) {
+    let reranker = if rerank.reranker || rerank.reranker_fixture.is_some() {
+        match rerank_provider(&rerank, &embed) {
             Ok(provider) => Some(provider),
             Err(message) => {
                 eprintln!("Error: {message}");
@@ -1098,23 +1452,13 @@ async fn mcp_command(args: &[String]) -> ExitCode {
     } else {
         None
     };
-    let reranker_candidates = options
-        .value("reranker-candidates")
-        .and_then(|value| value.parse().ok());
-    let reranker_max_chars = options
-        .value("reranker-max-chars")
-        .and_then(|value| value.parse().ok());
+    let reranker_candidates = rerank.reranker_candidates;
+    let reranker_max_chars = rerank.reranker_max_chars;
 
-    if options.switch("http") {
-        let host = options.value("host").unwrap_or(DEFAULT_HTTP_HOST);
-        let port = match options.value("port") {
-            Some(value) => match value.parse::<u16>() {
-                Ok(port) => port,
-                Err(_) => return usage(&format!("--port must be 0..=65535 (got {value:?})")),
-            },
-            None => DEFAULT_HTTP_PORT,
-        };
-        let path = options.value("path").unwrap_or(DEFAULT_HTTP_PATH);
+    if http {
+        let host = host.as_deref().unwrap_or(DEFAULT_HTTP_HOST);
+        let port = port.unwrap_or(DEFAULT_HTTP_PORT);
+        let path = path.as_deref().unwrap_or(DEFAULT_HTTP_PATH);
         let mut server = HttpServer::new(
             Arc::new(Mutex::new(store)),
             project_id,
@@ -1228,29 +1572,26 @@ async fn shutdown_signal() {
 /// batch and exits, which is handy for scripts and tests. The loop runs on the async
 /// runtime, so Ctrl-C stops it *and* flushes the pending window before the process
 /// exits, instead of dropping whatever was still debouncing.
-async fn watch_command(args: &[String]) -> ExitCode {
-    let options = match Options::parse(args) {
-        Ok(options) => options,
-        Err(message) => return usage(&message),
-    };
-    // `Options` recognises every switch this CLI defines, so `watch` parses flags it
-    // never reads. `--embeddings` is the one an operator would pass expecting vectors
-    // to follow the vault; accepting it quietly would make a markdown-only run look
-    // like a semantic one, so refuse it and name the command that does the work.
-    if options.switch("embeddings") {
+async fn watch_command(args: WatchArgs) -> ExitCode {
+    let WatchArgs {
+        vault,
+        index,
+        project,
+        window_ms,
+        once,
+        embeddings,
+    } = args;
+    // `--embeddings` is declared (hidden) only to reach this refusal: an operator would
+    // pass it expecting vectors to follow the vault, and a markdown-only run that looks
+    // like a semantic one is worse than an error naming the command that does the work.
+    if embeddings {
         return usage(
             "watch does not take --embeddings: it only keeps the markdown index current — \
              run `auto-memory reindex --vault <dir> --index <db> --embeddings` for the vectors",
         );
     }
-    let Some(vault) = options.value("vault").map(PathBuf::from) else {
-        return usage("watch requires --vault <dir>");
-    };
-    let Some(index) = options.value("index").map(PathBuf::from) else {
-        return usage("watch requires --index <db>");
-    };
-    let name = match options.value("project") {
-        Some(name) => name.to_owned(),
+    let name = match project {
+        Some(name) => name,
         None => vault.file_name().map_or_else(
             || "default".to_owned(),
             |name| name.to_string_lossy().into_owned(),
@@ -1271,10 +1612,7 @@ async fn watch_command(args: &[String]) -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    let window = options
-        .value("window-ms")
-        .and_then(|value| value.parse::<u64>().ok())
-        .map_or(DEFAULT_WATCH_WINDOW, Duration::from_millis);
+    let window = window_ms.map_or(DEFAULT_WATCH_WINDOW, Duration::from_millis);
 
     let mut service = IndexService::new(
         &mut store,
@@ -1287,7 +1625,7 @@ async fn watch_command(args: &[String]) -> ExitCode {
         index = %index.display(),
         project = %permalink,
         window_ms = window.as_millis() as u64,
-        once = options.switch("once"),
+        once,
         "watching the vault"
     );
     // The reconcile is a full vault pass (read, parse, write); like the per-batch
@@ -1309,7 +1647,7 @@ async fn watch_command(args: &[String]) -> ExitCode {
         "initial reconcile finished"
     );
     let watcher = VaultWatcher::new(service, &vault).with_window(window);
-    if options.switch("once") {
+    if once {
         // The one-shot path is a bounded blocking collect; keep it off the reactor.
         return match tokio::task::block_in_place(|| watch_once(watcher, window)) {
             Ok(applied) => {
@@ -1342,17 +1680,11 @@ async fn watch_command(args: &[String]) -> ExitCode {
 fn log_batch(label: &str, report: &auto_memory::indexing::WatchReport) {
     auto_memory::indexing::log_watch_report(label, report);
 }
-fn status_command(args: &[String]) -> ExitCode {
-    let options = match Options::parse(args) {
-        Ok(options) => options,
-        Err(message) => return usage(&message),
-    };
-    let Some(index) = options.value("index").map(PathBuf::from) else {
-        return usage("status requires --index <db>");
-    };
-    let Some(permalink) = options.value("project") else {
-        return usage("status requires --project <permalink>");
-    };
+fn status_command(args: StatusArgs) -> ExitCode {
+    let StatusArgs {
+        index,
+        project: permalink,
+    } = args;
     let store = match Store::open(&index) {
         Ok(store) => store,
         Err(error) => {
@@ -1360,7 +1692,7 @@ fn status_command(args: &[String]) -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    let project = match store.project_by_permalink(permalink) {
+    let project = match store.project_by_permalink(&permalink) {
         Ok(Some(project)) => project,
         Ok(None) => {
             eprintln!("project not found: {permalink}");
@@ -1384,41 +1716,32 @@ fn status_command(args: &[String]) -> ExitCode {
 ///
 /// Defaults mirror the reference CLI (`--depth 1`, `--timeframe 7d`, page 1,
 /// page size 10, max related 10) and errors print as `Error: …` with exit code 1.
-fn context_command(args: &[String]) -> ExitCode {
-    let options = match Options::parse(args) {
-        Ok(options) => options,
-        Err(message) => return usage(&message),
-    };
-    let Some(index) = options.value("index").map(PathBuf::from) else {
-        return usage("context requires --index <db>");
-    };
-    let Some(permalink) = options.value("project") else {
-        return usage("context requires --project <permalink>");
-    };
-    let Some(url) = options.positionals.first() else {
-        return usage("context requires a memory:// url");
-    };
+fn context_command(args: ContextArgs) -> ExitCode {
+    let ContextArgs {
+        url,
+        index,
+        project: permalink,
+        depth,
+        timeframe: window,
+        page,
+        page_size,
+        max_related,
+        plain,
+        json: _json,
+    } = args;
 
-    let number = |key: &str, default: u32| -> Result<u32, String> {
-        match options.value(key) {
-            None => Ok(default),
-            Some(value) => value
-                .parse::<u32>()
-                .map_err(|_| format!("{key} must be a positive integer, got {value}")),
-        }
-    };
     let context = match (|| {
-        let timeframe = options.value("timeframe").unwrap_or("7d");
+        let timeframe = window.as_deref().unwrap_or("7d");
         let since = timeframe::parse_timeframe(timeframe)?;
         let options = ContextOptions {
-            depth: number("depth", 1)?,
-            max_related: number("max-related", 10)?,
-            page: number("page", 1)?,
-            page_size: number("page-size", 10)?,
+            depth: depth.unwrap_or(1),
+            max_related: max_related.unwrap_or(10),
+            page: page.unwrap_or(1),
+            page_size: page_size.unwrap_or(10),
             since: Some(since),
         };
         options.validate()?;
-        Ok::<_, Box<dyn std::error::Error>>((options, url.clone()))
+        Ok::<_, Box<dyn std::error::Error>>(options)
     })() {
         Ok(value) => value,
         Err(error) => {
@@ -1434,7 +1757,7 @@ fn context_command(args: &[String]) -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    let project = match store.project_by_permalink(permalink) {
+    let project = match store.project_by_permalink(&permalink) {
         Ok(Some(project)) => project,
         Ok(None) => {
             eprintln!("Error: project not found: {permalink}");
@@ -1446,7 +1769,7 @@ fn context_command(args: &[String]) -> ExitCode {
         }
     };
 
-    let (context_options, url) = context;
+    let context_options = context;
     let graph = match build_context(&store, project.id, &url, &context_options) {
         Ok(graph) => graph,
         Err(error) => {
@@ -1462,7 +1785,7 @@ fn context_command(args: &[String]) -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    if options.switch("plain") {
+    if plain {
         println!("{}", render_plain(&response));
         return ExitCode::SUCCESS;
     }
@@ -1478,17 +1801,28 @@ fn context_command(args: &[String]) -> ExitCode {
     }
 }
 
-fn search_command(args: &[String]) -> ExitCode {
-    let options = match Options::parse(args) {
-        Ok(options) => options,
-        Err(message) => return usage(&message),
-    };
-    let Some(index) = options.value("index").map(PathBuf::from) else {
-        return usage("search requires --index <db>");
-    };
-    let Some(permalink) = options.value("project") else {
-        return usage("search requires --project <permalink>");
-    };
+fn search_command(args: SearchArgs) -> ExitCode {
+    let SearchArgs {
+        query,
+        index,
+        project: permalink,
+        title,
+        note_type,
+        tag,
+        status,
+        category,
+        entity_type,
+        permalink: permalink_filter,
+        meta,
+        after_date,
+        page,
+        page_size,
+        vector,
+        hybrid,
+        min_similarity,
+        embed,
+        rerank,
+    } = args;
     let store = match Store::open(&index) {
         Ok(store) => store,
         Err(error) => {
@@ -1496,7 +1830,7 @@ fn search_command(args: &[String]) -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    let project = match store.project_by_permalink(permalink) {
+    let project = match store.project_by_permalink(&permalink) {
         Ok(Some(project)) => project,
         Ok(None) => {
             eprintln!("project not found: {permalink}");
@@ -1509,33 +1843,27 @@ fn search_command(args: &[String]) -> ExitCode {
     };
 
     let mut search = TextSearchOptions {
-        query: (!options.positionals.is_empty()).then(|| options.positionals.join(" ")),
-        page: options
-            .value("page")
-            .and_then(|value| value.parse().ok())
-            .unwrap_or(1),
-        page_size: options
-            .value("page-size")
-            .and_then(|value| value.parse().ok())
-            .unwrap_or(10),
+        query: (!query.is_empty()).then(|| query.join(" ")),
+        page: page.unwrap_or(1),
+        page_size: page_size.unwrap_or(10),
         ..TextSearchOptions::default()
     };
-    if let Some(value) = options.value("title") {
-        search.title = Some(value.to_owned());
+    if let Some(value) = title {
+        search.title = Some(value);
     }
-    if let Some(value) = options.value("type") {
-        search.note_types.push(value.to_owned());
+    if let Some(value) = note_type {
+        search.note_types.push(value);
     }
-    if let Some(value) = options.value("tag") {
-        search.tags.push(value.to_owned());
+    if let Some(value) = tag {
+        search.tags.push(value);
     }
-    if let Some(value) = options.value("category") {
-        search.categories.push(value.to_owned());
+    if let Some(value) = category {
+        search.categories.push(value);
     }
-    if let Some(value) = options.value("status") {
-        search.status = Some(value.to_owned());
+    if let Some(value) = status {
+        search.status = Some(value);
     }
-    if let Some(value) = options.value("entity-type") {
+    if let Some(value) = entity_type {
         match value.parse::<SearchItemType>() {
             Ok(item_type) => search.entity_types = vec![item_type],
             Err(_) => return usage(&format!("unknown entity type: {value}")),
@@ -1545,14 +1873,14 @@ fn search_command(args: &[String]) -> ExitCode {
         // observation rows, because categories only exist there.
         search.entity_types = auto_memory::search::default_entity_types(&search.categories);
     }
-    if let Some(value) = options.value("permalink") {
+    if let Some(value) = permalink_filter {
         if value.contains('*') {
-            search.permalink_match = Some(value.to_owned());
+            search.permalink_match = Some(value);
         } else {
-            search.permalink = Some(value.to_owned());
+            search.permalink = Some(value);
         }
     }
-    if let Some(value) = options.value("meta") {
+    if let Some(value) = meta {
         let Some((key, value)) = value.split_once('=') else {
             return usage("--meta expects key=value");
         };
@@ -1563,21 +1891,18 @@ fn search_command(args: &[String]) -> ExitCode {
             .metadata_filters
             .insert(key.to_owned(), value.to_owned());
     }
-    if let Some(value) = options
-        .value("after-date")
-        .or_else(|| options.value("after_date"))
-    {
+    if let Some(value) = after_date {
         // Search bounds go through `dateparser`, not the timeframe parser the context
         // tools use; see `domain::dateparser` for why the two disagree.
-        let Some(bound) = auto_memory::domain::dateparser::parse_after_date(value) else {
+        let Some(bound) = auto_memory::domain::dateparser::parse_after_date(&value) else {
             return usage(&format!("--after-date is not a date or window: {value}"));
         };
         search.after_date = Some(bound);
     }
 
     // Semantic modes reuse the filter set and embed the query locally.
-    if options.switch("vector") || options.switch("hybrid") {
-        let provider = match embedding_provider(&options) {
+    if vector || hybrid {
+        let provider = match embedding_provider(&embed) {
             Ok(provider) => provider,
             Err(message) => {
                 eprintln!("Error: {message}");
@@ -1596,9 +1921,8 @@ fn search_command(args: &[String]) -> ExitCode {
         };
         // The reranker is opt-in (`--reranker`, or a fixture), like the reference's
         // `reranker_enabled=False` default.
-        let reranker = if options.switch("reranker") || options.value("reranker-fixture").is_some()
-        {
-            match rerank_provider(&options) {
+        let reranker = if rerank.reranker || rerank.reranker_fixture.is_some() {
+            match rerank_provider(&rerank, &embed) {
                 Ok(provider) => Some(provider),
                 Err(message) => {
                     eprintln!("Error: {message}");
@@ -1611,21 +1935,16 @@ fn search_command(args: &[String]) -> ExitCode {
         let rerank_request = reranker.as_ref().map(|provider| RerankRequest {
             query: &query_text,
             provider: provider.as_ref(),
-            candidates: options
-                .value("reranker-candidates")
-                .and_then(|value| value.parse().ok())
+            candidates: rerank
+                .reranker_candidates
                 .unwrap_or(DEFAULT_RERANKER_CANDIDATES),
-            max_document_chars: options
-                .value("reranker-max-chars")
-                .and_then(|value| value.parse().ok())
+            max_document_chars: rerank
+                .reranker_max_chars
                 .unwrap_or(DEFAULT_RERANKER_MAX_DOCUMENT_CHARS),
         });
 
         let vector_options = VectorSearchOptions {
-            min_similarity: options
-                .value("min-similarity")
-                .and_then(|value| value.parse().ok())
-                .unwrap_or(0.55),
+            min_similarity: min_similarity.unwrap_or(0.55),
             page: search.page,
             page_size: search.page_size,
             entity_types: search.entity_types.clone(),
@@ -1641,7 +1960,7 @@ fn search_command(args: &[String]) -> ExitCode {
             metadata_filters: search.metadata_filters.clone(),
             after_date: search.after_date.clone(),
         };
-        let page = if options.switch("hybrid") {
+        let page = if hybrid {
             search_hybrid(
                 &store,
                 project.id,
@@ -1698,20 +2017,17 @@ fn search_command(args: &[String]) -> ExitCode {
 /// `--embedding-fixture <json>` replays captured reference vectors (offline, no ONNX
 /// runtime needed); otherwise the reference ONNX model is loaded from `--model-cache`.
 fn embedding_provider(
-    options: &Options,
+    args: &EmbeddingArgs,
 ) -> Result<Box<dyn EmbeddingProvider + Send + Sync>, String> {
-    if let Some(path) = options.value("embedding-fixture") {
+    if let Some(path) = &args.embedding_fixture {
         let json = std::fs::read_to_string(path)
-            .map_err(|error| format!("failed to read {path}: {error}"))?;
+            .map_err(|error| format!("failed to read {}: {error}", path.display()))?;
         let provider = FixtureEmbeddingProvider::from_json(&json)
-            .map_err(|error| format!("failed to load {path}: {error}"))?;
+            .map_err(|error| format!("failed to load {}: {error}", path.display()))?;
         return Ok(Box::new(provider));
     }
-    let cache = model_cache(options);
-    let runtime = options
-        .value("onnx-runtime")
-        .map(PathBuf::from)
-        .or_else(find_onnx_runtime);
+    let cache = model_cache(args.model_cache.as_deref());
+    let runtime = args.onnx_runtime.clone().or_else(find_onnx_runtime);
     let provider = OnnxEmbeddingProvider::load_from_cache(&cache, runtime.as_deref())
         .map_err(|error| format!("failed to load the embedding model: {error}"))?;
     Ok(Box::new(provider))
@@ -1722,19 +2038,19 @@ fn embedding_provider(
 /// `--reranker-fixture FILE` supplies deterministic scores (a JSON map of query →
 /// document → relevance) for tests and offline runs; otherwise the reference model is
 /// loaded from the shared fastembed cache.
-fn rerank_provider(options: &Options) -> Result<Box<dyn RerankProvider + Send + Sync>, String> {
-    if let Some(path) = options.value("reranker-fixture") {
+fn rerank_provider(
+    args: &RerankArgs,
+    embed: &EmbeddingArgs,
+) -> Result<Box<dyn RerankProvider + Send + Sync>, String> {
+    if let Some(path) = &args.reranker_fixture {
         let json = std::fs::read_to_string(path)
-            .map_err(|error| format!("failed to read {path}: {error}"))?;
+            .map_err(|error| format!("failed to read {}: {error}", path.display()))?;
         let provider = FixtureRerankProvider::from_json(&json)
-            .map_err(|error| format!("failed to load {path}: {error}"))?;
+            .map_err(|error| format!("failed to load {}: {error}", path.display()))?;
         return Ok(Box::new(provider));
     }
-    let cache = model_cache(options);
-    let runtime = options
-        .value("onnx-runtime")
-        .map(PathBuf::from)
-        .or_else(find_onnx_runtime);
+    let cache = model_cache(embed.model_cache.as_deref());
+    let runtime = embed.onnx_runtime.clone().or_else(find_onnx_runtime);
     let provider = OnnxRerankProvider::load_from_cache(&cache, runtime.as_deref())
         .map_err(|error| format!("failed to load the reranker: {error}"))?;
     Ok(Box::new(provider))
@@ -1745,10 +2061,9 @@ fn rerank_provider(options: &Options) -> Result<Box<dyn RerankProvider + Send + 
 /// `--model-cache` wins, then `AUTO_MEMORY_MODEL_CACHE`, then the discovered default
 /// (see `default_model_cache`) — which prefers the reference installation's cache so an
 /// existing setup needs no download, and otherwise names this port's own directory.
-fn model_cache(options: &Options) -> PathBuf {
-    options
-        .value("model-cache")
-        .map(PathBuf::from)
+fn model_cache(explicit: Option<&Path>) -> PathBuf {
+    explicit
+        .map(Path::to_path_buf)
         .or_else(|| std::env::var_os(MODEL_CACHE_ENV).map(PathBuf::from))
         .unwrap_or_else(default_model_cache)
 }
@@ -1763,74 +2078,5 @@ fn print_json<T: serde::Serialize>(value: &T) -> ExitCode {
             eprintln!("failed to serialize output: {error}");
             ExitCode::FAILURE
         }
-    }
-}
-
-/// Minimal `--key value` / `--switch` parser for the CLI surface.
-struct Options {
-    values: BTreeMap<String, String>,
-    switches: Vec<String>,
-    positionals: Vec<String>,
-}
-
-const SWITCH_FLAGS: &[&str] = &[
-    "json",
-    "plain",
-    "full",
-    "verbose",
-    "local",
-    "embeddings",
-    "vector",
-    "hybrid",
-    "once",
-    "strict",
-    "text",
-    "read-only",
-    "http",
-    "no-index",
-];
-
-impl Options {
-    fn parse(args: &[String]) -> Result<Self, String> {
-        let mut values = BTreeMap::new();
-        let mut switches = Vec::new();
-        let mut positionals = Vec::new();
-        let mut index = 0;
-        while index < args.len() {
-            let arg = &args[index];
-            let Some(key) = arg.strip_prefix("--") else {
-                positionals.push(arg.clone());
-                index += 1;
-                continue;
-            };
-            if SWITCH_FLAGS.contains(&key) {
-                switches.push(key.to_owned());
-                index += 1;
-                continue;
-            }
-            match args.get(index + 1) {
-                Some(next) if !next.starts_with("--") => {
-                    values.insert(key.to_owned(), next.clone());
-                    index += 2;
-                }
-                _ => {
-                    switches.push(key.to_owned());
-                    index += 1;
-                }
-            }
-        }
-        Ok(Self {
-            values,
-            switches,
-            positionals,
-        })
-    }
-
-    fn value(&self, key: &str) -> Option<&str> {
-        self.values.get(key).map(String::as_str)
-    }
-
-    fn switch(&self, key: &str) -> bool {
-        self.switches.iter().any(|switch| switch == key)
     }
 }
