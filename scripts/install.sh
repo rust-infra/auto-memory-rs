@@ -6,9 +6,11 @@
 #   ./scripts/install.sh --version v0.1.0
 #   ./scripts/install.sh --prefix /usr/local # default: ~/.local/bin
 #
-# The repository is private, so a release asset is not downloadable without a token.
-# Set GITHUB_TOKEN (or GH_TOKEN) to a token with `Contents: Read`; without one the script
-# falls back to the public download URL and says so when that 404s.
+# A release asset is downloadable anonymously when the repository is public. When it is
+# not, set GITHUB_TOKEN (or GH_TOKEN) to a token with `Contents: Read`: the script then
+# resolves the asset through the API instead, which is the only route that works for a
+# private repository. Without a token it uses the public download URL and reports the
+# failure rather than guessing.
 #
 # Only the binary ships. ONNX Runtime is resolved at run time (see
 # `.github/workflows/release.yml`), so semantic search needs it installed separately —
@@ -22,9 +24,11 @@ VERSION=""
 DRY_RUN=0
 
 usage() {
-    sed -n '3,16p' "$0" | sed 's/^# \{0,1\}//'
+    # Everything between the shebang and the first blank line is the header; reading it
+    # by pattern rather than by line number means editing the comment cannot silently
+    # truncate `--help`. That blank line is included, so the heredoc does not repeat it.
+    sed -n '3,/^$/p' "$0" | sed 's/^# \{0,1\}//'
     cat <<'EOF'
-
 Options:
   --version <tag>   Release tag to install (default: the latest release)
   --prefix <dir>    Where to put the binary (default: $PREFIX or ~/.local/bin)
@@ -134,7 +138,7 @@ TOKEN="${GITHUB_TOKEN:-${GH_TOKEN:-}}"
 
 if [ -z "$VERSION" ]; then
     VERSION="$(latest_tag)"
-    [ -n "$VERSION" ] || die "could not resolve the latest release of $REPO (set GITHUB_TOKEN for a private repository, or pass --version)"
+    [ -n "$VERSION" ] || die "could not resolve the latest release of $REPO (no release yet, or a private repository without GITHUB_TOKEN — or pass --version)"
 fi
 
 ASSET="auto-memory-${TARGET}.tar.gz"
@@ -155,7 +159,7 @@ trap 'rm -rf "$workdir"' EXIT
 
 echo "downloading…"
 download "$(asset_url "$ASSET")" "$workdir/$ASSET" "application/octet-stream" ||
-    die "could not download $ASSET (private repository without GITHUB_TOKEN?)"
+    die "could not download $ASSET (404 — for a private repository, set GITHUB_TOKEN)"
 download "$(asset_url SHA256SUMS)" "$workdir/SHA256SUMS" "application/octet-stream" ||
     die "could not download SHA256SUMS"
 

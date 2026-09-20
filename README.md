@@ -19,8 +19,10 @@ auto-memory mcp --vault ~/vault \
     --index ~/.local/share/auto-memory/memory.db --project oracle
 ```
 
-The repository is private, so downloading a release asset needs `GITHUB_TOKEN`; building
-from source needs only a Rust toolchain (`cargo build --release`).
+`scripts/install.sh` downloads the release asset for this platform and verifies its
+SHA-256. A public repository needs no credential; if the repository is private, set
+`GITHUB_TOKEN` (or `GH_TOKEN`) to a token with `Contents: Read`. Building from source
+needs only a Rust toolchain (`cargo build --release`).
 
 `reindex` is incremental; text search, context and the MCP server work without the embedding
 runtime. See [`docs/usage.md`](docs/usage.md) for the full walkthrough.

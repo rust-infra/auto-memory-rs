@@ -16,9 +16,10 @@ into `~/.local/bin` (override with `--prefix` or `$PREFIX`):
 ./scripts/install.sh --dry-run          # say what it would do
 ```
 
-The repository is private, so a release asset is not downloadable without a token: set
-`GITHUB_TOKEN` (or `GH_TOKEN`) to a token with `Contents: Read`. Without one the script
-uses the public download path and reports the failure.
+A public repository needs no credential. If the repository is private, set `GITHUB_TOKEN`
+(or `GH_TOKEN`) to a token with `Contents: Read`; the script then resolves the asset through
+the API, which is the only route that works for a private repository. Without a token it uses
+the public path and reports the failure rather than guessing.
 
 ### Build from source
 
