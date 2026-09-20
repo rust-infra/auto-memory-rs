@@ -1,7 +1,7 @@
 # Oracle Harness
 
 `export_reference.py` captures golden outputs from the **pinned reference implementation**
-(Basic Memory 0.23.2) so `auto-memory-rs` can prove behavior compatibility.
+(0.23.2) so `auto-memory-rs` can prove behavior compatibility.
 
 ## What it does
 

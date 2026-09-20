@@ -1,4 +1,4 @@
-# Basic Memory Data Format — Compatibility Contract
+# Reference Data Format — Compatibility Contract
 
 Reference: `basic_memory` 0.23.2 (see `docs/reference.md`). Status **[V]** = verified in source,
 **[G]** = golden capture pending. Rust implementation must reproduce the semantics below.

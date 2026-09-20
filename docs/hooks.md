@@ -136,7 +136,7 @@ auto-memory-hooks/                 # 一个 git 仓库
     "SessionStart": [ { "matcher": "startup|resume|compact",
       "hooks": [ { "type": "command",
                    "command": "python3 \"$CLAUDE_PLUGIN_ROOT/hooks/auto-memory-hook.py\"",
-                   "timeout": 10, "statusMessage": "Briefing from Basic Memory" } ] } ],
+                   "timeout": 10, "statusMessage": "Briefing from Auto Memory" } ] } ],
     "UserPromptSubmit": [ { "matcher": "",
       "hooks": [ { "type": "command",
                    "command": "python3 \"$CLAUDE_PLUGIN_ROOT/hooks/auto-memory-hook.py\"",
@@ -165,7 +165,7 @@ tact-ui plugin list                      # 确认已安装
 ——要改就跑自己的插件仓库（内容同上）。
 
 你现在的 `~/.codex/config.toml` 里那条 `[hooks.state."codex@basic-memory:hooks/hooks.json:…"]`
-就是 Codex 记录的、来自 basic-memory 官方插件的 hook 信任哈希；换成自己的插件后，
+就是 Codex 记录的、来自旧插件的 hook 信任哈希；换成自己的插件后，
 会多出对应你仓库的一条。
 
 ---

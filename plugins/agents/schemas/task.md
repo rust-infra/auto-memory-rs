@@ -22,10 +22,9 @@ settings:
 
 A **Task** is work-in-progress tracked as a note, so it survives context
 compaction and shows up in the next session's brief. This schema is the same one
-the framework-agnostic [`memory-tasks`](https://github.com/basicmachines-co/basic-memory/tree/main/skills/memory-tasks)
-skill defines — kept identical here so the plugin and the skill agree on the
-shape. For the full task workflow (creating, updating, completing), use that
-skill.
+the framework-agnostic `memory-tasks` skill defines — kept identical here so the
+plugin and the skill agree on the shape. For the full task workflow (creating,
+updating, completing), use that skill.
 
 Tasks are found by the SessionStart hook via structured recall:
 `search_notes(metadata_filters={"type": "task", "status": "active"})`.

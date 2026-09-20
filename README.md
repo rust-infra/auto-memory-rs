@@ -1,10 +1,10 @@
 # auto-memory-rs
 
-A local-first Rust implementation of the [Basic Memory](https://github.com/basicmachines-co/basic-memory)
-core: markdown notes in an Obsidian vault are the only durable state, a SQLite index (full-text +
-vector) is derived from them, and an MCP server exposes the resulting knowledge graph to agents.
+A local-first Rust knowledge base: markdown notes in an Obsidian vault are the only durable
+state, a SQLite index (full-text + vector) is derived from them, and an MCP server exposes the
+resulting knowledge graph to agents.
 
-Behavior is pinned to the reference implementation **Basic Memory 0.23.2** and proved by a golden
+Behavior is pinned to the reference implementation (0.23.2) and proved by a golden
 corpus captured from it (`tests/golden/`) — see [`docs/reference.md`](docs/reference.md) and
 [`docs/compatibility-spec.md`](docs/compatibility-spec.md).
 
@@ -43,7 +43,6 @@ context, MCP, usage, hooks, architecture, and the 中文 integration guide.
 
 ## License
 
-AGPL-3.0-or-later — the full text is in [`LICENSE`](LICENSE). This is a derivative work of
-[Basic Memory](https://github.com/basicmachines-co/basic-memory) (also AGPL-3.0-or-later), so
+AGPL-3.0-or-later — the full text is in [`LICENSE`](LICENSE). This is a derivative work, so
 the AGPL's network clause applies: see [`docs/licensing.md`](docs/licensing.md) for what that
 permits and what it rules out.

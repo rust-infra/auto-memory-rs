@@ -1,6 +1,6 @@
 # auto-memory-rs — Docs Index
 
-Project: Local-only Rust reimplementation of the Basic Memory core, behavior-compatible with the
+Project: Local-only Rust knowledge base, behavior-compatible with the
 reference implementation, idiomatic Rust internally, Obsidian as the manual management UI.
 
 ## Documents
@@ -9,7 +9,7 @@ reference implementation, idiomatic Rust internally, Obsidian as the manual mana
 |---|---|
 | [auto-memory-rs-spec.md](auto-memory-rs-spec.md) | High-level spec: scope, architecture, Rust organization, DoD |
 | [auto-memory-rs-execution-plan.md](auto-memory-rs-execution-plan.md) | Phased execution plan (Phase 0–15, milestones, risks) |
-| [reference.md](reference.md) | **Pinned reference baseline** — Basic Memory 0.23.2, source paths, verified constants, corrections |
+| [reference.md](reference.md) | **Pinned reference baseline** — 0.23.2, source paths, verified constants, corrections |
 | [data-format.md](data-format.md) | Markdown/knowledge format contract (frontmatter, observations, relations, permalinks, FTS row model) |
 | [search-spec.md](search-spec.md) | Search behavior contract (FTS5, vector, hybrid fusion, filters, pagination) |
 | [context-spec.md](context-spec.md) | `build_context` / memory:// / recent_activity contract |
@@ -20,7 +20,7 @@ reference implementation, idiomatic Rust internally, Obsidian as the manual mana
 | [architecture-guide.md](architecture-guide.md) | 中文架构与数据流：分层图、磁盘布局、SQLite 表关系（ER）、索引/写入流程、检索各路径流程（文本/向量/混合/重排/图遍历）、常量出处 |
 | [release-checklist.md](release-checklist.md) | Quality gates, compatibility evidence, offline/perf smoke, parked work |
 | [compatibility-spec.md](compatibility-spec.md) | Golden-test strategy, canonicalization, oracle harness, open decisions |
-| [licensing.md](licensing.md) | AGPL-3.0-or-later status, the derivative relationship to Basic Memory, and which commercial models it permits |
+| [licensing.md](licensing.md) | AGPL-3.0-or-later status, the derivative relationship to the upstream project, and which commercial models it permits |
 | [patterns.md](patterns.md) | Design patterns in use, ones deliberately avoided, and the trigger to revisit each |
 | [../tools/README.md](../tools/README.md) | Oracle harness usage (`tools/export_reference.py`) |
 | [../tests/golden/README.md](../tests/golden/README.md) | Golden corpus layout, canonicalization, verified behaviors |
@@ -80,7 +80,7 @@ reference implementation, idiomatic Rust internally, Obsidian as the manual mana
     the executable, with `ORT_DYLIB_PATH` as the override. The model cache gained a neutral
     fallback (`~/.cache/auto-memory/models`) and `AUTO_MEMORY_MODEL_CACHE`.
   - **Distribution**: `LICENSE` (the full AGPL-3.0 text) and `docs/licensing.md` (the
-    derivative relationship to Basic Memory, what AGPL §13 permits, and what it rules out);
+    derivative relationship to the upstream project, what AGPL §13 permits, and what it rules out);
     `.github/workflows/{ci,release}.yml` (gates on every push, four-target release on a tag);
     `scripts/install.sh` (download, SHA-256 verify, install — the failure path is tested).
   - `tests/cli_project.rs` covers the new CLI surface, and

@@ -1,6 +1,6 @@
 # Using `auto-memory-rs`
 
-Local-only core of Basic Memory, behavior-compatible with the reference 0.23.2 release. There is
+Local-first Rust knowledge base, behavior-compatible with the reference 0.23.2 release. There is
 no Web UI and no cloud sync: **Obsidian is the management interface**, the vault of markdown files
 is the only durable state, and everything else (the SQLite index, the embeddings) is derived.
 

@@ -3,7 +3,7 @@ name = "auto-memory-rs"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.85"
-description = "Local-first Rust implementation of the Basic Memory core"
+description = "Local-first Rust knowledge base with markdown notes, a derived SQLite index, and an MCP server"
 license = "AGPL-3.0-or-later"
 publish = false
 

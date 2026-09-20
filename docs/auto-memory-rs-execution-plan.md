@@ -3,11 +3,11 @@
 - **Status:** Accepted plan
 - **Date:** 2026-09-08
 - **Repository:** `auto-memory-rs`
-- **Target:** Local-only Rust core with Basic Memory behavior compatibility
+- **Target:** Local-only Rust core, behavior-compatible with the reference implementation
 
 ## 0. Progress
 
-- **Phase 0 — Lock the Reference Baseline:** done. Pinned Basic Memory 0.23.2 (see `reference.md`); contract docs `data-format.md`, `search-spec.md`, `context-spec.md`, `mcp-spec.md`, `compatibility-spec.md` written from the installed source.
+- **Phase 0 — Lock the Reference Baseline:** done. Pinned the reference implementation (0.23.2) (see `reference.md`); contract docs `data-format.md`, `search-spec.md`, `context-spec.md`, `mcp-spec.md`, `compatibility-spec.md` written from the installed source.
 - **Phase 1 — Build the Golden Corpus:** done. `tools/export_reference.py` oracle harness, `tests/fixtures/vault` fixtures, 34 golden artifacts in `tests/golden/`, `tests/common/` (shared canonicalization, fixture and MCP-session helpers).
 - **Phase 2 — Bootstrap the Rust Project:** done. `lib.rs`/`main.rs`, `config`, `error`, `domain`, `markdown`, adapter/future-layer scaffolding; `serde`/`serde_json`/`serde_yaml_ng`/`thiserror`; `cargo fmt`/`clippy -D warnings`/`test` gates pass.
 - **Phase 3 — Domain Model:** done (first slice). Newtypes (`ProjectId`, `EntityId`, `DocumentId`, `Permalink`, `RelationType`), `Frontmatter`, `Observation`, `Relation`, `ParsedDocument`, `Wikilink`, search enums/query/result.

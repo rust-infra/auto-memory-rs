@@ -377,7 +377,7 @@ args = ["mcp", "--vault", "/home/me/vault",
 也有 CLI：`codex mcp add auto-memory-rs -- /path/to/auto-memory mcp --vault ... --index ... --project ...`
 （`codex mcp list` / `get` / `remove` 对应增删查）。
 
-> 与官方 Python 版并存：官方版靠 `BASIC_MEMORY_CONFIG_DIR` 发现配置，
+> 与参考实现的 Python 版并存：参考版靠 `BASIC_MEMORY_CONFIG_DIR` 发现配置，
 > 这个端口**完全靠命令行参数**（不读该环境变量）。所以两条 server 条目必须
 > 各自把 vault/index/project 写全；**不要让两个 server 指向同一个 vault 同时写**。
 
@@ -493,7 +493,7 @@ $BIN reindex --vault "$VAULT" --index "$INDEX" --project "$PROJECT" --full --emb
 
 ---
 
-## 11. 与参考实现（Basic Memory 0.23.2）的差异摘要
+## 11. 与参考实现（0.23.2）的差异摘要
 
 - 无 Web UI / 云同步 / 账号 / `list_workspaces` / 远程 MCP；
 - 索引**从不改写 vault**：参考实现会给缺 frontmatter 的文件注入

@@ -30,7 +30,7 @@
 - Spec / Plan 都没有记录上游 repository URL、pin 的 commit/tag/release、日期。
 - Spec §10 隐含的结论（SQLite FTS5、CJK script n-gram、hybrid `max + bonus*min`）**没有出处、没有验证状态**。如果来自记忆而非实测，必须先验证。
 - 需要的产出：`docs/reference.md` —— pinned commit、来源链接、每个关键行为的验证状态（verified / open）。
-- 现状最有利的条件：本机已安装官方 `basic-memory`（本地 Python 版 + MCP），且本环境提供同款 MCP 工具。**可以离线把本机官方实现当 oracle 捕获参考行为，不依赖网络。**
+- 现状最有利的条件：本机已安装的参考实现（本地 Python 版 + MCP），且本环境提供同款 MCP 工具。**可以离线把本机参考实现当 oracle 捕获参考行为，不依赖网络。**
 
 ### 2.2 执行计划 Phase 0 的交付物还不存在
 Plan §2 说 Phase 0 产出：
@@ -134,4 +134,4 @@ P2-1  README + 术语表 + open questions log + 进度表 + 修订历史
 
 ## 6. 结论
 
-文档**需要继续完善**：架构层已经够用，但契约层（reference pin、data-format、search/context/mcp 具体行为）是空的，而这正是"核心算法一致"的全部意义。建议下一步直接做 P0：把本机已安装的官方 Basic Memory 当作 oracle，离线圈定参考行为，补上五份契约文档；在此之后才开始 Phase 2 的 Rust 骨架。
+文档**需要继续完善**：架构层已经够用，但契约层（reference pin、data-format、search/context/mcp 具体行为）是空的，而这正是"核心算法一致"的全部意义。建议下一步直接做 P0：把本机已安装的参考实现当作 oracle，离线圈定参考行为，补上五份契约文档；在此之后才开始 Phase 2 的 Rust 骨架。

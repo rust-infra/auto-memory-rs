@@ -1,7 +1,7 @@
-//! `auto-memory-rs` — a local-first Rust implementation of the Basic Memory core.
+//! `auto-memory-rs` — a local-first Rust knowledge base.
 //!
 //! The crate keeps the **observable behavior** of the reference implementation
-//! (Basic Memory 0.23.2, see `docs/reference.md`) while organizing the code in
+//! (0.23.2, see `docs/reference.md`) while organizing the code in
 //! idiomatic Rust. Markdown is the source of truth; every index is rebuildable.
 //!
 //! Layering rule: adapters (CLI/MCP/filesystem) depend on application services,

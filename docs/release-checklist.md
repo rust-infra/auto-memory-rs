@@ -97,7 +97,7 @@ structural happened.
 
 ## 5. Compatibility inputs that live outside the repo
 
-- Reference interpreter and CLI: Basic Memory 0.23.2 (`~/.local/share/uv/tools/basic-memory`),
+- Reference interpreter and CLI: the reference implementation (0.23.2) (`~/.local/share/uv/tools/basic-memory`),
   recorded in `tests/golden/reference-env.json`.
 - Embedding model cache: `BAAI/bge-small-en-v1.5` under
   `~/.config/basic-memory/fastembed_cache`, plus the ONNX Runtime shared library. Only the vector

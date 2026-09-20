@@ -2,12 +2,12 @@
 
 - **Status:** Accepted
 - **Date:** 2026-09-08
-- **Scope:** Local-only Rust implementation of the Basic Memory core
+- **Scope:** Local-only Rust knowledge base
 - **Repository:** `auto-memory-rs`
 
 ## 1. Purpose
 
-`auto-memory-rs` is a local-first Rust implementation of the Basic Memory core. It keeps the core data model, parsing semantics, indexing behavior, search behavior, knowledge-graph traversal, context construction, and MCP behavior compatible with the reference implementation while intentionally excluding Web and Cloud product layers.
+`auto-memory-rs` is a local-first Rust knowledge base. It keeps the core data model, parsing semantics, indexing behavior, search behavior, knowledge-graph traversal, context construction, and MCP behavior compatible with the reference implementation while intentionally excluding Web and Cloud product layers.
 
 The implementation must be idiomatic Rust internally. Compatibility applies to externally observable behavior and algorithm results, not to the source language's original module layout or class structure.
 

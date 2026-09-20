@@ -1,4 +1,4 @@
-# Reference Baseline — Basic Memory 0.23.2
+# Reference Baseline — 0.23.2
 
 - **Status:** Verified (code-read) + partial golden capture pending
 - **Date captured:** 2026-09-08 (UTC) / 2026-09-09 (local)

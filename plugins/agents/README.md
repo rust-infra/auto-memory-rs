@@ -10,7 +10,7 @@ skill/marketplace directory), not into a Codex-only location. The harness is
 still Codex, so the manifest directory is the standard `.codex-plugin/`.
 
 The schemas and skills are ported from the reference implementation's
-`plugins/codex` (Basic Memory 0.23.2, MIT); the hook engine lives in the
+`plugins/codex` (MIT); the hook engine lives in the
 `auto-memory` binary (`auto-memory hook …`), not in a Python shim.
 
 ## Layout
