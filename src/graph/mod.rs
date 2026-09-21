@@ -1,4 +1,18 @@
 //! `memory://` handling, entity resolution, and bounded graph traversal.
+//!
+//! Every indexed Markdown file is a node ("entity"); every `[[...]]` reference in
+//! its body is a directed edge ("relation") pointing at another entity. Edges are
+//! stored once, in the direction they were written, and the target may be
+//! unresolved (`to_id IS NULL`) until a matching file exists.
+//!
+//! This module owns the traversal side: resolving a `memory://` URL to a starting
+//! entity and walking the edges outward. The actual SQL lives in
+//! [`crate::storage::Store::find_related`]; the storage shape is in
+//! `src/storage/schema.rs` and `src/storage/records.rs`.
+//!
+//! New to the graph? Read `docs/knowledge-graph.md` first — it explains the
+//! concepts with real fixture examples. `docs/context-spec.md` is the precise
+//! traversal contract.
 
 use std::collections::{HashSet, VecDeque};
 

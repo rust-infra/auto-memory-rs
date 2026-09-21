@@ -120,6 +120,8 @@ flowchart LR
 
 ### 2.2 表关系
 
+> 小白向的解释（实体/观察/关系是什么、关系从 Markdown 怎么产生、常见误解）见 [knowledge-graph.md](knowledge-graph.md)。
+
 ```mermaid
 erDiagram
     project ||--o{ entity : "project_id CASCADE"
@@ -447,6 +449,8 @@ flowchart LR
 或 `--reranker-fixture` 才启用。
 
 ### 4.5 上下文检索（图遍历）
+
+> 遍历的概念、depth 为什么 ×2、环检测和踩坑见 [knowledge-graph.md](knowledge-graph.md) §5–6；精确契约见 [context-spec.md](context-spec.md) §3。
 
 ```mermaid
 flowchart TB

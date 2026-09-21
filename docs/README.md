@@ -18,6 +18,7 @@ reference implementation, idiomatic Rust internally, Obsidian as the manual mana
 | [integration-guide.md](integration-guide.md) | 中文接入指南：构建 → vault/index/project 约定 → 索引/检索/watch → MCP 客户端接入（Codex/Claude Code/通用）→ 工具速查 → 排障 |
 | [hooks.md](hooks.md) | 中文 hook 接入：四层触发点（watch / git hook / Codex·Tact 插件 hook / Tact 进程内）、命令 hook 契约、`tools/auto-memory-hook.py` 用法与实测 |
 | [architecture-guide.md](architecture-guide.md) | 中文架构与数据流：分层图、磁盘布局、SQLite 表关系（ER）、索引/写入流程、检索各路径流程（文本/向量/混合/重排/图遍历）、常量出处 |
+| [knowledge-graph.md](knowledge-graph.md) | 中文入门：实体/观察/关系三个概念、关系从 Markdown 怎么产生、数据库字段、目标解析、图遍历，以及新手常见误解 |
 | [release-checklist.md](release-checklist.md) | Quality gates, compatibility evidence, offline/perf smoke, parked work |
 | [compatibility-spec.md](compatibility-spec.md) | Golden-test strategy, canonicalization, oracle harness, open decisions |
 | [licensing.md](licensing.md) | AGPL-3.0-or-later status, the derivative relationship to the upstream project, and which commercial models it permits |
