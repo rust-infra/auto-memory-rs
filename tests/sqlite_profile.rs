@@ -39,25 +39,38 @@ fn the_connection_profile_matches_the_reference() {
     let dir = Scratch::new("profile");
     let path = dir.join("memory.db");
     let store = Store::open(&path).expect("open");
-    let connection = store.connection();
 
-    assert_eq!(pragma_i64(connection, "PRAGMA busy_timeout"), 10_000);
-    assert_eq!(pragma_i64(connection, "PRAGMA synchronous"), 1, "NORMAL");
-    assert_eq!(pragma_i64(connection, "PRAGMA cache_size"), -64_000);
-    assert_eq!(pragma_i64(connection, "PRAGMA temp_store"), 2, "MEMORY");
-    assert_eq!(pragma_i64(connection, "PRAGMA wal_autocheckpoint"), 1_000);
-    assert_eq!(pragma_i64(connection, "PRAGMA foreign_keys"), 1);
-    assert_eq!(pragma_text(connection, "PRAGMA journal_mode"), "wal");
+    let pragma_value = |store: &Store, sql: &'static str| {
+        store
+            .with_connection(move |connection| pragma_i64(connection, sql))
+            .expect("pragma")
+    };
+    assert_eq!(pragma_value(&store, "PRAGMA busy_timeout"), 10_000);
+    assert_eq!(pragma_value(&store, "PRAGMA synchronous"), 1, "NORMAL");
+    assert_eq!(pragma_value(&store, "PRAGMA cache_size"), -64_000);
+    assert_eq!(pragma_value(&store, "PRAGMA temp_store"), 2, "MEMORY");
+    assert_eq!(pragma_value(&store, "PRAGMA wal_autocheckpoint"), 1_000);
+    assert_eq!(pragma_value(&store, "PRAGMA foreign_keys"), 1);
+    assert_eq!(
+        store
+            .with_connection(|connection| pragma_text(connection, "PRAGMA journal_mode"))
+            .expect("journal mode"),
+        "wal"
+    );
 
     // In-memory databases cannot use WAL, so the reference skips that one pragma;
     // the rest of the profile still applies.
     let memory = Store::open_in_memory().expect("memory");
     assert_ne!(
-        pragma_text(memory.connection(), "PRAGMA journal_mode"),
+        memory
+            .with_connection(|connection| pragma_text(connection, "PRAGMA journal_mode"))
+            .expect("journal mode"),
         "wal"
     );
     assert_eq!(
-        pragma_i64(memory.connection(), "PRAGMA busy_timeout"),
+        memory
+            .with_connection(|connection| pragma_i64(connection, "PRAGMA busy_timeout"))
+            .expect("busy timeout"),
         10_000
     );
 

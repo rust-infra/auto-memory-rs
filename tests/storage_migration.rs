@@ -20,10 +20,17 @@ fn a_blank_file_gets_the_full_schema_and_the_current_version() {
     assert!(store.has_fts5(), "the FTS5 table must exist");
     // Every table the store writes to is present.
     let count = |table: &str| -> i64 {
+        let table = table.to_owned();
+        let table_for_query = table.clone();
         store
-            .connection()
-            .query_row(&format!("SELECT count(*) FROM {table}"), [], |row| {
-                row.get(0)
+            .with_connection(move |connection| {
+                connection
+                    .query_row(
+                        &format!("SELECT count(*) FROM {table_for_query}"),
+                        [],
+                        |row| row.get(0),
+                    )
+                    .unwrap_or_else(|error| panic!("{table_for_query}: {error}"))
             })
             .unwrap_or_else(|error| panic!("{table}: {error}"))
     };

@@ -365,11 +365,10 @@ impl<'a> McpServer<'a> {
     /// Serve requests until the input ends or `shutdown` resolves (the CLI path).
     ///
     /// Frames are read on the runtime instead of a blocked thread, and each tool call
-    /// goes through [`tokio::task::block_in_place`]: the core is synchronous by design
-    /// (SQLite, ONNX, file reads — `docs/auto-memory-rs-spec.md` §6), so it is moved
-    /// off the reactor rather than made async, which is what lets this server share a
-    /// runtime with other work. That requires a multi-thread runtime; see
-    /// [`crate::runtime::executor`].
+    /// goes through [`tokio::task::block_in_place`]: the tool core keeps a synchronous
+    /// API (sqlite calls bridge through tokio-rusqlite, plus ONNX and file reads), so it
+    /// is moved off the reactor rather than made async. That requires a multi-thread
+    /// runtime; see [`crate::runtime::executor`].
     ///
     /// `shutdown` is checked between frames, never mid-request: a call already in
     /// flight still answers, and no frame is written partially. Response order stays

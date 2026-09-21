@@ -60,6 +60,10 @@ pub enum Error {
     #[error("sqlite error: {0}")]
     Sqlite(#[from] rusqlite::Error),
 
+    /// Failure from the asynchronous SQLite connection thread.
+    #[error("async sqlite error: {0}")]
+    AsyncSqlite(#[from] tokio_rusqlite::Error),
+
     /// JSON serialization failure.
     #[error("json error: {0}")]
     Json(#[from] serde_json::Error),

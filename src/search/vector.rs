@@ -14,7 +14,7 @@ use crate::runtime::rerank::RerankRequest;
 use crate::search::chunking::ChunkRecord;
 use crate::search::embedding::cosine_similarity;
 use crate::search::rerank::{rerank_and_paginate, rerank_candidate_limit};
-use crate::search::text::{SearchPage, TextSearchOptions, search_text, truncate_content};
+use crate::search::text::{SearchPage, TextSearchOptions, truncate_content};
 use crate::storage::{SearchRowView, Store, VectorChunkRow};
 
 /// Default minimum cosine similarity (reference `semantic_min_similarity`).
@@ -601,7 +601,7 @@ pub fn search_hybrid(
     fts_options.query = Some(text.to_owned());
     fts_options.page = 1;
     fts_options.page_size = candidate_window;
-    let fts_page = search_text(store.connection(), project_id, &fts_options)?;
+    let fts_page = store.search_text(project_id, &fts_options)?;
     let fts_raw: Vec<f32> = fts_page.results.iter().map(|result| result.score).collect();
     let normalized = normalize_fts_scores(&fts_raw);
     let fts_scores: Vec<(SearchKey, f32)> = fts_page
@@ -684,7 +684,7 @@ fn apply_row_filters(
     if !options.filter_requested() {
         return Ok(matches);
     }
-    let page = search_text(store.connection(), project_id, &options.filter_options())?;
+    let page = store.search_text(project_id, &options.filter_options())?;
     let allowed: HashSet<(String, i64)> = page
         .results
         .iter()

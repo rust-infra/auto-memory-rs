@@ -1,7 +1,10 @@
 //! Transactional access to the rebuildable SQLite index.
 
 use std::collections::HashMap;
+use std::future::Future;
 use std::path::Path;
+use std::sync::Arc;
+use std::task::{Context, Poll, Wake, Waker};
 
 use rusqlite::{Connection, OptionalExtension, named_params, params};
 use serde_json::{Map, Value};
@@ -9,7 +12,7 @@ use sha2::{Digest, Sha256};
 
 use crate::domain::document::{DocumentTimestamps, ParsedDocument};
 use crate::domain::timeframe;
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::search::chunking::SemanticRow;
 use crate::search::index_rows::{SearchIndexRowData, entity_row, observation_row, relation_row};
 use crate::search::text::{SearchPage, TextSearchOptions, search_text};
@@ -21,9 +24,75 @@ use crate::storage::schema;
 
 /// Handle to the derived SQLite index.
 ///
-/// The index is a cache: every row is rebuildable from the markdown corpus.
+/// The index is a cache: every row is rebuildable from the markdown corpus. SQLite
+/// work runs on a dedicated `tokio-rusqlite` connection thread while this type keeps
+/// the synchronous API the rest of the application already uses.
 pub struct Store {
-    conn: Connection,
+    conn: Option<tokio_rusqlite::Connection>,
+}
+
+impl Drop for Store {
+    fn drop(&mut self) {
+        if let Some(conn) = self.conn.take() {
+            let _ = block_on_db(conn.close());
+        }
+    }
+}
+
+/// Minimal executor for the `tokio-rusqlite` oneshot-backed futures.
+///
+/// `Connection::call` only needs a waker: the actual SQLite work runs on the
+/// dedicated `tokio-rusqlite` thread. Parking the calling thread therefore preserves
+/// the synchronous `Store` API without nesting runtimes or requiring `block_in_place`.
+fn block_on_db<F: Future>(future: F) -> F::Output {
+    struct ThreadWaker(std::thread::Thread);
+
+    impl Wake for ThreadWaker {
+        fn wake(self: Arc<Self>) {
+            self.0.unpark();
+        }
+
+        fn wake_by_ref(self: &Arc<Self>) {
+            self.0.unpark();
+        }
+    }
+
+    let mut future = std::pin::pin!(future);
+    let waker = Waker::from(Arc::new(ThreadWaker(std::thread::current())));
+    let mut context = Context::from_waker(&waker);
+    loop {
+        match future.as_mut().poll(&mut context) {
+            Poll::Ready(value) => return value,
+            Poll::Pending => std::thread::park(),
+        }
+    }
+}
+
+/// Map a `tokio-rusqlite` error back to the crate error, preserving application
+/// errors that were carried through the connection thread.
+fn map_async_error(error: tokio_rusqlite::Error) -> Error {
+    match error {
+        tokio_rusqlite::Error::Rusqlite(error) => Error::Sqlite(error),
+        tokio_rusqlite::Error::Other(error) => match error.downcast::<Error>() {
+            Ok(error) => *error,
+            Err(error) => Error::AsyncSqlite(tokio_rusqlite::Error::Other(error)),
+        },
+        error => Error::AsyncSqlite(error),
+    }
+}
+
+/// Run one fallible closure on a `tokio-rusqlite` connection.
+fn call_connection<T>(
+    conn: &tokio_rusqlite::Connection,
+    function: impl FnOnce(&mut Connection) -> Result<T> + Send + 'static,
+) -> Result<T>
+where
+    T: Send + 'static,
+{
+    block_on_db(conn.call(move |conn| {
+        function(conn).map_err(|error| tokio_rusqlite::Error::Other(Box::new(error)))
+    }))
+    .map_err(map_async_error)
 }
 
 /// Value written to `search_vector_chunks.vector_index` for the local backend.
@@ -219,6 +288,21 @@ fn configure_connection(conn: &Connection, file_backed: bool) -> Result<()> {
 }
 
 impl Store {
+    fn connection(&self) -> &tokio_rusqlite::Connection {
+        self.conn.as_ref().expect("the SQLite connection is open")
+    }
+
+    /// Run one closure on the `tokio-rusqlite` connection thread.
+    fn call<T>(
+        &self,
+        function: impl FnOnce(&mut Connection) -> Result<T> + Send + 'static,
+    ) -> Result<T>
+    where
+        T: Send + 'static,
+    {
+        call_connection(self.connection(), function)
+    }
+
     /// Open (or create) an index at `path` and run migrations.
     pub fn open(path: impl AsRef<Path>) -> Result<Self> {
         let path = path.as_ref();
@@ -229,78 +313,104 @@ impl Store {
         {
             std::fs::create_dir_all(parent)?;
         }
-        let conn = Connection::open(path)?;
-        configure_connection(&conn, true)?;
-        schema::migrate(&conn)?;
-        Ok(Self { conn })
+        let path = path.to_owned();
+        let conn = block_on_db(tokio_rusqlite::Connection::open(path)).map_err(Error::from)?;
+        Self::prepare(&conn, true)?;
+        Ok(Self { conn: Some(conn) })
     }
 
     /// Open a throwaway in-memory index (used by tests and short-lived CLIs).
     pub fn open_in_memory() -> Result<Self> {
-        let conn = Connection::open_in_memory()?;
-        configure_connection(&conn, false)?;
-        schema::migrate(&conn)?;
-        Ok(Self { conn })
+        let conn =
+            block_on_db(tokio_rusqlite::Connection::open_in_memory()).map_err(Error::from)?;
+        Self::prepare(&conn, false)?;
+        Ok(Self { conn: Some(conn) })
+    }
+
+    /// Configure a fresh connection and run the schema migrations.
+    fn prepare(conn: &tokio_rusqlite::Connection, file_backed: bool) -> Result<()> {
+        call_connection(conn, move |conn| {
+            configure_connection(conn, file_backed)?;
+            schema::migrate(conn)?;
+            Ok(())
+        })
     }
 
     /// Read the semantic chunk inputs (search rows) for a project.
     pub fn semantic_rows(&self, project_id: i64) -> Result<Vec<SemanticRow>> {
-        let mut statement = self.conn.prepare(
-            "SELECT id, type, title, permalink, content_snippet, category, relation_type, entity_id
-               FROM search_index WHERE project_id = ?1 ORDER BY type, id",
-        )?;
-        let rows = statement
-            .query_map([project_id], |row| {
-                Ok(SemanticRow {
-                    id: row.get(0)?,
-                    item_type: row.get(1)?,
-                    title: row.get(2)?,
-                    permalink: row.get(3)?,
-                    content_snippet: row.get(4)?,
-                    category: row.get(5)?,
-                    relation_type: row.get(6)?,
-                    entity_id: row.get(7)?,
-                })
-            })?
-            .collect::<std::result::Result<Vec<_>, _>>()?;
-        Ok(rows)
+        self.call(move |conn| {
+            let mut statement = conn.prepare(
+                "SELECT id, type, title, permalink, content_snippet, category, relation_type, entity_id
+                   FROM search_index WHERE project_id = ?1 ORDER BY type, id",
+            )?;
+            let rows = statement
+                .query_map([project_id], |row| {
+                    Ok(SemanticRow {
+                        id: row.get(0)?,
+                        item_type: row.get(1)?,
+                        title: row.get(2)?,
+                        permalink: row.get(3)?,
+                        content_snippet: row.get(4)?,
+                        category: row.get(5)?,
+                        relation_type: row.get(6)?,
+                        entity_id: row.get(7)?,
+                    })
+                })?
+                .collect::<std::result::Result<Vec<_>, _>>()?;
+            Ok(rows)
+        })
     }
 
     /// Run a text search against this index.
     pub fn search_text(&self, project_id: i64, options: &TextSearchOptions) -> Result<SearchPage> {
-        search_text(&self.conn, project_id, options)
+        let options = options.clone();
+        self.call(move |conn| search_text(conn, project_id, &options))
     }
 
-    /// Borrow the underlying SQLite connection (the search layer runs raw SQL).
-    pub fn connection(&self) -> &Connection {
-        &self.conn
+    /// Run a closure with the underlying SQLite connection.
+    pub fn with_connection<T>(
+        &self,
+        function: impl FnOnce(&Connection) -> T + Send + 'static,
+    ) -> Result<T>
+    where
+        T: Send + 'static,
+    {
+        self.call(move |conn| Ok(function(conn)))
     }
 
     /// Schema version recorded in the index.
     pub fn schema_version(&self) -> Result<i64> {
-        Ok(schema::metadata(&self.conn, "schema_version")?
-            .and_then(|value| value.parse().ok())
-            .unwrap_or_default())
+        self.call(|conn| {
+            Ok(schema::metadata(conn, "schema_version")?
+                .and_then(|value| value.parse().ok())
+                .unwrap_or_default())
+        })
     }
 
     /// Whether this SQLite build supports FTS5 virtual tables.
     pub fn has_fts5(&self) -> bool {
-        schema::has_fts5(&self.conn)
+        self.call(|conn| Ok(schema::has_fts5(conn)))
+            .unwrap_or(false)
     }
 
     /// Read a metadata value recorded during indexing.
     pub fn metadata(&self, key: &str) -> Result<Option<String>> {
-        schema::metadata(&self.conn, key)
+        let key = key.to_owned();
+        self.call(move |conn| schema::metadata(conn, &key))
     }
 
     /// Write a metadata value (index version tracking, rebuild timestamps).
     pub fn set_metadata(&self, key: &str, value: &str) -> Result<()> {
-        self.conn.execute(
-            "INSERT INTO index_metadata (key, value) VALUES (?1, ?2)
-             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-            params![key, value],
-        )?;
-        Ok(())
+        let key = key.to_owned();
+        let value = value.to_owned();
+        self.call(move |conn| {
+            conn.execute(
+                "INSERT INTO index_metadata (key, value) VALUES (?1, ?2)
+                 ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                params![key, value],
+            )?;
+            Ok(())
+        })
     }
 
     /// Rows in the FTS5 `search_index` table, across every project.
@@ -308,54 +418,40 @@ impl Store {
     /// Only used to prove the index carries no stranded rows (an FTS table has no
     /// foreign keys, so it is the one place a delete cannot cascade).
     pub fn search_index_count(&self) -> Result<i64> {
-        Ok(self
-            .conn
-            .query_row("SELECT count(*) FROM search_index", [], |row| row.get(0))?)
+        self.call(|conn| {
+            Ok(conn.query_row("SELECT count(*) FROM search_index", [], |row| row.get(0))?)
+        })
     }
 
     /// Register a project (or refresh its path/permalink) and return its row id.
     pub fn upsert_project(&self, name: &str, permalink: &str, path: &str) -> Result<i64> {
         let external_id = deterministic_uuid(&format!("project:{permalink}"));
-        self.conn.execute(
-            "INSERT INTO project (external_id, name, permalink, path) VALUES (?1, ?2, ?3, ?4)
-             ON CONFLICT(permalink) DO UPDATE SET name = excluded.name, path = excluded.path",
-            params![external_id, name, permalink, path],
-        )?;
-        let id = self.conn.query_row(
-            "SELECT id FROM project WHERE permalink = ?1",
-            [permalink],
-            |row| row.get(0),
-        )?;
-        Ok(id)
+        let name = name.to_owned();
+        let permalink = permalink.to_owned();
+        let path = path.to_owned();
+        self.call(move |conn| {
+            conn.execute(
+                "INSERT INTO project (external_id, name, permalink, path) VALUES (?1, ?2, ?3, ?4)
+                 ON CONFLICT(permalink) DO UPDATE SET name = excluded.name, path = excluded.path",
+                params![external_id, name, permalink, path],
+            )?;
+            let id = conn.query_row(
+                "SELECT id FROM project WHERE permalink = ?1",
+                [permalink],
+                |row| row.get(0),
+            )?;
+            Ok(id)
+        })
     }
 
     /// Every registered project, ordered by name (the reference merge sorts by permalink).
     pub fn projects(&self) -> Result<Vec<ProjectRow>> {
-        let mut statement = self
-            .conn
-            .prepare("SELECT id, external_id, name, permalink, path FROM project ORDER BY name")?;
-        let rows = statement
-            .query_map([], |row| {
-                Ok(ProjectRow {
-                    id: row.get(0)?,
-                    external_id: row.get(1)?,
-                    name: row.get(2)?,
-                    permalink: row.get(3)?,
-                    path: row.get(4)?,
-                })
-            })?
-            .collect::<std::result::Result<Vec<_>, _>>()?;
-        Ok(rows)
-    }
-
-    /// Find a project by permalink.
-    pub fn project_by_permalink(&self, permalink: &str) -> Result<Option<ProjectRow>> {
-        let row = self
-            .conn
-            .query_row(
-                "SELECT id, external_id, name, permalink, path FROM project WHERE permalink = ?1",
-                [permalink],
-                |row| {
+        self.call(|conn| {
+            let mut statement = conn.prepare(
+                "SELECT id, external_id, name, permalink, path FROM project ORDER BY name",
+            )?;
+            let rows = statement
+                .query_map([], |row| {
                     Ok(ProjectRow {
                         id: row.get(0)?,
                         external_id: row.get(1)?,
@@ -363,10 +459,33 @@ impl Store {
                         permalink: row.get(3)?,
                         path: row.get(4)?,
                     })
-                },
-            )
-            .optional()?;
-        Ok(row)
+                })?
+                .collect::<std::result::Result<Vec<_>, _>>()?;
+            Ok(rows)
+        })
+    }
+
+    /// Find a project by permalink.
+    pub fn project_by_permalink(&self, permalink: &str) -> Result<Option<ProjectRow>> {
+        let permalink = permalink.to_owned();
+        self.call(move |conn| {
+            let row = conn
+                .query_row(
+                    "SELECT id, external_id, name, permalink, path FROM project WHERE permalink = ?1",
+                    [permalink],
+                    |row| {
+                        Ok(ProjectRow {
+                            id: row.get(0)?,
+                            external_id: row.get(1)?,
+                            name: row.get(2)?,
+                            permalink: row.get(3)?,
+                            path: row.get(4)?,
+                        })
+                    },
+                )
+                .optional()?;
+            Ok(row)
+        })
     }
 
     /// Insert or replace one parsed document and its semantic rows.
@@ -382,78 +501,84 @@ impl Store {
         document: &ParsedDocument,
         timestamps: &DocumentTimestamps,
     ) -> Result<i64> {
-        let metadata = serde_json::to_string(&document.frontmatter.metadata)?;
-        let now = timeframe::now_storage_timestamp();
-        let external_id =
-            deterministic_uuid(&format!("{project_permalink}\u{0}{}", document.file_path));
+        let project_permalink = project_permalink.to_owned();
+        let permalink = permalink.map(str::to_owned);
+        let checksum = checksum.to_owned();
+        let document = document.clone();
+        let timestamps = timestamps.clone();
+        self.call(move |conn| {
+            let metadata = serde_json::to_string(&document.frontmatter.metadata)?;
+            let now = timeframe::now_storage_timestamp();
+            let external_id =
+                deterministic_uuid(&format!("{project_permalink}\u{0}{}", document.file_path));
 
-        let tx = self.conn.transaction()?;
-        let existing: Option<i64> = tx
-            .query_row(
-                "SELECT id FROM entity WHERE project_id = ?1 AND file_path = ?2",
-                params![project_id, document.file_path],
-                |row| row.get(0),
-            )
-            .optional()?;
+            let tx = conn.transaction()?;
+            let existing: Option<i64> = tx
+                .query_row(
+                    "SELECT id FROM entity WHERE project_id = ?1 AND file_path = ?2",
+                    params![project_id, document.file_path],
+                    |row| row.get(0),
+                )
+                .optional()?;
 
-        let entity_id = match existing {
-            Some(id) => {
-                tx.execute(
-                    "UPDATE entity
+            let entity_id = match existing {
+                Some(id) => {
+                    tx.execute(
+                        "UPDATE entity
                         SET title = ?1, note_type = ?2, permalink = ?3, checksum = ?4,
                             entity_metadata = ?5, updated_at = ?6
                       WHERE id = ?7",
-                    params![
-                        document.frontmatter.title,
-                        document.frontmatter.note_type,
-                        permalink,
-                        checksum,
-                        metadata,
-                        timestamps.updated_at,
-                        id
-                    ],
-                )?;
-                id
-            }
-            None => {
-                tx.execute(
-                    "INSERT INTO entity
+                        params![
+                            document.frontmatter.title,
+                            document.frontmatter.note_type,
+                            permalink,
+                            checksum,
+                            metadata,
+                            timestamps.updated_at,
+                            id
+                        ],
+                    )?;
+                    id
+                }
+                None => {
+                    tx.execute(
+                        "INSERT INTO entity
                         (external_id, project_id, title, note_type, entity_metadata,
                          content_type, permalink, file_path, checksum, created_at, updated_at)
                      VALUES (?1, ?2, ?3, ?4, ?5, 'text/markdown', ?6, ?7, ?8, ?9, ?10)",
-                    params![
-                        external_id,
-                        project_id,
-                        document.frontmatter.title,
-                        document.frontmatter.note_type,
-                        metadata,
-                        permalink,
-                        document.file_path,
-                        checksum,
-                        timestamps.created_at,
-                        timestamps.updated_at
-                    ],
+                        params![
+                            external_id,
+                            project_id,
+                            document.frontmatter.title,
+                            document.frontmatter.note_type,
+                            metadata,
+                            permalink,
+                            document.file_path,
+                            checksum,
+                            timestamps.created_at,
+                            timestamps.updated_at
+                        ],
+                    )?;
+                    tx.last_insert_rowid()
+                }
+            };
+
+            tx.execute("DELETE FROM observation WHERE entity_id = ?1", [entity_id])?;
+            tx.execute("DELETE FROM relation WHERE from_id = ?1", [entity_id])?;
+            tx.execute("DELETE FROM search_index WHERE entity_id = ?1", [entity_id])?;
+
+            let mut observation_ids: Vec<(i64, &crate::domain::observation::Observation)> =
+                Vec::with_capacity(document.observations.len());
+            for observation in &document.observations {
+                let tags = serde_json::to_string(
+                    &observation
+                        .tags
+                        .iter()
+                        .cloned()
+                        .map(Value::String)
+                        .collect::<Vec<_>>(),
                 )?;
-                tx.last_insert_rowid()
-            }
-        };
-
-        tx.execute("DELETE FROM observation WHERE entity_id = ?1", [entity_id])?;
-        tx.execute("DELETE FROM relation WHERE from_id = ?1", [entity_id])?;
-        tx.execute("DELETE FROM search_index WHERE entity_id = ?1", [entity_id])?;
-
-        let mut observation_ids: Vec<(i64, &crate::domain::observation::Observation)> =
-            Vec::with_capacity(document.observations.len());
-        for observation in &document.observations {
-            let tags = serde_json::to_string(
-                &observation
-                    .tags
-                    .iter()
-                    .cloned()
-                    .map(Value::String)
-                    .collect::<Vec<_>>(),
-            )?;
-            tx.execute(
+                tx.execute(
                 "INSERT INTO observation (project_id, entity_id, category, content, context, tags)
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
                 params![
@@ -468,107 +593,112 @@ impl Store {
                     tags
                 ],
             )?;
-            observation_ids.push((tx.last_insert_rowid(), observation));
-        }
-
-        // Reference `RelationGenerationPublisher.publish` keys relations by
-        // `(relation_type, to_name)`, keeps the first authored occurrence, and inserts
-        // the survivors in lexicographic order. That ordering decides relation ids
-        // within a note, so it also decides the order (and the `max_related` cut) of
-        // the graph traversal.
-        let mut ordered_relations: Vec<&crate::domain::relation::Relation> = Vec::new();
-        let mut seen_relations: std::collections::HashSet<(&str, &str)> =
-            std::collections::HashSet::new();
-        for relation in &document.relations {
-            if seen_relations.insert((relation.relation_type.as_str(), relation.target.as_str())) {
-                ordered_relations.push(relation);
+                observation_ids.push((tx.last_insert_rowid(), observation));
             }
-        }
-        ordered_relations.sort_by(|left, right| {
-            (left.relation_type.as_str(), left.target.as_str())
-                .cmp(&(right.relation_type.as_str(), right.target.as_str()))
-        });
 
-        let mut relation_ids: Vec<(i64, &crate::domain::relation::Relation)> =
-            Vec::with_capacity(ordered_relations.len());
-        for relation in ordered_relations {
-            tx.execute(
-                "INSERT OR IGNORE INTO relation
+            // Reference `RelationGenerationPublisher.publish` keys relations by
+            // `(relation_type, to_name)`, keeps the first authored occurrence, and inserts
+            // the survivors in lexicographic order. That ordering decides relation ids
+            // within a note, so it also decides the order (and the `max_related` cut) of
+            // the graph traversal.
+            let mut ordered_relations: Vec<&crate::domain::relation::Relation> = Vec::new();
+            let mut seen_relations: std::collections::HashSet<(&str, &str)> =
+                std::collections::HashSet::new();
+            for relation in &document.relations {
+                if seen_relations
+                    .insert((relation.relation_type.as_str(), relation.target.as_str()))
+                {
+                    ordered_relations.push(relation);
+                }
+            }
+            ordered_relations.sort_by(|left, right| {
+                (left.relation_type.as_str(), left.target.as_str())
+                    .cmp(&(right.relation_type.as_str(), right.target.as_str()))
+            });
+
+            let mut relation_ids: Vec<(i64, &crate::domain::relation::Relation)> =
+                Vec::with_capacity(ordered_relations.len());
+            for relation in ordered_relations {
+                tx.execute(
+                    "INSERT OR IGNORE INTO relation
                     (project_id, from_id, to_id, to_name, relation_type, context)
                  VALUES (?1, ?2, NULL, ?3, ?4, ?5)",
-                params![
-                    project_id,
-                    entity_id,
-                    relation.target,
-                    relation.relation_type.as_str(),
-                    relation.context
-                ],
-            )?;
-            relation_ids.push((tx.last_insert_rowid(), relation));
-        }
+                    params![
+                        project_id,
+                        entity_id,
+                        relation.target,
+                        relation.relation_type.as_str(),
+                        relation.context
+                    ],
+                )?;
+                relation_ids.push((tx.last_insert_rowid(), relation));
+            }
 
-        let mut search_rows = Vec::with_capacity(1 + observation_ids.len() + relation_ids.len());
-        search_rows.push(entity_row(
-            entity_id,
-            &document.frontmatter.title,
-            &document.frontmatter.note_type,
-            permalink,
-            &document.file_path,
-            &document.content,
-            &document.frontmatter.tags,
-        ));
-        for (observation_id, observation) in observation_ids {
-            search_rows.push(observation_row(
-                observation_id,
+            let mut search_rows =
+                Vec::with_capacity(1 + observation_ids.len() + relation_ids.len());
+            search_rows.push(entity_row(
                 entity_id,
-                permalink,
-                &document.file_path,
-                observation,
-            ));
-        }
-        for (relation_id, relation) in relation_ids {
-            search_rows.push(relation_row(
-                relation_id,
-                entity_id,
-                &document.file_path,
                 &document.frontmatter.title,
-                None,
-                None,
-                entity_id,
-                None,
-                relation.relation_type.as_str(),
+                &document.frontmatter.note_type,
+                permalink.as_deref(),
+                &document.file_path,
+                &document.content,
+                &document.frontmatter.tags,
             ));
-        }
-        insert_search_rows(&tx, project_id, &search_rows)?;
+            for (observation_id, observation) in observation_ids {
+                search_rows.push(observation_row(
+                    observation_id,
+                    entity_id,
+                    permalink.as_deref(),
+                    &document.file_path,
+                    observation,
+                ));
+            }
+            for (relation_id, relation) in relation_ids {
+                search_rows.push(relation_row(
+                    relation_id,
+                    entity_id,
+                    &document.file_path,
+                    &document.frontmatter.title,
+                    None,
+                    None,
+                    entity_id,
+                    None,
+                    relation.relation_type.as_str(),
+                ));
+            }
+            insert_search_rows(&tx, project_id, &search_rows)?;
 
-        tx.execute(
-            "INSERT INTO index_metadata (key, value) VALUES ('last_indexed_at', ?1)
-             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-            [&now],
-        )?;
-        tx.commit()?;
-        Ok(entity_id)
+            tx.execute(
+                "INSERT INTO index_metadata (key, value) VALUES ('last_indexed_at', ?1)
+                 ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                [&now],
+            )?;
+            tx.commit()?;
+            Ok(entity_id)
+        })
     }
 
     /// Remove one indexed document (cascades to observations and relations).
     pub fn remove_document(&mut self, project_id: i64, file_path: &str) -> Result<()> {
-        let entity_id: Option<i64> = self
-            .conn
-            .query_row(
-                "SELECT id FROM entity WHERE project_id = ?1 AND file_path = ?2",
+        let file_path = file_path.to_owned();
+        self.call(move |conn| {
+            let entity_id: Option<i64> = conn
+                .query_row(
+                    "SELECT id FROM entity WHERE project_id = ?1 AND file_path = ?2",
+                    params![project_id, file_path],
+                    |row| row.get(0),
+                )
+                .optional()?;
+            if let Some(entity_id) = entity_id {
+                conn.execute("DELETE FROM search_index WHERE entity_id = ?1", [entity_id])?;
+            }
+            conn.execute(
+                "DELETE FROM entity WHERE project_id = ?1 AND file_path = ?2",
                 params![project_id, file_path],
-                |row| row.get(0),
-            )
-            .optional()?;
-        if let Some(entity_id) = entity_id {
-            self.conn
-                .execute("DELETE FROM search_index WHERE entity_id = ?1", [entity_id])?;
-        }
-        self.conn.execute(
-            "DELETE FROM entity WHERE project_id = ?1 AND file_path = ?2",
-            params![project_id, file_path],
-        )?;
-        Ok(())
+            )?;
+            Ok(())
+        })
     }
 
     /// Unregister a project and drop its derived rows. Returns whether it existed.
@@ -583,18 +713,20 @@ impl Store {
         let Some(project) = self.project_by_permalink(permalink)? else {
             return Ok(false);
         };
-        let transaction = self.conn.transaction()?;
-        transaction.execute(
-            "DELETE FROM search_index WHERE project_id = ?1",
-            [project.id],
-        )?;
-        transaction.execute(
-            "DELETE FROM search_vector_chunks WHERE project_id = ?1",
-            [project.id],
-        )?;
-        transaction.execute("DELETE FROM project WHERE id = ?1", [project.id])?;
-        transaction.commit()?;
-        Ok(true)
+        self.call(move |conn| {
+            let transaction = conn.transaction()?;
+            transaction.execute(
+                "DELETE FROM search_index WHERE project_id = ?1",
+                [project.id],
+            )?;
+            transaction.execute(
+                "DELETE FROM search_vector_chunks WHERE project_id = ?1",
+                [project.id],
+            )?;
+            transaction.execute("DELETE FROM project WHERE id = ?1", [project.id])?;
+            transaction.commit()?;
+            Ok(true)
+        })
     }
 
     /// Resolve relation targets to entity ids after a rebuild.
@@ -603,39 +735,41 @@ impl Store {
     /// without `.md`, or a bare permalink segment; the reference resolver is more
     /// elaborate and is ported incrementally.
     pub fn resolve_relations(&self, project_id: i64) -> Result<usize> {
-        let mut statement = self.conn.prepare(
-            "SELECT r.id, r.to_name FROM relation r WHERE r.project_id = ?1 AND r.to_id IS NULL",
-        )?;
-        let unresolved: Vec<(i64, String)> = statement
-            .query_map([project_id], |row| Ok((row.get(0)?, row.get(1)?)))?
-            .collect::<std::result::Result<_, _>>()?;
-        drop(statement);
+        let resolved = self.call(move |conn| {
+            let mut statement = conn.prepare(
+                "SELECT r.id, r.to_name FROM relation r WHERE r.project_id = ?1 AND r.to_id IS NULL",
+            )?;
+            let unresolved: Vec<(i64, String)> = statement
+                .query_map([project_id], |row| Ok((row.get(0)?, row.get(1)?)))?
+                .collect::<std::result::Result<_, _>>()?;
+            drop(statement);
 
-        let mut resolved = 0;
-        for (relation_id, to_name) in unresolved {
-            let target = normalize_target(&to_name);
-            let candidate: Option<i64> = self
-                .conn
-                .query_row(
-                    "SELECT id FROM entity
-                      WHERE project_id = ?1
-                        AND (permalink = ?2
-                             OR file_path = ?2
-                             OR file_path = ?3
-                             OR replace(file_path, '.md', '') = ?2)
-                      ORDER BY id LIMIT 1",
-                    params![project_id, target, format!("{target}.md")],
-                    |row| row.get(0),
-                )
-                .optional()?;
-            if let Some(to_id) = candidate {
-                self.conn.execute(
-                    "UPDATE relation SET to_id = ?1 WHERE id = ?2",
-                    params![to_id, relation_id],
-                )?;
-                resolved += 1;
+            let mut resolved = 0;
+            for (relation_id, to_name) in unresolved {
+                let target = normalize_target(&to_name);
+                let candidate: Option<i64> = conn
+                    .query_row(
+                        "SELECT id FROM entity
+                          WHERE project_id = ?1
+                            AND (permalink = ?2
+                                 OR file_path = ?2
+                                 OR file_path = ?3
+                                 OR replace(file_path, '.md', '') = ?2)
+                          ORDER BY id LIMIT 1",
+                        params![project_id, target, format!("{target}.md")],
+                        |row| row.get(0),
+                    )
+                    .optional()?;
+                if let Some(to_id) = candidate {
+                    conn.execute(
+                        "UPDATE relation SET to_id = ?1 WHERE id = ?2",
+                        params![to_id, relation_id],
+                    )?;
+                    resolved += 1;
+                }
             }
-        }
+            Ok(resolved)
+        })?;
         if resolved > 0 {
             self.refresh_relation_search_rows(project_id)?;
         }
@@ -644,90 +778,93 @@ impl Store {
 
     /// Rebuild relation-level search rows so titles reflect resolved targets.
     pub fn refresh_relation_search_rows(&self, project_id: i64) -> Result<()> {
-        #[derive(Debug)]
-        struct RelationSearchSource {
-            id: i64,
-            from_id: i64,
-            from_title: String,
-            from_permalink: Option<String>,
-            from_file_path: String,
-            to_id: Option<i64>,
-            to_title: Option<String>,
-            to_permalink: Option<String>,
-            to_name: String,
-            relation_type: String,
-        }
+        self.call(move |conn| {
+            #[derive(Debug)]
+            struct RelationSearchSource {
+                id: i64,
+                from_id: i64,
+                from_title: String,
+                from_permalink: Option<String>,
+                from_file_path: String,
+                to_id: Option<i64>,
+                to_title: Option<String>,
+                to_permalink: Option<String>,
+                to_name: String,
+                relation_type: String,
+            }
 
-        let mut statement = self.conn.prepare(
-            "SELECT r.id, r.from_id, f.title, f.permalink, f.file_path,
-                    r.to_id, t.title, t.permalink, r.to_name, r.relation_type
-               FROM relation r
-               JOIN entity f ON f.id = r.from_id
-               LEFT JOIN entity t ON t.id = r.to_id
-              WHERE r.project_id = ?1",
-        )?;
-        let rows: Vec<RelationSearchSource> = statement
-            .query_map([project_id], |row| {
-                Ok(RelationSearchSource {
-                    id: row.get(0)?,
-                    from_id: row.get(1)?,
-                    from_title: row.get(2)?,
-                    from_permalink: row.get(3)?,
-                    from_file_path: row.get(4)?,
-                    to_id: row.get(5)?,
-                    to_title: row.get(6)?,
-                    to_permalink: row.get(7)?,
-                    to_name: row.get(8)?,
-                    relation_type: row.get(9)?,
-                })
-            })?
-            .collect::<std::result::Result<Vec<_>, _>>()?;
-        drop(statement);
+            let mut statement = conn.prepare(
+                "SELECT r.id, r.from_id, f.title, f.permalink, f.file_path,
+                        r.to_id, t.title, t.permalink, r.to_name, r.relation_type
+                   FROM relation r
+                   JOIN entity f ON f.id = r.from_id
+                   LEFT JOIN entity t ON t.id = r.to_id
+                  WHERE r.project_id = ?1",
+            )?;
+            let rows: Vec<RelationSearchSource> = statement
+                .query_map([project_id], |row| {
+                    Ok(RelationSearchSource {
+                        id: row.get(0)?,
+                        from_id: row.get(1)?,
+                        from_title: row.get(2)?,
+                        from_permalink: row.get(3)?,
+                        from_file_path: row.get(4)?,
+                        to_id: row.get(5)?,
+                        to_title: row.get(6)?,
+                        to_permalink: row.get(7)?,
+                        to_name: row.get(8)?,
+                        relation_type: row.get(9)?,
+                    })
+                })?
+                .collect::<std::result::Result<Vec<_>, _>>()?;
+            drop(statement);
 
-        self.conn.execute(
-            "DELETE FROM search_index WHERE project_id = ?1 AND type = 'relation'",
-            [project_id],
-        )?;
+            conn.execute(
+                "DELETE FROM search_index WHERE project_id = ?1 AND type = 'relation'",
+                [project_id],
+            )?;
 
-        let mut search_rows = Vec::with_capacity(rows.len());
-        for row in rows {
-            let target = row
-                .to_permalink
-                .clone()
-                .unwrap_or_else(|| row.to_name.clone());
-            let permalink = row.from_permalink.as_ref().map(|from| {
-                crate::domain::permalink::generate_permalink(&format!(
-                    "{from}/{}/{}",
-                    row.relation_type, target
-                ))
-            });
-            search_rows.push(relation_row(
-                row.id,
-                row.from_id,
-                &row.from_file_path,
-                &row.from_title,
-                row.to_title.as_deref(),
-                permalink.as_deref(),
-                row.from_id,
-                row.to_id,
-                &row.relation_type,
-            ));
-        }
-        insert_search_rows(&self.conn, project_id, &search_rows)
+            let mut search_rows = Vec::with_capacity(rows.len());
+            for row in rows {
+                let target = row
+                    .to_permalink
+                    .clone()
+                    .unwrap_or_else(|| row.to_name.clone());
+                let permalink = row.from_permalink.as_ref().map(|from| {
+                    crate::domain::permalink::generate_permalink(&format!(
+                        "{from}/{}/{}",
+                        row.relation_type, target
+                    ))
+                });
+                search_rows.push(relation_row(
+                    row.id,
+                    row.from_id,
+                    &row.from_file_path,
+                    &row.from_title,
+                    row.to_title.as_deref(),
+                    permalink.as_deref(),
+                    row.from_id,
+                    row.to_id,
+                    &row.relation_type,
+                ));
+            }
+            insert_search_rows(conn, project_id, &search_rows)
+        })
     }
 
     /// Fetch one entity by internal row id.
     pub fn entity_by_id(&self, entity_id: i64) -> Result<Option<EntityRow>> {
-        let row = self
-            .conn
-            .query_row(
+        self.call(move |conn| {
+            let row = conn
+                .query_row(
                 "SELECT id, external_id, title, note_type, permalink, file_path, checksum, entity_metadata
                    FROM entity WHERE id = ?1",
                 [entity_id],
                 map_entity_row,
             )
             .optional()?;
-        Ok(row)
+            Ok(row)
+        })
     }
 
     /// Fetch one entity by project-relative file path.
@@ -736,16 +873,18 @@ impl Store {
         project_id: i64,
         file_path: &str,
     ) -> Result<Option<EntityRow>> {
-        let row = self
-            .conn
-            .query_row(
-                "SELECT id, external_id, title, note_type, permalink, file_path, checksum, entity_metadata
-                   FROM entity WHERE project_id = ?1 AND file_path = ?2",
-                params![project_id, file_path],
-                map_entity_row,
-            )
-            .optional()?;
-        Ok(row)
+        let file_path = file_path.to_owned();
+        self.call(move |conn| {
+            let row = conn
+                .query_row(
+                    "SELECT id, external_id, title, note_type, permalink, file_path, checksum, entity_metadata
+                       FROM entity WHERE project_id = ?1 AND file_path = ?2",
+                    params![project_id, file_path],
+                    map_entity_row,
+                )
+                .optional()?;
+            Ok(row)
+        })
     }
 
     /// Fetch one entity by permalink.
@@ -754,30 +893,32 @@ impl Store {
         project_id: i64,
         permalink: &str,
     ) -> Result<Option<EntityRow>> {
-        let row = self
-            .conn
-            .query_row(
-                "SELECT id, external_id, title, note_type, permalink, file_path, checksum, entity_metadata
-                   FROM entity WHERE project_id = ?1 AND permalink = ?2",
-                params![project_id, permalink],
-                |row| {
-                    let metadata: Option<String> = row.get(7)?;
-                    Ok(EntityRow {
-                        id: row.get(0)?,
-                        external_id: row.get(1)?,
-                        title: row.get(2)?,
-                        note_type: row.get(3)?,
-                        permalink: row.get(4)?,
-                        file_path: row.get(5)?,
-                        checksum: row.get(6)?,
-                        metadata: metadata
-                            .and_then(|raw| serde_json::from_str::<Map<String, Value>>(&raw).ok())
-                            .unwrap_or_default(),
-                    })
-                },
-            )
-            .optional()?;
-        Ok(row)
+        let permalink = permalink.to_owned();
+        self.call(move |conn| {
+            let row = conn
+                .query_row(
+                    "SELECT id, external_id, title, note_type, permalink, file_path, checksum, entity_metadata
+                       FROM entity WHERE project_id = ?1 AND permalink = ?2",
+                    params![project_id, permalink],
+                    |row| {
+                        let metadata: Option<String> = row.get(7)?;
+                        Ok(EntityRow {
+                            id: row.get(0)?,
+                            external_id: row.get(1)?,
+                            title: row.get(2)?,
+                            note_type: row.get(3)?,
+                            permalink: row.get(4)?,
+                            file_path: row.get(5)?,
+                            checksum: row.get(6)?,
+                            metadata: metadata
+                                .and_then(|raw| serde_json::from_str::<Map<String, Value>>(&raw).ok())
+                                .unwrap_or_default(),
+                        })
+                    },
+                )
+                .optional()?;
+            Ok(row)
+        })
     }
 
     /// Entities with an exactly matching title, shortest path first.
@@ -785,63 +926,71 @@ impl Store {
     /// Mirrors `EntityRepository.get_by_title`, which link resolution uses to break
     /// ties between same-titled notes in different folders.
     pub fn entities_by_title(&self, project_id: i64, title: &str) -> Result<Vec<EntityRow>> {
-        let mut statement = self.conn.prepare(
-            "SELECT id, external_id, title, note_type, permalink, file_path, checksum, entity_metadata
-               FROM entity WHERE project_id = ?1 AND title = ?2
-              ORDER BY length(file_path), file_path",
-        )?;
-        let rows = statement
-            .query_map(params![project_id, title], map_entity_row)?
-            .collect::<std::result::Result<Vec<_>, _>>()?;
-        Ok(rows)
+        let title = title.to_owned();
+        self.call(move |conn| {
+            let mut statement = conn.prepare(
+                "SELECT id, external_id, title, note_type, permalink, file_path, checksum, entity_metadata
+                   FROM entity WHERE project_id = ?1 AND title = ?2
+                  ORDER BY length(file_path), file_path",
+            )?;
+            let rows = statement
+                .query_map(params![project_id, title], map_entity_row)?
+                .collect::<std::result::Result<Vec<_>, _>>()?;
+            Ok(rows)
+        })
     }
 
     /// Observations owned by one entity.
     pub fn observations_for_entity(&self, entity_id: i64) -> Result<Vec<ObservationRow>> {
-        let mut statement = self.conn.prepare(
-            "SELECT id, entity_id, category, content, context, tags FROM observation
-              WHERE entity_id = ?1 ORDER BY id",
-        )?;
-        let rows = statement
-            .query_map([entity_id], |row| {
-                let tags: String = row.get(5)?;
-                Ok(ObservationRow {
-                    id: row.get(0)?,
-                    entity_id: row.get(1)?,
-                    category: row.get(2)?,
-                    content: row.get(3)?,
-                    context: row.get(4)?,
-                    tags: serde_json::from_str::<Vec<String>>(&tags).unwrap_or_default(),
-                })
-            })?
-            .collect::<std::result::Result<Vec<_>, _>>()?;
-        Ok(rows)
+        self.call(move |conn| {
+            let mut statement = conn.prepare(
+                "SELECT id, entity_id, category, content, context, tags FROM observation
+                  WHERE entity_id = ?1 ORDER BY id",
+            )?;
+            let rows = statement
+                .query_map([entity_id], |row| {
+                    let tags: String = row.get(5)?;
+                    Ok(ObservationRow {
+                        id: row.get(0)?,
+                        entity_id: row.get(1)?,
+                        category: row.get(2)?,
+                        content: row.get(3)?,
+                        context: row.get(4)?,
+                        tags: serde_json::from_str::<Vec<String>>(&tags).unwrap_or_default(),
+                    })
+                })?
+                .collect::<std::result::Result<Vec<_>, _>>()?;
+            Ok(rows)
+        })
     }
 
     /// Note body recorded for an entity (frontmatter removed).
     pub fn entity_content(&self, entity_id: i64) -> Option<String> {
-        self.conn
-            .query_row(
+        self.call(move |conn| {
+            Ok(conn.query_row(
                 "SELECT content_snippet FROM search_index
                   WHERE entity_id = ?1 AND type = 'entity' LIMIT 1",
                 [entity_id],
                 |row| row.get::<_, Option<String>>(0),
-            )
-            .ok()
-            .flatten()
+            ))
+        })
+        .ok()
+        .and_then(std::result::Result::ok)
+        .flatten()
     }
 
     /// Indexed creation timestamp for an entity.
     pub fn entity_created_at(&self, entity_id: i64) -> Result<Option<String>> {
-        let value = self
-            .conn
-            .query_row(
-                "SELECT created_at FROM entity WHERE id = ?1",
-                [entity_id],
-                |row| row.get::<_, String>(0),
-            )
-            .optional()?;
-        Ok(value)
+        self.call(move |conn| {
+            let value = conn
+                .query_row(
+                    "SELECT created_at FROM entity WHERE id = ?1",
+                    [entity_id],
+                    |row| row.get::<_, String>(0),
+                )
+                .optional()?;
+            Ok(value)
+        })
     }
 
     /// Titles and external ids for a set of entity ids.
@@ -852,25 +1001,30 @@ impl Store {
         &self,
         entity_ids: &[i64],
     ) -> Result<HashMap<i64, (String, String)>> {
-        let mut lookup = HashMap::new();
         if entity_ids.is_empty() {
-            return Ok(lookup);
+            return Ok(HashMap::new());
         }
-        let placeholders = vec!["?"; entity_ids.len()].join(", ");
-        let sql = format!("SELECT id, title, external_id FROM entity WHERE id IN ({placeholders})");
-        let mut statement = self.conn.prepare(&sql)?;
-        let rows = statement.query_map(rusqlite::params_from_iter(entity_ids.iter()), |row| {
-            Ok((
-                row.get::<_, i64>(0)?,
-                row.get::<_, String>(1)?,
-                row.get::<_, String>(2)?,
-            ))
-        })?;
-        for row in rows {
-            let (id, title, external_id) = row?;
-            lookup.insert(id, (title, external_id));
-        }
-        Ok(lookup)
+        let entity_ids = entity_ids.to_vec();
+        self.call(move |conn| {
+            let placeholders = vec!["?"; entity_ids.len()].join(", ");
+            let sql =
+                format!("SELECT id, title, external_id FROM entity WHERE id IN ({placeholders})");
+            let mut statement = conn.prepare(&sql)?;
+            let rows =
+                statement.query_map(rusqlite::params_from_iter(entity_ids.iter()), |row| {
+                    Ok((
+                        row.get::<_, i64>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                    ))
+                })?;
+            let mut lookup = HashMap::new();
+            for row in rows {
+                let (id, title, external_id) = row?;
+                lookup.insert(id, (title, external_id));
+            }
+            Ok(lookup)
+        })
     }
 
     /// Vectors already stored for a project, keyed by chunk key.
@@ -883,26 +1037,29 @@ impl Store {
         project_id: i64,
         model: &str,
     ) -> Result<HashMap<String, (String, Vec<f32>)>> {
-        let mut statement = self.conn.prepare(
-            "SELECT c.chunk_key, c.source_hash, e.embedding
-               FROM search_vector_chunks c
-               JOIN search_vector_embeddings e ON e.rowid = c.id
-              WHERE c.project_id = ?1 AND c.embedding_model = ?2
-                AND c.embedding_status = 'ready' AND e.source_hash = c.source_hash",
-        )?;
-        let rows = statement.query_map(params![project_id, model], |row| {
-            Ok((
-                row.get::<_, String>(0)?,
-                row.get::<_, String>(1)?,
-                row.get::<_, Vec<u8>>(2)?,
-            ))
-        })?;
-        let mut embeddings = HashMap::new();
-        for row in rows {
-            let (chunk_key, source_hash, blob) = row?;
-            embeddings.insert(chunk_key, (source_hash, decode_vector(&blob)));
-        }
-        Ok(embeddings)
+        let model = model.to_owned();
+        self.call(move |conn| {
+            let mut statement = conn.prepare(
+                "SELECT c.chunk_key, c.source_hash, e.embedding
+                   FROM search_vector_chunks c
+                   JOIN search_vector_embeddings e ON e.rowid = c.id
+                  WHERE c.project_id = ?1 AND c.embedding_model = ?2
+                    AND c.embedding_status = 'ready' AND e.source_hash = c.source_hash",
+            )?;
+            let rows = statement.query_map(params![project_id, model], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, Vec<u8>>(2)?,
+                ))
+            })?;
+            let mut embeddings = HashMap::new();
+            for row in rows {
+                let (chunk_key, source_hash, blob) = row?;
+                embeddings.insert(chunk_key, (source_hash, decode_vector(&blob)));
+            }
+            Ok(embeddings)
+        })
     }
 
     /// Replace a project's vector index with `rows`.
@@ -916,70 +1073,79 @@ impl Store {
         model: &str,
         rows: &[VectorRow],
     ) -> Result<usize> {
-        let now = timeframe::now_storage_timestamp();
-        let tx = self.conn.transaction()?;
-        tx.execute(
-            "DELETE FROM search_vector_chunks WHERE project_id = ?1",
-            [project_id],
-        )?;
-        {
-            let mut insert_chunk = tx.prepare(
-                "INSERT INTO search_vector_chunks
-                    (entity_id, project_id, chunk_key, chunk_text, source_hash,
-                     entity_fingerprint, embedding_model, vector_index, embedding_status,
-                     updated_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'ready', ?9)",
+        let model = model.to_owned();
+        let rows = rows.to_vec();
+        let row_count = rows.len();
+        self.call(move |conn| {
+            let now = timeframe::now_storage_timestamp();
+            let tx = conn.transaction()?;
+            tx.execute(
+                "DELETE FROM search_vector_chunks WHERE project_id = ?1",
+                [project_id],
             )?;
-            let mut insert_embedding = tx.prepare(
-                "INSERT INTO search_vector_embeddings (rowid, embedding, source_hash)
-                 VALUES (?1, ?2, ?3)",
-            )?;
-            for row in rows {
-                insert_chunk.execute(params![
-                    row.entity_id,
-                    project_id,
-                    row.chunk_key,
-                    row.chunk_text,
-                    row.source_hash,
-                    row.entity_fingerprint,
-                    model,
-                    VECTOR_INDEX_NAME,
-                    now
-                ])?;
-                let rowid = tx.last_insert_rowid();
-                insert_embedding.execute(params![
-                    rowid,
-                    encode_vector(&row.embedding),
-                    row.source_hash
-                ])?;
+            {
+                let mut insert_chunk = tx.prepare(
+                    "INSERT INTO search_vector_chunks
+                        (entity_id, project_id, chunk_key, chunk_text, source_hash,
+                         entity_fingerprint, embedding_model, vector_index, embedding_status,
+                         updated_at)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'ready', ?9)",
+                )?;
+                let mut insert_embedding = tx.prepare(
+                    "INSERT INTO search_vector_embeddings (rowid, embedding, source_hash)
+                     VALUES (?1, ?2, ?3)",
+                )?;
+                for row in &rows {
+                    insert_chunk.execute(params![
+                        row.entity_id,
+                        project_id,
+                        row.chunk_key,
+                        row.chunk_text,
+                        row.source_hash,
+                        row.entity_fingerprint,
+                        model,
+                        VECTOR_INDEX_NAME,
+                        now
+                    ])?;
+                    let rowid = tx.last_insert_rowid();
+                    insert_embedding.execute(params![
+                        rowid,
+                        encode_vector(&row.embedding),
+                        row.source_hash
+                    ])?;
+                }
             }
-        }
-        tx.commit()?;
-        Ok(rows.len())
+            tx.commit()?;
+            Ok(row_count)
+        })
     }
 
     /// Stored chunks and vectors for one project (vector-search candidates).
     pub fn vector_chunks(&self, project_id: i64, model: &str) -> Result<Vec<VectorChunkRow>> {
-        let mut statement = self.conn.prepare(
-            "SELECT c.id, c.entity_id, c.chunk_key, c.chunk_text, c.source_hash, e.embedding
-               FROM search_vector_chunks c
-               JOIN search_vector_embeddings e ON e.rowid = c.id
-              WHERE c.project_id = ?1 AND c.vector_index = ?2
-                AND c.embedding_status = 'ready' AND c.embedding_model = ?3
-                AND e.source_hash = c.source_hash
-              ORDER BY c.entity_id, c.chunk_key",
-        )?;
-        let rows = statement.query_map(params![project_id, VECTOR_INDEX_NAME, model], |row| {
-            Ok(VectorChunkRow {
-                id: row.get(0)?,
-                entity_id: row.get(1)?,
-                chunk_key: row.get(2)?,
-                chunk_text: row.get(3)?,
-                source_hash: row.get(4)?,
-                embedding: decode_vector(&row.get::<_, Vec<u8>>(5)?),
-            })
-        })?;
-        Ok(rows.collect::<std::result::Result<Vec<_>, _>>()?)
+        let model = model.to_owned();
+        self.call(move |conn| {
+            let mut statement = conn.prepare(
+                "SELECT c.id, c.entity_id, c.chunk_key, c.chunk_text, c.source_hash, e.embedding
+                   FROM search_vector_chunks c
+                   JOIN search_vector_embeddings e ON e.rowid = c.id
+                  WHERE c.project_id = ?1 AND c.vector_index = ?2
+                    AND c.embedding_status = 'ready' AND c.embedding_model = ?3
+                    AND e.source_hash = c.source_hash
+                  ORDER BY c.entity_id, c.chunk_key",
+            )?;
+            let rows =
+                statement.query_map(params![project_id, VECTOR_INDEX_NAME, model], |row| {
+                    Ok(VectorChunkRow {
+                        id: row.get(0)?,
+                        entity_id: row.get(1)?,
+                        chunk_key: row.get(2)?,
+                        chunk_text: row.get(3)?,
+                        source_hash: row.get(4)?,
+                        embedding: decode_vector(&row.get::<_, Vec<u8>>(5)?),
+                    })
+                })?;
+            Ok(rows.collect::<std::result::Result<Vec<_>, _>>()?)
+        })
     }
 
     /// `search_index` rows for the given ids, in the reference hydration shape.
@@ -989,38 +1155,41 @@ impl Store {
         if ids.is_empty() {
             return Ok(Vec::new());
         }
-        let placeholders = vec!["?"; ids.len()].join(", ");
-        let sql = format!(
-            "SELECT id, title, type, permalink, file_path, content_snippet, metadata,
-                    entity_id, category, relation_type, updated_at
-               FROM search_index
-              WHERE project_id = ? AND id IN ({placeholders})"
-        );
-        let mut values: Vec<Box<dyn rusqlite::ToSql>> = Vec::with_capacity(ids.len() + 1);
-        values.push(Box::new(project_id));
-        for id in ids {
-            values.push(Box::new(*id));
-        }
-        let mut statement = self.conn.prepare(&sql)?;
-        let rows = statement.query_map(
-            rusqlite::params_from_iter(values.iter().map(std::convert::AsRef::as_ref)),
-            |row| {
-                Ok(SearchRowView {
-                    id: row.get(0)?,
-                    title: row.get(1)?,
-                    item_type: row.get(2)?,
-                    permalink: row.get(3)?,
-                    file_path: row.get(4)?,
-                    content_snippet: row.get(5)?,
-                    metadata: row.get(6)?,
-                    entity_id: row.get(7)?,
-                    category: row.get(8)?,
-                    relation_type: row.get(9)?,
-                    updated_at: row.get(10)?,
-                })
-            },
-        )?;
-        Ok(rows.collect::<std::result::Result<Vec<_>, _>>()?)
+        let ids = ids.to_vec();
+        self.call(move |conn| {
+            let placeholders = vec!["?"; ids.len()].join(", ");
+            let sql = format!(
+                "SELECT id, title, type, permalink, file_path, content_snippet, metadata,
+                        entity_id, category, relation_type, updated_at
+                   FROM search_index
+                  WHERE project_id = ? AND id IN ({placeholders})"
+            );
+            let mut values: Vec<Box<dyn rusqlite::ToSql>> = Vec::with_capacity(ids.len() + 1);
+            values.push(Box::new(project_id));
+            for id in ids {
+                values.push(Box::new(id));
+            }
+            let mut statement = conn.prepare(&sql)?;
+            let rows = statement.query_map(
+                rusqlite::params_from_iter(values.iter().map(std::convert::AsRef::as_ref)),
+                |row| {
+                    Ok(SearchRowView {
+                        id: row.get(0)?,
+                        title: row.get(1)?,
+                        item_type: row.get(2)?,
+                        permalink: row.get(3)?,
+                        file_path: row.get(4)?,
+                        content_snippet: row.get(5)?,
+                        metadata: row.get(6)?,
+                        entity_id: row.get(7)?,
+                        category: row.get(8)?,
+                        relation_type: row.get(9)?,
+                        updated_at: row.get(10)?,
+                    })
+                },
+            )?;
+            Ok(rows.collect::<std::result::Result<Vec<_>, _>>()?)
+        })
     }
 
     /// `(permalink, external_id)` for the given entity ids.
@@ -1028,29 +1197,33 @@ impl Store {
         &self,
         entity_ids: &[i64],
     ) -> Result<HashMap<i64, (Option<String>, String)>> {
-        let mut lookup = HashMap::new();
         if entity_ids.is_empty() {
-            return Ok(lookup);
+            return Ok(HashMap::new());
         }
-        let mut unique: Vec<i64> = entity_ids.to_vec();
-        unique.sort_unstable();
-        unique.dedup();
-        let placeholders = vec!["?"; unique.len()].join(", ");
-        let sql =
-            format!("SELECT id, permalink, external_id FROM entity WHERE id IN ({placeholders})");
-        let mut statement = self.conn.prepare(&sql)?;
-        let rows = statement.query_map(rusqlite::params_from_iter(unique.iter()), |row| {
-            Ok((
-                row.get::<_, i64>(0)?,
-                row.get::<_, Option<String>>(1)?,
-                row.get::<_, String>(2)?,
-            ))
-        })?;
-        for row in rows {
-            let (id, permalink, external_id) = row?;
-            lookup.insert(id, (permalink, external_id));
-        }
-        Ok(lookup)
+        let entity_ids = entity_ids.to_vec();
+        self.call(move |conn| {
+            let mut unique = entity_ids;
+            unique.sort_unstable();
+            unique.dedup();
+            let placeholders = vec!["?"; unique.len()].join(", ");
+            let sql = format!(
+                "SELECT id, permalink, external_id FROM entity WHERE id IN ({placeholders})"
+            );
+            let mut statement = conn.prepare(&sql)?;
+            let rows = statement.query_map(rusqlite::params_from_iter(unique.iter()), |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, Option<String>>(1)?,
+                    row.get::<_, String>(2)?,
+                ))
+            })?;
+            let mut lookup = HashMap::new();
+            for row in rows {
+                let (id, permalink, external_id) = row?;
+                lookup.insert(id, (permalink, external_id));
+            }
+            Ok(lookup)
+        })
     }
 
     /// Traverse the relation graph from `roots`, mirroring reference `find_related`.
@@ -1073,84 +1246,91 @@ impl Store {
         if roots.is_empty() || max_results == 0 {
             return Ok(Vec::new());
         }
-        let seeds = roots
-            .iter()
-            .map(i64::to_string)
-            .collect::<Vec<_>>()
-            .join(", ");
-        let sql = FIND_RELATED_SQL.replace("{{seeds}}", &seeds);
-        let mut statement = self.conn.prepare(&sql)?;
-        let rows = statement
-            .query_map(
-                named_params! {
-                    ":since": since,
-                    ":project_id": project_id,
-                    ":max_depth": i64::from(depth) * 2,
-                    ":max_results": max_results,
-                },
-                |row| {
-                    Ok(RelatedRow {
-                        item_type: row.get("type")?,
-                        id: row.get("id")?,
-                        title: row.get("title")?,
-                        permalink: row.get("permalink")?,
-                        file_path: row.get("file_path")?,
-                        from_id: row.get("from_id")?,
-                        to_id: row.get("to_id")?,
-                        relation_type: row.get("relation_type")?,
-                        to_name: row.get("to_name")?,
-                        depth: row.get("depth")?,
-                        root_id: row.get("root_id")?,
-                        created_at: row.get("created_at")?,
-                    })
-                },
-            )?
-            .collect::<std::result::Result<Vec<_>, _>>()?;
-        Ok(rows)
+        let roots = roots.to_vec();
+        let since = since.map(str::to_owned);
+        self.call(move |conn| {
+            let seeds = roots
+                .iter()
+                .map(i64::to_string)
+                .collect::<Vec<_>>()
+                .join(", ");
+            let sql = FIND_RELATED_SQL.replace("{{seeds}}", &seeds);
+            let mut statement = conn.prepare(&sql)?;
+            let rows = statement
+                .query_map(
+                    named_params! {
+                        ":since": since,
+                        ":project_id": project_id,
+                        ":max_depth": i64::from(depth) * 2,
+                        ":max_results": max_results,
+                    },
+                    |row| {
+                        Ok(RelatedRow {
+                            item_type: row.get("type")?,
+                            id: row.get("id")?,
+                            title: row.get("title")?,
+                            permalink: row.get("permalink")?,
+                            file_path: row.get("file_path")?,
+                            from_id: row.get("from_id")?,
+                            to_id: row.get("to_id")?,
+                            relation_type: row.get("relation_type")?,
+                            to_name: row.get("to_name")?,
+                            depth: row.get("depth")?,
+                            root_id: row.get("root_id")?,
+                            created_at: row.get("created_at")?,
+                        })
+                    },
+                )?
+                .collect::<std::result::Result<Vec<_>, _>>()?;
+            Ok(rows)
+        })
     }
 
     /// Every relation edge in a project with entity titles resolved.
     pub fn relation_edges(&self) -> Result<Vec<crate::graph::RelationEdge>> {
-        let mut statement = self.conn.prepare(
-            "SELECT r.id, r.from_id, r.to_id, r.to_name, r.relation_type, r.context,
-                    f.title, f.permalink, f.file_path, f.external_id,
-                    t.title, t.permalink, t.external_id
-               FROM relation r
-               JOIN entity f ON f.id = r.from_id
-               LEFT JOIN entity t ON t.id = r.to_id
-              ORDER BY r.id",
-        )?;
-        let rows = statement
-            .query_map([], |row| {
-                Ok(crate::graph::RelationEdge {
-                    id: row.get(0)?,
-                    from_id: row.get(1)?,
-                    to_id: row.get(2)?,
-                    to_name: row.get(3)?,
-                    relation_type: row.get(4)?,
-                    context: row.get(5)?,
-                    from_title: row.get(6)?,
-                    from_permalink: row.get(7)?,
-                    from_file_path: row.get(8)?,
-                    from_external_id: row.get(9)?,
-                    to_title: row.get(10)?,
-                    to_permalink: row.get(11)?,
-                    to_external_id: row.get(12)?,
-                })
-            })?
-            .collect::<std::result::Result<Vec<_>, _>>()?;
-        Ok(rows)
+        self.call(|conn| {
+            let mut statement = conn.prepare(
+                "SELECT r.id, r.from_id, r.to_id, r.to_name, r.relation_type, r.context,
+                        f.title, f.permalink, f.file_path, f.external_id,
+                        t.title, t.permalink, t.external_id
+                   FROM relation r
+                   JOIN entity f ON f.id = r.from_id
+                   LEFT JOIN entity t ON t.id = r.to_id
+                  ORDER BY r.id",
+            )?;
+            let rows = statement
+                .query_map([], |row| {
+                    Ok(crate::graph::RelationEdge {
+                        id: row.get(0)?,
+                        from_id: row.get(1)?,
+                        to_id: row.get(2)?,
+                        to_name: row.get(3)?,
+                        relation_type: row.get(4)?,
+                        context: row.get(5)?,
+                        from_title: row.get(6)?,
+                        from_permalink: row.get(7)?,
+                        from_file_path: row.get(8)?,
+                        from_external_id: row.get(9)?,
+                        to_title: row.get(10)?,
+                        to_permalink: row.get(11)?,
+                        to_external_id: row.get(12)?,
+                    })
+                })?
+                .collect::<std::result::Result<Vec<_>, _>>()?;
+            Ok(rows)
+        })
     }
 
     /// Every indexed file path for a project (used by reconciliation).
     pub fn file_paths(&self, project_id: i64) -> Result<Vec<String>> {
-        let mut statement = self
-            .conn
-            .prepare("SELECT file_path FROM entity WHERE project_id = ?1 ORDER BY file_path")?;
-        let rows = statement
-            .query_map([project_id], |row| row.get(0))?
-            .collect::<std::result::Result<Vec<String>, _>>()?;
-        Ok(rows)
+        self.call(move |conn| {
+            let mut statement = conn
+                .prepare("SELECT file_path FROM entity WHERE project_id = ?1 ORDER BY file_path")?;
+            let rows = statement
+                .query_map([project_id], |row| row.get(0))?
+                .collect::<std::result::Result<Vec<String>, _>>()?;
+            Ok(rows)
+        })
     }
 
     /// Move an indexed document to a new path, optionally updating its permalink.
@@ -1164,19 +1344,24 @@ impl Store {
         to: &str,
         permalink: Option<&str>,
     ) -> Result<bool> {
-        let tx = self.conn.transaction()?;
-        let updated = match permalink {
-            Some(permalink) => tx.execute(
-                "UPDATE entity SET file_path = ?1, permalink = ?2 WHERE project_id = ?3 AND file_path = ?4",
-                params![to, permalink, project_id, from],
-            )?,
-            None => tx.execute(
-                "UPDATE entity SET file_path = ?1 WHERE project_id = ?2 AND file_path = ?3",
-                params![to, project_id, from],
-            )?,
-        };
-        tx.commit()?;
-        Ok(updated > 0)
+        let from = from.to_owned();
+        let to = to.to_owned();
+        let permalink = permalink.map(str::to_owned);
+        self.call(move |conn| {
+            let tx = conn.transaction()?;
+            let updated = match permalink {
+                Some(permalink) => tx.execute(
+                    "UPDATE entity SET file_path = ?1, permalink = ?2 WHERE project_id = ?3 AND file_path = ?4",
+                    params![to, permalink, project_id, from],
+                )?,
+                None => tx.execute(
+                    "UPDATE entity SET file_path = ?1 WHERE project_id = ?2 AND file_path = ?3",
+                    params![to, project_id, from],
+                )?,
+            };
+            tx.commit()?;
+            Ok(updated > 0)
+        })
     }
 
     /// Entities under a directory prefix, in the reference repository's row order.
@@ -1190,107 +1375,116 @@ impl Store {
         project_id: i64,
         directory_prefix: &str,
     ) -> Result<Vec<DirectoryEntityRow>> {
-        let prefix = directory_prefix.trim_matches('/');
-        let columns = "SELECT id, file_path, title, permalink, external_id, note_type, \
-                       content_type, updated_at FROM entity WHERE project_id = ?1";
-        let mut rows = Vec::new();
-        if prefix.is_empty() {
-            let mut statement = self.conn.prepare(&format!("{columns} ORDER BY id"))?;
-            let mapped = statement.query_map([project_id], directory_row)?;
+        let prefix = directory_prefix.trim_matches('/').to_owned();
+        self.call(move |conn| {
+            let columns = "SELECT id, file_path, title, permalink, external_id, note_type, \
+                           content_type, updated_at FROM entity WHERE project_id = ?1";
+            let mut rows = Vec::new();
+            if prefix.is_empty() {
+                let mut statement = conn.prepare(&format!("{columns} ORDER BY id"))?;
+                let mapped = statement.query_map([project_id], directory_row)?;
+                for row in mapped {
+                    rows.push(row?);
+                }
+                return Ok(rows);
+            }
+            let pattern = format!("{prefix}/%");
+            let mut statement =
+                conn.prepare(&format!("{columns} AND file_path LIKE ?2 ORDER BY id"))?;
+            let mapped = statement.query_map(params![project_id, pattern], directory_row)?;
             for row in mapped {
                 rows.push(row?);
             }
-            return Ok(rows);
-        }
-        let pattern = format!("{prefix}/%");
-        let mut statement = self
-            .conn
-            .prepare(&format!("{columns} AND file_path LIKE ?2 ORDER BY id"))?;
-        let mapped = statement.query_map(params![project_id, pattern], directory_row)?;
-        for row in mapped {
-            rows.push(row?);
-        }
-        Ok(rows)
+            Ok(rows)
+        })
     }
 
     /// List entities for a project, ordered by file path.
     pub fn entities(&self, project_id: i64) -> Result<Vec<EntityRow>> {
-        let mut statement = self.conn.prepare(
-            "SELECT id, external_id, title, note_type, permalink, file_path, checksum, entity_metadata
-               FROM entity WHERE project_id = ?1 ORDER BY file_path",
-        )?;
-        let rows = statement
-            .query_map([project_id], |row| {
-                let metadata: Option<String> = row.get(7)?;
-                Ok(EntityRow {
-                    id: row.get(0)?,
-                    external_id: row.get(1)?,
-                    title: row.get(2)?,
-                    note_type: row.get(3)?,
-                    permalink: row.get(4)?,
-                    file_path: row.get(5)?,
-                    checksum: row.get(6)?,
-                    metadata: metadata
-                        .and_then(|raw| serde_json::from_str::<Map<String, Value>>(&raw).ok())
-                        .unwrap_or_default(),
-                })
-            })?
-            .collect::<std::result::Result<Vec<_>, _>>()?;
-        Ok(rows)
+        self.call(move |conn| {
+            let mut statement = conn.prepare(
+                "SELECT id, external_id, title, note_type, permalink, file_path, checksum, entity_metadata
+                   FROM entity WHERE project_id = ?1 ORDER BY file_path",
+            )?;
+            let rows = statement
+                .query_map([project_id], |row| {
+                    let metadata: Option<String> = row.get(7)?;
+                    Ok(EntityRow {
+                        id: row.get(0)?,
+                        external_id: row.get(1)?,
+                        title: row.get(2)?,
+                        note_type: row.get(3)?,
+                        permalink: row.get(4)?,
+                        file_path: row.get(5)?,
+                        checksum: row.get(6)?,
+                        metadata: metadata
+                            .and_then(|raw| serde_json::from_str::<Map<String, Value>>(&raw).ok())
+                            .unwrap_or_default(),
+                    })
+                })?
+                .collect::<std::result::Result<Vec<_>, _>>()?;
+            Ok(rows)
+        })
     }
 
     /// List observations for a project, ordered by entity id then insertion order.
     pub fn observations(&self, project_id: i64) -> Result<Vec<ObservationRow>> {
-        let mut statement = self.conn.prepare(
-            "SELECT id, entity_id, category, content, context, tags
-               FROM observation WHERE project_id = ?1 ORDER BY entity_id, id",
-        )?;
-        let rows = statement
-            .query_map([project_id], |row| {
-                let tags: String = row.get(5)?;
-                Ok(ObservationRow {
-                    id: row.get(0)?,
-                    entity_id: row.get(1)?,
-                    category: row.get(2)?,
-                    content: row.get(3)?,
-                    context: row.get(4)?,
-                    tags: serde_json::from_str::<Vec<String>>(&tags).unwrap_or_default(),
-                })
-            })?
-            .collect::<std::result::Result<Vec<_>, _>>()?;
-        Ok(rows)
+        self.call(move |conn| {
+            let mut statement = conn.prepare(
+                "SELECT id, entity_id, category, content, context, tags
+                   FROM observation WHERE project_id = ?1 ORDER BY entity_id, id",
+            )?;
+            let rows = statement
+                .query_map([project_id], |row| {
+                    let tags: String = row.get(5)?;
+                    Ok(ObservationRow {
+                        id: row.get(0)?,
+                        entity_id: row.get(1)?,
+                        category: row.get(2)?,
+                        content: row.get(3)?,
+                        context: row.get(4)?,
+                        tags: serde_json::from_str::<Vec<String>>(&tags).unwrap_or_default(),
+                    })
+                })?
+                .collect::<std::result::Result<Vec<_>, _>>()?;
+            Ok(rows)
+        })
     }
 
     /// List relations for a project, ordered by source entity then insertion order.
     pub fn relations(&self, project_id: i64) -> Result<Vec<RelationRow>> {
-        let mut statement = self.conn.prepare(
-            "SELECT from_id, to_id, to_name, relation_type, context
-               FROM relation WHERE project_id = ?1 ORDER BY from_id, id",
-        )?;
-        let rows = statement
-            .query_map([project_id], |row| {
-                Ok(RelationRow {
-                    from_id: row.get(0)?,
-                    to_id: row.get(1)?,
-                    to_name: row.get(2)?,
-                    relation_type: row.get(3)?,
-                    context: row.get(4)?,
-                })
-            })?
-            .collect::<std::result::Result<Vec<_>, _>>()?;
-        Ok(rows)
+        self.call(move |conn| {
+            let mut statement = conn.prepare(
+                "SELECT from_id, to_id, to_name, relation_type, context
+                   FROM relation WHERE project_id = ?1 ORDER BY from_id, id",
+            )?;
+            let rows = statement
+                .query_map([project_id], |row| {
+                    Ok(RelationRow {
+                        from_id: row.get(0)?,
+                        to_id: row.get(1)?,
+                        to_name: row.get(2)?,
+                        relation_type: row.get(3)?,
+                        context: row.get(4)?,
+                    })
+                })?
+                .collect::<std::result::Result<Vec<_>, _>>()?;
+            Ok(rows)
+        })
     }
 
     /// Row counts for a project.
     pub fn counts(&self, project_id: i64) -> Result<Counts> {
-        let count = |table: &str| -> Result<i64> {
-            let sql = format!("SELECT count(*) FROM {table} WHERE project_id = ?1");
-            Ok(self.conn.query_row(&sql, [project_id], |row| row.get(0))?)
-        };
-        Ok(Counts {
-            entities: count("entity")?,
-            observations: count("observation")?,
-            relations: count("relation")?,
+        self.call(move |conn| {
+            let count = |table: &str| -> Result<i64> {
+                let sql = format!("SELECT count(*) FROM {table} WHERE project_id = ?1");
+                Ok(conn.query_row(&sql, [project_id], |row| row.get(0))?)
+            };
+            Ok(Counts {
+                entities: count("entity")?,
+                observations: count("observation")?,
+                relations: count("relation")?,
+            })
         })
     }
 }

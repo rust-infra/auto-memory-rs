@@ -19,7 +19,7 @@ pub const THREAD_NAME: &str = "auto-memory";
 /// Build the runtime the async adapters run on.
 ///
 /// The multi-thread flavor is a requirement, not a tuning choice: both adapters hand
-/// their synchronous core work (SQLite, ONNX, file reads) to
+/// their blocking core work (tokio-rusqlite, ONNX, file reads) to
 /// [`tokio::task::block_in_place`], which panics on a current-thread runtime because
 /// there is no other worker to keep the reactor alive.
 pub fn runtime() -> Result<tokio::runtime::Runtime> {

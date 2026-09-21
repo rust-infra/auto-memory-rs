@@ -17,9 +17,9 @@
 //!
 //! ## Blocking core work
 //!
-//! Tool dispatch touches SQLite, ONNX, and the vault (all synchronous), so it runs
-//! under [`tokio::task::block_in_place`]. That requires the multi-thread runtime
-//! built by [`crate::runtime::executor`], which is what `main` uses.
+//! Tool dispatch touches the tokio-rusqlite bridge, ONNX, and the vault, so it runs
+//! under [`tokio::task::block_in_place`]. That requires the multi-thread runtime built
+//! by [`crate::runtime::executor`], which is what `main` uses.
 
 use std::future::Future;
 use std::path::PathBuf;
@@ -302,8 +302,8 @@ impl ServerHandler for HttpSession {
         });
         let client_info = self.client_info();
         let backend = Arc::clone(&self.backend);
-        // SQLite/ONNX/file work stays synchronous; move it off the reactor exactly
-        // like the stdio transport does.
+        // The tool surface keeps a synchronous API; move it off the reactor exactly
+        // like the stdio transport does. SQLite itself runs on tokio-rusqlite's thread.
         tokio::task::block_in_place(move || backend.dispatch_tool(&params, client_info))
     }
 }
