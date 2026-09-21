@@ -4,6 +4,8 @@
 > 想先看实现细节的，请跳到 [§7 代码地图](#7-代码地图)。
 >
 > 文中的图是 Mermaid，GitHub / GitLab 会直接渲染；本地看时需要编辑器的 Mermaid 预览。
+> 想看会动的版本（写入、检索、图遍历三条数据流动起来）：用浏览器打开
+> [`visuals/data-flow.html`](visuals/data-flow.html)。
 
 ## 0. 一句话
 
@@ -330,5 +332,6 @@ flowchart LR
 | 图怎么遍历 | `src/storage/store.rs` 的 `find_related`、`src/graph/mod.rs` |
 | 遍历出来的上下文 | `docs/context-spec.md`、`docs/architecture-guide.md` §4.5 |
 | 架构图 / ER 图 | `docs/architecture-guide.md` §2.2 |
+| 会动的数据流图 | `docs/visuals/data-flow.html`（浏览器打开） |
 | 可参考的真实样例 | `tests/fixtures/vault/notes/{simple,wikilinks,relations,unresolved}.md` |
 | 参考实现的行为依据 | `docs/reference.md` §6b / §6e |
