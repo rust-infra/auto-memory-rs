@@ -106,15 +106,16 @@ impl<'a> IndexService<'a> {
     }
 
     /// Index one file, skipping the write when its checksum is unchanged.
-    pub fn index_file(&mut self, relative_path: &str) -> Result<IndexOutcome> {
-        self.index_file_inner(relative_path, true)
+    pub async fn index_file(&mut self, relative_path: &str) -> Result<IndexOutcome> {
+        self.index_file_inner(relative_path, true).await
     }
 
     /// Checksum currently stored for one indexed path.
-    pub fn entity_checksum(&self, relative_path: &str) -> Result<Option<String>> {
+    pub async fn entity_checksum(&self, relative_path: &str) -> Result<Option<String>> {
         Ok(self
             .store
-            .entity_by_file_path(self.project_id, relative_path)?
+            .entity_by_file_path(self.project_id, relative_path)
+            .await?
             .and_then(|entity| entity.checksum))
     }
 
@@ -129,7 +130,11 @@ impl<'a> IndexService<'a> {
 
     /// Index one file; relation resolution is deferred when `resolve` is false so
     /// a reconciliation pass can resolve every target once at the end.
-    fn index_file_inner(&mut self, relative_path: &str, resolve: bool) -> Result<IndexOutcome> {
+    async fn index_file_inner(
+        &mut self,
+        relative_path: &str,
+        resolve: bool,
+    ) -> Result<IndexOutcome> {
         let policy = self.options.permalink.clone();
         let outcome = load_indexed_document(&self.root, relative_path, &policy);
         let indexed = match outcome? {
@@ -140,22 +145,23 @@ impl<'a> IndexService<'a> {
 
         if let Some(existing) = self
             .store
-            .entity_by_file_path(self.project_id, relative_path)?
+            .entity_by_file_path(self.project_id, relative_path)
+            .await?
         {
             if existing.checksum.as_deref() == Some(indexed.checksum.as_str()) {
                 return Ok(IndexOutcome::Unchanged);
             }
         }
-        self.write(&indexed, resolve)?;
+        self.write(&indexed, resolve).await?;
         Ok(IndexOutcome::Indexed)
     }
 
     /// Index one file even when the stored checksum matches.
-    pub fn force_index_file(&mut self, relative_path: &str) -> Result<IndexOutcome> {
+    pub async fn force_index_file(&mut self, relative_path: &str) -> Result<IndexOutcome> {
         let policy = self.options.permalink.clone();
         match load_indexed_document(&self.root, relative_path, &policy)? {
             LoadOutcome::Loaded(indexed) => {
-                self.write(&indexed, true)?;
+                self.write(&indexed, true).await?;
                 Ok(IndexOutcome::Indexed)
             }
             LoadOutcome::MalformedFrontmatter => Ok(IndexOutcome::SkippedMalformed),
@@ -164,13 +170,16 @@ impl<'a> IndexService<'a> {
     }
 
     /// Remove one document from the index. Returns whether a row was removed.
-    pub fn remove_file(&mut self, relative_path: &str) -> Result<bool> {
+    pub async fn remove_file(&mut self, relative_path: &str) -> Result<bool> {
         let existed = self
             .store
-            .entity_by_file_path(self.project_id, relative_path)?
+            .entity_by_file_path(self.project_id, relative_path)
+            .await?
             .is_some();
         if existed {
-            self.store.remove_document(self.project_id, relative_path)?;
+            self.store
+                .remove_document(self.project_id, relative_path)
+                .await?;
         }
         Ok(existed)
     }
@@ -179,7 +188,7 @@ impl<'a> IndexService<'a> {
     ///
     /// With `update_permalinks_on_move = false` (reference default) the existing
     /// permalink is preserved; otherwise it is recomputed from the new path.
-    pub fn move_file(&mut self, from: &str, to: &str) -> Result<IndexOutcome> {
+    pub async fn move_file(&mut self, from: &str, to: &str) -> Result<IndexOutcome> {
         let policy = self.options.permalink.clone();
         let indexed = match load_indexed_document(&self.root, to, &policy)? {
             LoadOutcome::Loaded(indexed) => indexed,
@@ -187,7 +196,10 @@ impl<'a> IndexService<'a> {
             LoadOutcome::Missing => return Ok(IndexOutcome::Missing),
         };
 
-        let existing = self.store.entity_by_file_path(self.project_id, from)?;
+        let existing = self
+            .store
+            .entity_by_file_path(self.project_id, from)
+            .await?;
         let permalink = match &existing {
             Some(entity) if !self.options.update_permalinks_on_move => entity.permalink.clone(),
             _ => Some(indexed.permalink.clone()),
@@ -220,7 +232,8 @@ impl<'a> IndexService<'a> {
             let merged = crate::markdown::serialize::merge_frontmatter(&content, &updates)?;
             crate::markdown::serialize::write_atomic(&absolute, &merged)?;
             self.store
-                .move_document(self.project_id, from, to, permalink.as_deref())?;
+                .move_document(self.project_id, from, to, permalink.as_deref())
+                .await?;
         }
 
         // Re-read the destination so the index sees the rewritten frontmatter.
@@ -229,12 +242,13 @@ impl<'a> IndexService<'a> {
             LoadOutcome::MalformedFrontmatter => return Ok(IndexOutcome::SkippedMalformed),
             LoadOutcome::Missing => return Ok(IndexOutcome::Missing),
         };
-        self.write_with_permalink(&indexed, permalink.as_deref(), true)?;
+        self.write_with_permalink(&indexed, permalink.as_deref(), true)
+            .await?;
         Ok(IndexOutcome::Indexed)
     }
 
     /// Scan the vault and apply the difference to the index.
-    pub fn reconcile(&mut self) -> Result<ReconcileReport> {
+    pub async fn reconcile(&mut self) -> Result<ReconcileReport> {
         let files = markdown_files(&self.root);
         let mut report = ReconcileReport::default();
         let mut seen = HashSet::with_capacity(files.len());
@@ -243,9 +257,10 @@ impl<'a> IndexService<'a> {
             seen.insert(relative_path.clone());
             let existed = self
                 .store
-                .entity_by_file_path(self.project_id, &relative_path)?
+                .entity_by_file_path(self.project_id, &relative_path)
+                .await?
                 .is_some();
-            match self.index_file_inner(&relative_path, false)? {
+            match self.index_file_inner(&relative_path, false).await? {
                 IndexOutcome::Indexed if existed => report.updated += 1,
                 IndexOutcome::Indexed => report.added += 1,
                 IndexOutcome::Unchanged => report.unchanged += 1,
@@ -253,24 +268,24 @@ impl<'a> IndexService<'a> {
             }
         }
 
-        for path in self.store.file_paths(self.project_id)? {
+        for path in self.store.file_paths(self.project_id).await? {
             if !seen.contains(&path) {
-                self.store.remove_document(self.project_id, &path)?;
+                self.store.remove_document(self.project_id, &path).await?;
                 report.removed += 1;
             }
         }
 
-        report.relations_resolved = self.store.resolve_relations(self.project_id)?;
+        report.relations_resolved = self.store.resolve_relations(self.project_id).await?;
         Ok(report)
     }
 
     /// Full rebuild through the shared rebuild pipeline.
-    pub fn full_rebuild(&mut self) -> Result<RebuildReport> {
+    pub async fn full_rebuild(&mut self) -> Result<RebuildReport> {
         let options = RebuildOptions {
             project_permalink: self.options.permalink.project_permalink.clone(),
             include_project_in_permalink: self.options.permalink.include_project,
         };
-        rebuild_vault(self.store, self.project_id, &self.root, &options)
+        rebuild_vault(self.store, self.project_id, &self.root, &options).await
     }
 
     /// Recompute the vector index with `provider` (reference `reindex --embeddings`).
@@ -279,15 +294,16 @@ impl<'a> IndexService<'a> {
     /// reference upsert (`SQLiteVecIndex.upsert` matches on
     /// `(entity_id, chunk_key, source_hash)`); everything else is embedded and the
     /// project's vector rows are replaced transactionally.
-    pub fn reindex_embeddings(
+    pub async fn reindex_embeddings(
         &mut self,
         provider: &dyn EmbeddingProvider,
     ) -> Result<EmbeddingReport> {
-        let rows = self.store.semantic_rows(self.project_id)?;
+        let rows = self.store.semantic_rows(self.project_id).await?;
         let records = build_chunk_records(&rows);
         let existing = self
             .store
-            .vector_embeddings(self.project_id, provider.model_name())?;
+            .vector_embeddings(self.project_id, provider.model_name())
+            .await?;
 
         // Fingerprints are per owning search row, so group the chunk records the way
         // the reference does before writing them.
@@ -393,30 +409,34 @@ impl<'a> IndexService<'a> {
             });
         }
         self.store
-            .replace_vector_index(self.project_id, provider.model_name(), &vector_rows)?;
+            .replace_vector_index(self.project_id, provider.model_name(), &vector_rows)
+            .await?;
         Ok(report)
     }
 
-    fn write(&mut self, indexed: &IndexedDocument, resolve: bool) -> Result<()> {
+    async fn write(&mut self, indexed: &IndexedDocument, resolve: bool) -> Result<()> {
         self.write_with_permalink(indexed, Some(&indexed.permalink), resolve)
+            .await
     }
 
-    fn write_with_permalink(
+    async fn write_with_permalink(
         &mut self,
         indexed: &IndexedDocument,
         permalink: Option<&str>,
         resolve: bool,
     ) -> Result<()> {
-        self.store.replace_document(
-            self.project_id,
-            &self.options.permalink.project_permalink,
-            permalink,
-            &indexed.checksum,
-            &indexed.document,
-            &indexed.timestamps,
-        )?;
+        self.store
+            .replace_document(
+                self.project_id,
+                &self.options.permalink.project_permalink,
+                permalink,
+                &indexed.checksum,
+                &indexed.document,
+                &indexed.timestamps,
+            )
+            .await?;
         if resolve {
-            self.store.resolve_relations(self.project_id)?;
+            self.store.resolve_relations(self.project_id).await?;
         }
         Ok(())
     }

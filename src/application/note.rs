@@ -105,9 +105,9 @@ impl<'a> NoteService<'a> {
     }
 
     /// Read one note by permalink or project-relative path.
-    pub fn read_note(&self, identifier: &str) -> Result<NoteDocument> {
-        let file_path = self.resolve(identifier)?;
-        self.read_path(&file_path)
+    pub async fn read_note(&self, identifier: &str) -> Result<NoteDocument> {
+        let file_path = self.resolve(identifier).await?;
+        self.read_path(&file_path).await
     }
 
     /// Create a note, or overwrite it when `overwrite` is set.
@@ -115,7 +115,7 @@ impl<'a> NoteService<'a> {
     /// The file is written as `---\n<frontmatter>---\n\n<body>` with
     /// `title`/`type`/`permalink` plus the caller metadata, then indexed. `content`
     /// defaults to `# <title>` for an empty body, matching the reference writer.
-    pub fn write_note(
+    pub async fn write_note(
         &mut self,
         relative_path: &str,
         content: &str,
@@ -123,6 +123,7 @@ impl<'a> NoteService<'a> {
         overwrite: bool,
     ) -> Result<NoteDocument> {
         self.write_note_with_type(relative_path, content, metadata, None, overwrite)
+            .await
     }
 
     /// Create a note with an explicit default type.
@@ -130,7 +131,7 @@ impl<'a> NoteService<'a> {
     /// `note_type` is the caller's `note_type` argument: it supplies the frontmatter
     /// `type` when the content does not carry one, while content frontmatter stays
     /// authoritative — the same precedence the reference applies on its create path.
-    pub fn write_note_with_type(
+    pub async fn write_note_with_type(
         &mut self,
         relative_path: &str,
         content: &str,
@@ -201,15 +202,15 @@ impl<'a> NoteService<'a> {
         text.push_str(&crate::markdown::serialize::render(&frontmatter, &body));
 
         write_atomic(&absolute, &text)?;
-        self.reindex(&relative_path)?;
-        self.read_path(&relative_path)
+        self.reindex(&relative_path).await?;
+        self.read_path(&relative_path).await
     }
 
     /// Apply one edit operation to an existing note.
     ///
     /// `metadata` is merged into the frontmatter (`title`/`type`/`permalink` are
     /// derived and rejected); the body edit follows the reference semantics.
-    pub fn edit_note(
+    pub async fn edit_note(
         &mut self,
         identifier: &str,
         operation: EditOperation,
@@ -218,6 +219,7 @@ impl<'a> NoteService<'a> {
         metadata: &NoteMetadata,
     ) -> Result<NoteDocument> {
         self.edit_note_with_status(identifier, operation, content, options, metadata)
+            .await
             .map(|(document, _)| document)
     }
 
@@ -226,7 +228,7 @@ impl<'a> NoteService<'a> {
     /// The reference's `edit_note` is upsert-shaped: a missing note is created at the path
     /// the identifier names (title from the filename), the operation is applied to the
     /// empty document, and the result reports `file_created`.
-    pub fn edit_note_with_status(
+    pub async fn edit_note_with_status(
         &mut self,
         identifier: &str,
         operation: EditOperation,
@@ -234,7 +236,7 @@ impl<'a> NoteService<'a> {
         options: &EditOptions,
         metadata: &NoteMetadata,
     ) -> Result<(NoteDocument, bool)> {
-        let existing = self.resolve(identifier);
+        let existing = self.resolve(identifier).await;
         let relative_path = match existing {
             Ok(relative_path) => relative_path,
             Err(error) => {
@@ -243,8 +245,9 @@ impl<'a> NoteService<'a> {
                 }
                 let relative_path = create_path_for(identifier)?;
                 let edited = apply_edit_operation("", operation, content, options)?;
-                let document =
-                    self.write_note_with_type(&relative_path, &edited, metadata, None, true)?;
+                let document = self
+                    .write_note_with_type(&relative_path, &edited, metadata, None, true)
+                    .await?;
                 return Ok((document, true));
             }
         };
@@ -253,13 +256,13 @@ impl<'a> NoteService<'a> {
         let edited = apply_edit_operation(&current, operation, content, options)?;
         let merged = merge_metadata_into_markdown(&edited, metadata.as_pairs())?;
         write_atomic(&absolute, &merged)?;
-        self.reindex(&relative_path)?;
-        Ok((self.read_path(&relative_path)?, false))
+        self.reindex(&relative_path).await?;
+        Ok((self.read_path(&relative_path).await?, false))
     }
 
     /// Move one note to a new project-relative path.
-    pub fn move_note(&mut self, from: &str, to: &str) -> Result<NoteDocument> {
-        let from = self.resolve(from)?;
+    pub async fn move_note(&mut self, from: &str, to: &str) -> Result<NoteDocument> {
+        let from = self.resolve(from).await?;
         let to = normalize_path(to)?;
         let source = self.root.join(&from);
         let target = self.root.join(&to);
@@ -275,24 +278,25 @@ impl<'a> NoteService<'a> {
 
         let index_options = self.options.clone();
         let mut service = IndexService::new(self.store, self.project_id, &self.root, index_options);
-        service.move_file(&from, &to)?;
-        self.read_path(&to)
+        service.move_file(&from, &to).await?;
+        self.read_path(&to).await
     }
 
     /// Delete one note and drop it from the index.
-    pub fn delete_note(&mut self, identifier: &str) -> Result<String> {
-        let relative_path = self.resolve(identifier)?;
+    pub async fn delete_note(&mut self, identifier: &str) -> Result<String> {
+        let relative_path = self.resolve(identifier).await?;
         let absolute = self.root.join(&relative_path);
         if absolute.exists() {
             std::fs::remove_file(&absolute)?;
         }
         self.store
-            .remove_document(self.project_id, &relative_path)?;
+            .remove_document(self.project_id, &relative_path)
+            .await?;
         Ok(relative_path)
     }
 
     /// Resolve a permalink or relative path into a project-relative path.
-    pub fn resolve(&self, identifier: &str) -> Result<String> {
+    pub async fn resolve(&self, identifier: &str) -> Result<String> {
         let trimmed = identifier
             .trim()
             .trim_start_matches("memory://")
@@ -313,11 +317,11 @@ impl<'a> NoteService<'a> {
         {
             return Ok(normalized);
         }
-        if let Some(entity) = resolve_entity_path(self.store, self.project_id, trimmed)? {
+        if let Some(entity) = resolve_entity_path(self.store, self.project_id, trimmed).await? {
             return Ok(entity.file_path);
         }
         let generated = generate_permalink(trimmed);
-        if let Some(entity) = resolve_entity_path(self.store, self.project_id, &generated)? {
+        if let Some(entity) = resolve_entity_path(self.store, self.project_id, &generated).await? {
             return Ok(entity.file_path);
         }
         Err(Error::InvalidArgument {
@@ -325,7 +329,7 @@ impl<'a> NoteService<'a> {
         })
     }
 
-    fn read_path(&self, relative_path: &str) -> Result<NoteDocument> {
+    async fn read_path(&self, relative_path: &str) -> Result<NoteDocument> {
         let absolute = self.root.join(relative_path);
         let text = std::fs::read_to_string(&absolute).map_err(|error| {
             if error.kind() == std::io::ErrorKind::NotFound {
@@ -339,7 +343,8 @@ impl<'a> NoteService<'a> {
         let document = parse_document(relative_path, &text)?;
         let permalink = self
             .store
-            .entity_by_file_path(self.project_id, relative_path)?
+            .entity_by_file_path(self.project_id, relative_path)
+            .await?
             .and_then(|entity| entity.permalink);
         Ok(NoteDocument {
             file_path: relative_path.to_owned(),
@@ -352,11 +357,11 @@ impl<'a> NoteService<'a> {
         })
     }
 
-    fn reindex(&mut self, relative_path: &str) -> Result<()> {
+    async fn reindex(&mut self, relative_path: &str) -> Result<()> {
         let options = self.options.clone();
         let mut service = IndexService::new(self.store, self.project_id, &self.root, options);
-        service.force_index_file(relative_path)?;
-        self.store.resolve_relations(self.project_id)?;
+        service.force_index_file(relative_path).await?;
+        self.store.resolve_relations(self.project_id).await?;
         Ok(())
     }
 }

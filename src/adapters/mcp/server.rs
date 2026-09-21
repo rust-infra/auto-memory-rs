@@ -352,9 +352,10 @@ impl<'a> McpServer<'a> {
     /// which keeps the transport clean for MCP clients. This is the blocking entry
     /// point (library callers and embedding); the CLI runs [`Self::serve_async`].
     pub fn serve(&mut self, input: impl BufRead, mut output: impl Write) -> Result<()> {
+        let runtime = crate::runtime::executor::runtime()?;
         for line in input.lines() {
             let line = line?;
-            if let Some(response) = self.handle_line(&line) {
+            if let Some(response) = runtime.block_on(self.handle_line(&line)) {
                 writeln!(output, "{response}")?;
                 output.flush()?;
             }
@@ -365,10 +366,9 @@ impl<'a> McpServer<'a> {
     /// Serve requests until the input ends or `shutdown` resolves (the CLI path).
     ///
     /// Frames are read on the runtime instead of a blocked thread, and each tool call
-    /// goes through [`tokio::task::block_in_place`]: the tool core keeps a synchronous
-    /// API (sqlite calls bridge through tokio-rusqlite, plus ONNX and file reads), so it
-    /// is moved off the reactor rather than made async. That requires a multi-thread
-    /// runtime; see [`crate::runtime::executor`].
+    /// awaits the async core services. SQLite runs on tokio-rusqlite's connection
+    /// thread; CPU-heavy ONNX work can still move to the blocking pool. That requires a
+    /// multi-thread runtime; see [`crate::runtime::executor`].
     ///
     /// `shutdown` is checked between frames, never mid-request: a call already in
     /// flight still answers, and no frame is written partially. Response order stays
@@ -391,7 +391,7 @@ impl<'a> McpServer<'a> {
             let Some(line) = line else {
                 return Ok(());
             };
-            let Some(response) = tokio::task::block_in_place(|| self.handle_line(&line)) else {
+            let Some(response) = self.handle_line(&line).await else {
                 continue;
             };
             output.write_all(response.to_string().as_bytes()).await?;
@@ -405,7 +405,7 @@ impl<'a> McpServer<'a> {
     /// `None` covers the three frames that produce no response: a blank keep-alive
     /// line, a line that is not JSON (reported on stderr, never stdout), and a
     /// notification.
-    fn handle_line(&mut self, line: &str) -> Option<Value> {
+    async fn handle_line(&mut self, line: &str) -> Option<Value> {
         if line.trim().is_empty() {
             return None;
         }
@@ -416,11 +416,11 @@ impl<'a> McpServer<'a> {
                 return None;
             }
         };
-        self.handle(&request)
+        self.handle(&request).await
     }
 
     /// Handle one JSON-RPC request; `None` for notifications.
-    pub fn handle(&mut self, request: &Value) -> Option<Value> {
+    pub async fn handle(&mut self, request: &Value) -> Option<Value> {
         let method = request["method"].as_str().unwrap_or_default();
         let id = request.get("id").cloned();
         // A notification (`notifications/initialized` and friends) carries no id and
@@ -441,7 +441,7 @@ impl<'a> McpServer<'a> {
             }
             "ping" => Ok(json!({})),
             "tools/list" => Ok(json!({ "tools": self.tools() })),
-            "tools/call" => self.call_tool(&request["params"]),
+            "tools/call" => self.call_tool(&request["params"]).await,
             other => Err(Error::InvalidArgument {
                 message: format!("unsupported method: {other}"),
             }),
@@ -458,7 +458,7 @@ impl<'a> McpServer<'a> {
 
     /// Dispatch one `tools/call`. Exposed to the HTTP transport, which translates
     /// rmcp's typed request into this same `{name, arguments}` shape.
-    pub(crate) fn call_tool(&mut self, params: &Value) -> Result<Value> {
+    pub(crate) async fn call_tool(&mut self, params: &Value) -> Result<Value> {
         let name = params["name"].as_str().unwrap_or_default();
         let arguments = params.get("arguments").cloned().unwrap_or(json!({}));
         let tool = name
@@ -478,58 +478,87 @@ impl<'a> McpServer<'a> {
         // without a dispatch arm — and each arm names the tool's argument type here, so
         // the object a handler reads is the one this call built.
         Ok(match tool {
-            ToolName::ReadNote => self.read_note(&ReadNoteParams::from_arguments(&arguments))?,
-            ToolName::WriteNote => self.write_note(&WriteNoteParams::from_arguments(&arguments))?,
-            ToolName::EditNote => self.edit_note(&EditNoteParams::from_arguments(&arguments))?,
-            ToolName::MoveNote => self.move_note(&MoveNoteParams::from_arguments(&arguments))?,
+            ToolName::ReadNote => {
+                self.read_note(&ReadNoteParams::from_arguments(&arguments))
+                    .await?
+            }
+            ToolName::WriteNote => {
+                self.write_note(&WriteNoteParams::from_arguments(&arguments))
+                    .await?
+            }
+            ToolName::EditNote => {
+                self.edit_note(&EditNoteParams::from_arguments(&arguments))
+                    .await?
+            }
+            ToolName::MoveNote => {
+                self.move_note(&MoveNoteParams::from_arguments(&arguments))
+                    .await?
+            }
             ToolName::DeleteNote => {
-                self.delete_note(&DeleteNoteParams::from_arguments(&arguments))?
+                self.delete_note(&DeleteNoteParams::from_arguments(&arguments))
+                    .await?
             }
             ToolName::SearchNotes => {
-                self.search_notes(&SearchNotesParams::from_arguments(&arguments))?
+                self.search_notes(&SearchNotesParams::from_arguments(&arguments))
+                    .await?
             }
             ToolName::Search => {
-                self.chatgpt_search(&ChatgptSearchParams::from_arguments(&arguments))?
+                self.chatgpt_search(&ChatgptSearchParams::from_arguments(&arguments))
+                    .await?
             }
             ToolName::Fetch => {
-                self.chatgpt_fetch(&ChatgptFetchParams::from_arguments(&arguments))?
+                self.chatgpt_fetch(&ChatgptFetchParams::from_arguments(&arguments))
+                    .await?
             }
             ToolName::BuildContext => {
-                self.build_context(&BuildContextParams::from_arguments(&arguments))?
+                self.build_context(&BuildContextParams::from_arguments(&arguments))
+                    .await?
             }
             ToolName::ListDirectory => {
-                self.list_directory(&ListDirectoryParams::from_arguments(&arguments))?
+                self.list_directory(&ListDirectoryParams::from_arguments(&arguments))
+                    .await?
             }
             ToolName::ReadContent => {
-                self.read_content(&ReadContentParams::from_arguments(&arguments))?
+                self.read_content(&ReadContentParams::from_arguments(&arguments))
+                    .await?
             }
-            ToolName::ViewNote => self.view_note(&ViewNoteParams::from_arguments(&arguments))?,
+            ToolName::ViewNote => {
+                self.view_note(&ViewNoteParams::from_arguments(&arguments))
+                    .await?
+            }
             ToolName::RecentActivity => {
-                self.recent_activity(&RecentActivityParams::from_arguments(&arguments))?
+                self.recent_activity(&RecentActivityParams::from_arguments(&arguments))
+                    .await?
             }
             ToolName::ListMemoryProjects => {
-                self.list_memory_projects(&ListMemoryProjectsParams::from_arguments(&arguments))?
+                self.list_memory_projects(&ListMemoryProjectsParams::from_arguments(&arguments))
+                    .await?
             }
             ToolName::CreateMemoryProject => {
-                self.create_memory_project(&CreateMemoryProjectParams::from_arguments(&arguments))?
+                self.create_memory_project(&CreateMemoryProjectParams::from_arguments(&arguments))
+                    .await?
             }
             ToolName::DeleteProject => {
-                self.delete_project(&DeleteProjectParams::from_arguments(&arguments))?
+                self.delete_project(&DeleteProjectParams::from_arguments(&arguments))
+                    .await?
             }
             ToolName::SchemaValidate => {
-                self.schema_validate(&SchemaValidateParams::from_arguments(&arguments))?
+                self.schema_validate(&SchemaValidateParams::from_arguments(&arguments))
+                    .await?
             }
             ToolName::SchemaInfer => {
-                self.schema_infer(&SchemaInferParams::from_arguments(&arguments))?
+                self.schema_infer(&SchemaInferParams::from_arguments(&arguments))
+                    .await?
             }
             ToolName::SchemaDiff => {
-                self.schema_diff(&SchemaDiffParams::from_arguments(&arguments))?
+                self.schema_diff(&SchemaDiffParams::from_arguments(&arguments))
+                    .await?
             }
-            ToolName::AutoMemoryDiagnostics => self.diagnostics()?,
+            ToolName::AutoMemoryDiagnostics => self.diagnostics().await?,
         })
     }
 
-    fn read_note(&mut self, params: &ReadNoteParams) -> Result<Value> {
+    async fn read_note(&mut self, params: &ReadNoteParams) -> Result<Value> {
         let identifier = required_str(params.identifier.as_deref(), "identifier")?.to_owned();
         let output_format = params.output_format();
         let include_frontmatter = params.include_frontmatter.unwrap_or(false);
@@ -537,9 +566,11 @@ impl<'a> McpServer<'a> {
         let page_size = params.page_size();
 
         if !output_format.is_json() {
-            return Ok(text_result(self.note_text(&identifier, page, page_size)?));
+            return Ok(text_result(
+                self.note_text(&identifier, page, page_size).await?,
+            ));
         }
-        match self.read_note_source(&identifier)? {
+        match self.read_note_source(&identifier).await? {
             Some((document, raw)) => {
                 let (body, frontmatter) = parse_opening_frontmatter(&raw);
                 json_result(json!({
@@ -550,21 +581,21 @@ impl<'a> McpServer<'a> {
                     "frontmatter": frontmatter,
                 }))
             }
-            None => self.missing_note(&identifier, page, page_size),
+            None => self.missing_note(&identifier, page, page_size).await,
         }
     }
 
     /// The reference's text surface: raw markdown, or not-found guidance.
-    fn note_text(&mut self, identifier: &str, page: u32, page_size: u32) -> Result<String> {
-        if let Some((_, raw)) = self.read_note_source(identifier)? {
+    async fn note_text(&mut self, identifier: &str, page: u32, page_size: u32) -> Result<String> {
+        if let Some((_, raw)) = self.read_note_source(identifier).await? {
             return Ok(raw);
         }
-        if let Some(permalink) = self.find_by_exact_title(identifier)?
-            && let Some((_, raw)) = self.read_note_source(&permalink)?
+        if let Some(permalink) = self.find_by_exact_title(identifier).await?
+            && let Some((_, raw)) = self.read_note_source(&permalink).await?
         {
             return Ok(raw);
         }
-        let candidates = self.search_candidates(identifier, page, page_size)?;
+        let candidates = self.search_candidates(identifier, page, page_size).await?;
         if candidates.is_empty() {
             return Ok(format_not_found_message(&self.project_name, identifier));
         }
@@ -576,8 +607,11 @@ impl<'a> McpServer<'a> {
     }
 
     /// Resolve and read one note, returning `None` instead of an error when absent.
-    fn read_note_source(&mut self, identifier: &str) -> Result<Option<(NoteDocument, String)>> {
-        let document = match self.notes().read_note(identifier) {
+    async fn read_note_source(
+        &mut self,
+        identifier: &str,
+    ) -> Result<Option<(NoteDocument, String)>> {
+        let document = match self.notes().read_note(identifier).await {
             Ok(document) => document,
             Err(error) => {
                 // Only a miss falls through to the lookup chain; an I/O failure is real.
@@ -592,8 +626,8 @@ impl<'a> McpServer<'a> {
     }
 
     /// The JSON miss payload: nulls, plus suggestion rows when the search found any.
-    fn missing_note(&mut self, identifier: &str, page: u32, page_size: u32) -> Result<Value> {
-        let candidates = self.search_candidates(identifier, page, page_size)?;
+    async fn missing_note(&mut self, identifier: &str, page: u32, page_size: u32) -> Result<Value> {
+        let candidates = self.search_candidates(identifier, page, page_size).await?;
         let mut payload = json!({
             "title": Value::Null,
             "permalink": Value::Null,
@@ -621,19 +655,22 @@ impl<'a> McpServer<'a> {
     }
 
     /// Walk title-search pages looking for a case-insensitive exact title match.
-    fn find_by_exact_title(&mut self, identifier: &str) -> Result<Option<String>> {
+    async fn find_by_exact_title(&mut self, identifier: &str) -> Result<Option<String>> {
         const LOOKUP_PAGE_SIZE: u32 = 10;
         const MAX_PAGES: u32 = 10;
         for page in 1..=MAX_PAGES {
-            let found = self.store.search_text(
-                self.project_id,
-                &TextSearchOptions {
-                    title: Some(identifier.to_owned()),
-                    page,
-                    page_size: LOOKUP_PAGE_SIZE,
-                    ..TextSearchOptions::default()
-                },
-            )?;
+            let found = self
+                .store
+                .search_text(
+                    self.project_id,
+                    &TextSearchOptions {
+                        title: Some(identifier.to_owned()),
+                        page,
+                        page_size: LOOKUP_PAGE_SIZE,
+                        ..TextSearchOptions::default()
+                    },
+                )
+                .await?;
             if let Some(row) = found
                 .results
                 .iter()
@@ -649,21 +686,24 @@ impl<'a> McpServer<'a> {
     }
 
     /// Text-search suggestions, shaped for `format_related_results`.
-    fn search_candidates(
+    async fn search_candidates(
         &mut self,
         identifier: &str,
         page: u32,
         page_size: u32,
     ) -> Result<Vec<Value>> {
-        let found = self.store.search_text(
-            self.project_id,
-            &TextSearchOptions {
-                query: Some(identifier.to_owned()),
-                page,
-                page_size,
-                ..TextSearchOptions::default()
-            },
-        )?;
+        let found = self
+            .store
+            .search_text(
+                self.project_id,
+                &TextSearchOptions {
+                    query: Some(identifier.to_owned()),
+                    page,
+                    page_size,
+                    ..TextSearchOptions::default()
+                },
+            )
+            .await?;
         Ok(found
             .results
             .iter()
@@ -679,7 +719,7 @@ impl<'a> McpServer<'a> {
     }
 
     /// note: write a markdown note and return the JSON or text result.
-    fn write_note(&mut self, params: &WriteNoteParams) -> Result<Value> {
+    async fn write_note(&mut self, params: &WriteNoteParams) -> Result<Value> {
         // note: required arguments fail; optional arguments use reference defaults.
         let title = required_str(params.title.as_deref(), "title")?.to_owned();
         // note: missing content creates an empty note.
@@ -742,7 +782,8 @@ impl<'a> McpServer<'a> {
         let existed = self.vault.join(&file_path).is_file()
             || self
                 .store
-                .entity_by_file_path(self.project_id, &file_path)?
+                .entity_by_file_path(self.project_id, &file_path)
+                .await?
                 .is_some();
         let generated_permalink = generate_permalink(&title);
         if existed && !overwrite {
@@ -767,18 +808,21 @@ impl<'a> McpServer<'a> {
         // note: persist only after all validation has passed.
         let written = {
             let mut notes = self.notes();
-            notes.write_note_with_type(
-                &file_path,
-                &content,
-                &metadata,
-                note_type.as_deref(),
-                overwrite,
-            )?
+            notes
+                .write_note_with_type(
+                    &file_path,
+                    &content,
+                    &metadata,
+                    note_type.as_deref(),
+                    overwrite,
+                )
+                .await?
         };
         let action = if existed { "updated" } else { "created" };
         let entity = self
             .store
-            .entity_by_file_path(self.project_id, &written.file_path)?;
+            .entity_by_file_path(self.project_id, &written.file_path)
+            .await?;
 
         if output_format.is_json() {
             // note: the MCP write path intentionally returns a null checksum.
@@ -805,7 +849,7 @@ impl<'a> McpServer<'a> {
         ];
         if let Some(entity) = &entity {
             // note: group observations by category for a compact summary.
-            let observations = self.store.observations_for_entity(entity.id)?;
+            let observations = self.store.observations_for_entity(entity.id).await?;
             if !observations.is_empty() {
                 let mut counts: BTreeMap<&str, usize> = BTreeMap::new();
                 for observation in &observations {
@@ -820,7 +864,8 @@ impl<'a> McpServer<'a> {
             // note: include only outgoing relations from the written entity.
             let relations: Vec<crate::storage::RelationRow> = self
                 .store
-                .relations(self.project_id)?
+                .relations(self.project_id)
+                .await?
                 .into_iter()
                 .filter(|relation| relation.from_id == entity.id)
                 .collect();
@@ -862,7 +907,7 @@ impl<'a> McpServer<'a> {
         )))
     }
 
-    fn edit_note(&mut self, params: &EditNoteParams) -> Result<Value> {
+    async fn edit_note(&mut self, params: &EditNoteParams) -> Result<Value> {
         let identifier = required_str(params.identifier.as_deref(), "identifier")?.to_owned();
         let operation =
             EditOperation::parse(required_str(params.operation.as_deref(), "operation")?)?;
@@ -880,7 +925,9 @@ impl<'a> McpServer<'a> {
         let output_format = params.output_format();
         let (document, file_created) = {
             let mut notes = self.notes();
-            notes.edit_note_with_status(&identifier, operation, &content, &options, &metadata)?
+            notes
+                .edit_note_with_status(&identifier, operation, &content, &options, &metadata)
+                .await?
         };
 
         if output_format.is_json() {
@@ -959,7 +1006,7 @@ impl<'a> McpServer<'a> {
         )))
     }
 
-    fn move_note(&mut self, params: &MoveNoteParams) -> Result<Value> {
+    async fn move_note(&mut self, params: &MoveNoteParams) -> Result<Value> {
         let identifier = required_str(params.identifier.as_deref(), "identifier")?.to_owned();
         let is_directory = params.is_directory.unwrap_or(false);
         let destination_path = params.destination_path.as_deref();
@@ -989,11 +1036,13 @@ impl<'a> McpServer<'a> {
                     message: "move_note requires destination_path or destination_folder".to_owned(),
                 });
             };
-            return self.move_directory(&identifier, destination, output_format);
+            return self
+                .move_directory(&identifier, destination, output_format)
+                .await;
         }
 
         let Some(entity) =
-            crate::graph::resolve_entity_path(self.store, self.project_id, &identifier)?
+            crate::graph::resolve_entity_path(self.store, self.project_id, &identifier).await?
         else {
             return move_result(
                 output_format,
@@ -1045,7 +1094,7 @@ impl<'a> McpServer<'a> {
 
         let moved = {
             let mut notes = self.notes();
-            notes.move_note(&identifier, &destination)?
+            notes.move_note(&identifier, &destination).await?
         };
         move_result(
             output_format,
@@ -1062,7 +1111,7 @@ impl<'a> McpServer<'a> {
     }
 
     /// Move every note under a directory prefix to a new prefix.
-    fn move_directory(
+    async fn move_directory(
         &mut self,
         identifier: &str,
         destination: &str,
@@ -1084,7 +1133,7 @@ impl<'a> McpServer<'a> {
             let suffix = &file[prefix_with_slash.len()..];
             let target = format!("{destination_prefix}/{suffix}");
             let mut notes = self.notes();
-            match notes.move_note(file, &target) {
+            match notes.move_note(file, &target).await {
                 Ok(_) => moved.push(target),
                 Err(_) => failed.push(file.clone()),
             }
@@ -1152,16 +1201,17 @@ impl<'a> McpServer<'a> {
         Ok(text_result(lines.join("\n")))
     }
 
-    fn delete_note(&mut self, params: &DeleteNoteParams) -> Result<Value> {
+    async fn delete_note(&mut self, params: &DeleteNoteParams) -> Result<Value> {
         let identifier = required_str(params.identifier.as_deref(), "identifier")?.to_owned();
         let is_directory = params.is_directory.unwrap_or(false);
         let output_format = params.output_format();
         if is_directory {
-            return self.delete_directory(&identifier, output_format);
+            return self.delete_directory(&identifier, output_format).await;
         }
 
         // Resolve first so the result can name what was removed.
-        let entity = crate::graph::resolve_entity_path(self.store, self.project_id, &identifier)?;
+        let entity =
+            crate::graph::resolve_entity_path(self.store, self.project_id, &identifier).await?;
         let Some(entity) = entity else {
             return if output_format.is_json() {
                 json_result(json!({
@@ -1176,7 +1226,7 @@ impl<'a> McpServer<'a> {
         };
         {
             let mut notes = self.notes();
-            notes.delete_note(&entity.file_path)?;
+            notes.delete_note(&entity.file_path).await?;
         }
         if output_format.is_json() {
             return json_result(json!({
@@ -1193,7 +1243,11 @@ impl<'a> McpServer<'a> {
     ///
     /// The directory itself is left in place (the reference removes the files, not the
     /// folder), and the summary is the captured markdown block.
-    fn delete_directory(&mut self, identifier: &str, output_format: OutputFormat) -> Result<Value> {
+    async fn delete_directory(
+        &mut self,
+        identifier: &str,
+        output_format: OutputFormat,
+    ) -> Result<Value> {
         let prefix = identifier
             .trim_matches('/')
             .trim_end_matches('/')
@@ -1210,7 +1264,7 @@ impl<'a> McpServer<'a> {
         let mut failed: Vec<String> = Vec::new();
         for file in &files {
             let mut notes = self.notes();
-            match notes.delete_note(file) {
+            match notes.delete_note(file).await {
                 Ok(_) => deleted.push(file.clone()),
                 Err(_) => failed.push(file.clone()),
             }
@@ -1276,13 +1330,13 @@ impl<'a> McpServer<'a> {
         Ok(text_result(lines.join("\n")))
     }
 
-    fn search_notes(&mut self, params: &SearchNotesParams) -> Result<Value> {
+    async fn search_notes(&mut self, params: &SearchNotesParams) -> Result<Value> {
         let query = params.query.clone();
         let output_format = params.output_format();
         if params.search_all_projects.unwrap_or(false) {
-            return self.search_all_projects(params, output_format);
+            return self.search_all_projects(params, output_format).await;
         }
-        match self.search_outcome(params)? {
+        match self.search_outcome(params).await? {
             SearchOutcome::Payload(payload) => {
                 if output_format.is_json() {
                     return json_result(payload);
@@ -1307,8 +1361,8 @@ impl<'a> McpServer<'a> {
     /// unknown type and a request with no criteria both produce guidance rather than a
     /// payload; and the semantic modes need an embedding runtime, so without one they
     /// say so instead of quietly running a text search.
-    fn search_outcome(&mut self, params: &SearchNotesParams) -> Result<SearchOutcome> {
-        self.search_outcome_for(self.project_id, params)
+    async fn search_outcome(&mut self, params: &SearchNotesParams) -> Result<SearchOutcome> {
+        self.search_outcome_for(self.project_id, params).await
     }
 
     /// Search every registered project and merge the pages.
@@ -1318,7 +1372,7 @@ impl<'a> McpServer<'a> {
     /// AND of the parts and `has_more` the OR, and the merged rows are sorted by score
     /// descending before the requested page is sliced out. The text surface labels the
     /// page `all projects`.
-    fn search_all_projects(
+    async fn search_all_projects(
         &mut self,
         params: &SearchNotesParams,
         output_format: OutputFormat,
@@ -1326,7 +1380,7 @@ impl<'a> McpServer<'a> {
         let page = params.page.unwrap_or(1).max(1) as u32;
         let page_size = params.page_size.unwrap_or(10).max(1) as u32;
         let per_project_page_size = page * page_size;
-        let projects = self.store.projects()?;
+        let projects = self.store.projects().await?;
 
         let mut merged: Vec<Value> = Vec::new();
         let mut total = 0usize;
@@ -1343,7 +1397,7 @@ impl<'a> McpServer<'a> {
                 output_format: Some(<&str>::from(OutputFormat::Json).to_owned()),
                 ..params.clone()
             };
-            let payload = match self.search_outcome_for(project.id, &request)? {
+            let payload = match self.search_outcome_for(project.id, &request).await? {
                 SearchOutcome::Payload(payload) => payload,
                 // A project that answered with guidance contributes nothing, and the
                 // merged total can no longer claim to be exact.
@@ -1401,7 +1455,7 @@ impl<'a> McpServer<'a> {
     /// Classify one `search_notes` request against a specific project.
     ///
     /// Split out so `search_all_projects` can run the same logic per project.
-    fn search_outcome_for(
+    async fn search_outcome_for(
         &mut self,
         project_id: i64,
         params: &SearchNotesParams,
@@ -1470,7 +1524,7 @@ impl<'a> McpServer<'a> {
         }
 
         let payload = match mode {
-            SearchMode::Text => page_payload(&self.store.search_text(project_id, &options)?),
+            SearchMode::Text => page_payload(&self.store.search_text(project_id, &options).await?),
             SearchMode::Vector | SearchMode::Hybrid => {
                 let Some(provider) = self.provider.as_ref() else {
                     return Ok(SearchOutcome::Guidance(semantic_disabled_guidance(
@@ -1500,7 +1554,8 @@ impl<'a> McpServer<'a> {
                         provider.model_name(),
                         &vector_options,
                         rerank_request.as_ref(),
-                    )?
+                    )
+                    .await?
                 } else {
                     search_vector(
                         self.store,
@@ -1509,7 +1564,8 @@ impl<'a> McpServer<'a> {
                         provider.model_name(),
                         &vector_options,
                         rerank_request.as_ref(),
-                    )?
+                    )
+                    .await?
                 };
                 page_payload(&page)
             }
@@ -1518,8 +1574,8 @@ impl<'a> McpServer<'a> {
     }
 
     /// The `search_notes` JSON payload, shared with the ChatGPT `search` adapter.
-    fn search_payload(&mut self, params: &SearchNotesParams) -> Result<Value> {
-        match self.search_outcome(params)? {
+    async fn search_payload(&mut self, params: &SearchNotesParams) -> Result<Value> {
+        match self.search_outcome(params).await? {
             SearchOutcome::Payload(payload) => Ok(payload),
             SearchOutcome::Guidance(_) => Ok(json!({
                 "results": [],
@@ -1583,7 +1639,7 @@ impl<'a> McpServer<'a> {
         Ok(options)
     }
 
-    fn build_context(&mut self, params: &BuildContextParams) -> Result<Value> {
+    async fn build_context(&mut self, params: &BuildContextParams) -> Result<Value> {
         let url = required_str(params.url.as_deref(), "url")?.to_owned();
         let timeframe = params.timeframe.as_deref().unwrap_or("7d");
         // `build_context` is the one tool that answers with its JSON payload by
@@ -1596,7 +1652,7 @@ impl<'a> McpServer<'a> {
             page_size: params.page_size.unwrap_or(10) as u32,
             since: Some(timeframe::parse_timeframe(timeframe)?),
         };
-        let graph = build_context(self.store, self.project_id, &url, &options)?;
+        let graph = build_context(self.store, self.project_id, &url, &options).await?;
         if output_format == OutputFormat::Text {
             let response = serde_json::to_value(&graph)?;
             return Ok(text_result(crate::application::context::render_markdown(
@@ -1607,7 +1663,7 @@ impl<'a> McpServer<'a> {
         json_result(serde_json::to_value(graph)?)
     }
 
-    fn list_directory(&mut self, params: &ListDirectoryParams) -> Result<Value> {
+    async fn list_directory(&mut self, params: &ListDirectoryParams) -> Result<Value> {
         let dir_name = params.dir_name().to_owned();
         let page_size = params.page_size();
         let sort = params
@@ -1623,7 +1679,7 @@ impl<'a> McpServer<'a> {
             page: params.page.unwrap_or(1) as u32,
             page_size,
         };
-        let listing = list_directory(self.store, self.project_id, &options)?;
+        let listing = list_directory(self.store, self.project_id, &options).await?;
         if params.output_format().is_json() {
             return json_result(serde_json::to_value(&listing)?);
         }
@@ -1632,14 +1688,14 @@ impl<'a> McpServer<'a> {
         )))
     }
 
-    fn read_content(&mut self, params: &ReadContentParams) -> Result<Value> {
+    async fn read_content(&mut self, params: &ReadContentParams) -> Result<Value> {
         let raw_path = params
             .path()
             .ok_or_else(|| Error::InvalidArgument {
                 message: "path is required".to_owned(),
             })?
             .to_owned();
-        let relative = self.notes().resolve(&raw_path)?;
+        let relative = self.notes().resolve(&raw_path).await?;
         let bytes = std::fs::read(self.vault.join(&relative))?;
         let content_type = guess_content_type(&relative);
 
@@ -1700,7 +1756,7 @@ impl<'a> McpServer<'a> {
         }))
     }
 
-    fn recent_activity(&mut self, params: &RecentActivityParams) -> Result<Value> {
+    async fn recent_activity(&mut self, params: &RecentActivityParams) -> Result<Value> {
         let page_size = params.page_size();
         if page_size > 100 {
             return Err(Error::InvalidArgument {
@@ -1723,7 +1779,7 @@ impl<'a> McpServer<'a> {
             since: Some(timeframe::parse_timeframe(&timeframe)?),
             type_filter_applied,
         };
-        let activity = recent_context(self.store, self.project_id, &options)?;
+        let activity = recent_context(self.store, self.project_id, &options).await?;
         if params.output_format().is_json() {
             return json_result(serde_json::to_value(recent_rows(&activity))?);
         }
@@ -1736,8 +1792,8 @@ impl<'a> McpServer<'a> {
         )))
     }
 
-    fn list_memory_projects(&mut self, params: &ListMemoryProjectsParams) -> Result<Value> {
-        let projects = self.store.projects()?;
+    async fn list_memory_projects(&mut self, params: &ListMemoryProjectsParams) -> Result<Value> {
+        let projects = self.store.projects().await?;
         let merged = projects
             .iter()
             .map(|project| {
@@ -1787,7 +1843,7 @@ impl<'a> McpServer<'a> {
     /// The reference short-circuits on `BASIC_MEMORY_MCP_PROJECT` before opening any
     /// routed client; `auto-memory mcp` is always constrained to one project, so this is
     /// the whole surface rather than an error path. Project lifecycle belongs to the CLI.
-    fn create_memory_project(&mut self, params: &CreateMemoryProjectParams) -> Result<Value> {
+    async fn create_memory_project(&mut self, params: &CreateMemoryProjectParams) -> Result<Value> {
         let project_name = required_str(params.project_name.as_deref(), "project_name")?;
         if params.output_format().is_json() {
             return json_result(json!({
@@ -1811,7 +1867,7 @@ impl<'a> McpServer<'a> {
     }
 
     /// Project deletion through a `--project`-constrained server is refused.
-    fn delete_project(&mut self, params: &DeleteProjectParams) -> Result<Value> {
+    async fn delete_project(&mut self, params: &DeleteProjectParams) -> Result<Value> {
         // The reference requires the argument and echoes it in the hint.
         let project_name = required_str(params.project_name.as_deref(), "project_name")?;
         Ok(text_result(format!(
@@ -1820,12 +1876,12 @@ impl<'a> McpServer<'a> {
         )))
     }
 
-    fn view_note(&mut self, params: &ViewNoteParams) -> Result<Value> {
+    async fn view_note(&mut self, params: &ViewNoteParams) -> Result<Value> {
         let identifier = required_str(params.identifier.as_deref(), "identifier")?.to_owned();
         // `view_note` is a thin wrapper over `read_note`'s text surface: the raw
         // markdown is embedded in an artifact instruction block, and a miss returns
         // the "Note Not Found" guidance verbatim rather than wrapping it.
-        let content = self.note_text(&identifier, 1, 10)?;
+        let content = self.note_text(&identifier, 1, 10).await?;
         if content.contains("# Note Not Found") {
             return Ok(text_result(content));
         }
@@ -1839,8 +1895,8 @@ impl<'a> McpServer<'a> {
         Ok(text_result(dedent(&template).trim().to_owned()))
     }
 
-    fn diagnostics(&mut self) -> Result<Value> {
-        let counts = self.store.counts(self.project_id)?;
+    async fn diagnostics(&mut self) -> Result<Value> {
+        let counts = self.store.counts(self.project_id).await?;
         // The reference declares this tool with `output_schema=None`, so its payload is a
         // markdown report and the frame carries no `structuredContent`; the report's
         // machine-specific values are replaced by this port's own.
@@ -1902,7 +1958,7 @@ impl<'a> McpServer<'a> {
     /// payload telling the caller to use `search_notes`, and an OpenAI client gets the
     /// same ten results as `search_notes(page=1, page_size=10)` reshaped into
     /// `{id, title, url}` rows.
-    fn chatgpt_search(&mut self, params: &ChatgptSearchParams) -> Result<Value> {
+    async fn chatgpt_search(&mut self, params: &ChatgptSearchParams) -> Result<Value> {
         let query = required_str(params.query.as_deref(), "query")?.to_owned();
         if !self.is_openai_mcp_client() {
             return content_items_result(vec![text_item(json!({
@@ -1913,13 +1969,15 @@ impl<'a> McpServer<'a> {
             }))]);
         }
 
-        let payload = self.search_payload(&SearchNotesParams {
-            query: Some(query.clone()),
-            page: Some(1),
-            page_size: Some(10),
-            output_format: Some(<&str>::from(OutputFormat::Json).to_owned()),
-            ..SearchNotesParams::default()
-        })?;
+        let payload = self
+            .search_payload(&SearchNotesParams {
+                query: Some(query.clone()),
+                page: Some(1),
+                page_size: Some(10),
+                output_format: Some(<&str>::from(OutputFormat::Json).to_owned()),
+                ..SearchNotesParams::default()
+            })
+            .await?;
         let raw = payload["results"].as_array().cloned().unwrap_or_default();
         let formatted = raw
             .iter()
@@ -1954,7 +2012,7 @@ impl<'a> McpServer<'a> {
     ///
     /// An OpenAI client gets the raw markdown of the note plus a derived title; a miss
     /// still returns a document, flagged through `metadata.error`.
-    fn chatgpt_fetch(&mut self, params: &ChatgptFetchParams) -> Result<Value> {
+    async fn chatgpt_fetch(&mut self, params: &ChatgptFetchParams) -> Result<Value> {
         let id = required_str(params.id.as_deref(), "id")?.to_owned();
         if !self.is_openai_mcp_client() {
             return content_items_result(vec![text_item(json!({
@@ -1974,7 +2032,7 @@ impl<'a> McpServer<'a> {
         } else {
             format!("memory://{id}")
         };
-        let content = self.note_text(&identifier, 1, 10)?;
+        let content = self.note_text(&identifier, 1, 10).await?;
         let metadata = if content.trim_start().starts_with("# Note Not Found") {
             json!({ "error": "Document not found" })
         } else {
@@ -1990,13 +2048,14 @@ impl<'a> McpServer<'a> {
     }
 
     /// `schema_validate`: one note, one type, or every schema-covered type.
-    fn schema_validate(&mut self, params: &SchemaValidateParams) -> Result<Value> {
+    async fn schema_validate(&mut self, params: &SchemaValidateParams) -> Result<Value> {
         let note_type = params.note_type.clone();
         let identifier = params.identifier.clone();
         let output_format = params.output_format();
 
         let service = SchemaService::new(self.store, self.project_id, &self.vault);
-        let outcome = schema_tools::validate(&service, note_type.as_deref(), identifier.as_deref());
+        let outcome =
+            schema_tools::validate(&service, note_type.as_deref(), identifier.as_deref()).await;
         if output_format.is_json() {
             return json_result(outcome.payload());
         }
@@ -2004,13 +2063,13 @@ impl<'a> McpServer<'a> {
     }
 
     /// `schema_infer`: frequency analysis plus a suggested Picoschema block.
-    fn schema_infer(&mut self, params: &SchemaInferParams) -> Result<Value> {
+    async fn schema_infer(&mut self, params: &SchemaInferParams) -> Result<Value> {
         let note_type = required_str(params.note_type.as_deref(), "note_type")?.to_owned();
         let threshold = params.threshold.unwrap_or(0.25);
         let output_format = params.output_format();
 
         let service = SchemaService::new(self.store, self.project_id, &self.vault);
-        let outcome = schema_tools::infer(&service, &note_type, threshold);
+        let outcome = schema_tools::infer(&service, &note_type, threshold).await;
         if output_format.is_json() {
             return json_result(outcome.payload());
         }
@@ -2018,12 +2077,12 @@ impl<'a> McpServer<'a> {
     }
 
     /// `schema_diff`: declared fields versus observed usage.
-    fn schema_diff(&mut self, params: &SchemaDiffParams) -> Result<Value> {
+    async fn schema_diff(&mut self, params: &SchemaDiffParams) -> Result<Value> {
         let note_type = required_str(params.note_type.as_deref(), "note_type")?.to_owned();
         let output_format = params.output_format();
 
         let service = SchemaService::new(self.store, self.project_id, &self.vault);
-        let outcome = schema_tools::diff(&service, &note_type);
+        let outcome = schema_tools::diff(&service, &note_type).await;
         if output_format.is_json() {
             return json_result(outcome.payload());
         }
@@ -2048,15 +2107,17 @@ pub(crate) fn advertised_tools(read_only: bool) -> Vec<Value> {
 }
 
 /// Register (or refresh) the project row for a vault before serving.
-pub fn ensure_project(
+pub async fn ensure_project(
     store: &mut Store,
     name: &str,
     permalink: &str,
     vault: &std::path::Path,
 ) -> Result<i64> {
-    let project_id = store.upsert_project(name, permalink, &vault.to_string_lossy())?;
+    let project_id = store
+        .upsert_project(name, permalink, &vault.to_string_lossy())
+        .await?;
     let mut service = IndexService::new(store, project_id, vault, IndexOptions::new(permalink));
-    service.reconcile()?;
+    service.reconcile().await?;
     Ok(project_id)
 }
 

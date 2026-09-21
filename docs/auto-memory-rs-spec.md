@@ -162,8 +162,8 @@ Rules:
 - Do not use `get_` prefixes for ordinary accessors.
 - Keep parser, ranking, graph traversal, and context selection deterministic and independently testable.
 - Use traits only at real external boundaries such as storage, filesystem, clock, and embedding providers.
-- Keep CPU-bound algorithms synchronous; use async primarily for MCP transport, watcher/event loops, and background work.
-- Do not hold locks across `.await`.
+- Keep CPU-bound algorithms off the reactor; use async for MCP transport, watcher/event loops, CLI database commands, storage, and background work.
+- Do not hold std sync locks across `.await`; use async-aware locks when a guard must span one.
 - Avoid global mutable state.
 - Run `rustfmt`, `clippy`, unit tests, integration tests, and documentation checks in CI.
 

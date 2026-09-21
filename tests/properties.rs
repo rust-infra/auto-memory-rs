@@ -208,8 +208,8 @@ fn permalinks_are_stable_and_lowercase() {
 }
 
 /// `find_related` invariants over a generated vault.
-#[test]
-fn graph_traversal_returns_unique_rows_in_depth_order() {
+#[tokio::test(flavor = "multi_thread")]
+async fn graph_traversal_returns_unique_rows_in_depth_order() {
     let dir = Scratch::new("graph");
     let vault = dir.join("vault");
     fs::create_dir_all(&vault).expect("vault");
@@ -222,9 +222,10 @@ fn graph_traversal_returns_unique_rows_in_depth_order() {
         fs::write(vault.join(format!("note-{index}.md")), text).expect("write");
     }
 
-    let mut store = Store::open_in_memory().expect("store");
+    let mut store = Store::open_in_memory().await.expect("store");
     let project_id = store
         .upsert_project("oracle", "oracle", &vault.to_string_lossy())
+        .await
         .expect("project");
     rebuild_vault(
         &mut store,
@@ -232,10 +233,12 @@ fn graph_traversal_returns_unique_rows_in_depth_order() {
         &vault,
         &RebuildOptions::new("oracle"),
     )
+    .await
     .expect("rebuild");
 
     let seeds: Vec<i64> = store
         .entities(project_id)
+        .await
         .expect("entities")
         .iter()
         .map(|entity| entity.id)
@@ -245,6 +248,7 @@ fn graph_traversal_returns_unique_rows_in_depth_order() {
         for max_results in [1u32, 5, 50] {
             let rows = store
                 .find_related(project_id, &seeds, depth, max_results, None)
+                .await
                 .expect("traversal");
             assert!(
                 rows.len() <= max_results as usize,

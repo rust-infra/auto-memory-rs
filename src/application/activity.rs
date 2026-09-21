@@ -84,7 +84,7 @@ pub struct ActivityContext {
 }
 
 /// Build the recent-activity context for one project.
-pub fn recent_context(
+pub async fn recent_context(
     store: &Store,
     project_id: i64,
     options: &ActivityOptions,
@@ -98,16 +98,18 @@ pub fn recent_context(
     // page without a second query. Our search takes a page index rather than an
     // offset, so fetch one page that covers `offset + limit + 1` and slice.
     let fetch = (offset + options.page_size as usize + 1) as u32;
-    let page = store.search_text(
-        project_id,
-        &TextSearchOptions {
-            entity_types: options.types.clone(),
-            after_date: since.clone(),
-            page: 1,
-            page_size: fetch,
-            ..TextSearchOptions::default()
-        },
-    )?;
+    let page = store
+        .search_text(
+            project_id,
+            &TextSearchOptions {
+                entity_types: options.types.clone(),
+                after_date: since.clone(),
+                page: 1,
+                page_size: fetch,
+                ..TextSearchOptions::default()
+            },
+        )
+        .await?;
     let mut primary: Vec<_> = page.results.into_iter().skip(offset).collect();
     let has_more = primary.len() > options.page_size as usize;
     primary.truncate(options.page_size as usize);
@@ -122,20 +124,22 @@ pub fn recent_context(
             SearchItemType::Relation => row.relation_id,
         })
         .collect();
-    let related = store.find_related(
-        project_id,
-        &roots,
-        options.depth,
-        options.max_related,
-        since.as_deref(),
-    )?;
+    let related = store
+        .find_related(
+            project_id,
+            &roots,
+            options.depth,
+            options.max_related,
+            since.as_deref(),
+        )
+        .await?;
 
     let primary_entity_ids: Vec<i64> = primary
         .iter()
         .filter(|row| row.item_type == SearchItemType::Entity)
         .filter_map(|row| row.entity_id)
         .collect();
-    let lookup = hydration_lookup(store, &primary_entity_ids, &related)?;
+    let lookup = hydration_lookup(store, &primary_entity_ids, &related).await?;
 
     // The reference loads observations for every entity id the response mentions —
     // primary *and* related — and counts them once per distinct entity.
@@ -159,7 +163,7 @@ pub fn recent_context(
         if row.item_type == SearchItemType::Entity
             && let Some(entity_id) = row.entity_id
         {
-            observations = observation_summaries_for(store, entity_id, &lookup)?;
+            observations = observation_summaries_for(store, entity_id, &lookup).await?;
             if counted_observations.insert(entity_id) {
                 total_observations += observations.len();
             }
@@ -172,14 +176,14 @@ pub fn recent_context(
                 related_results.push(serde_json::to_value(relation_summary(candidate, &lookup))?);
             } else {
                 if counted_observations.insert(candidate.id) {
-                    total_observations += store.observations_for_entity(candidate.id)?.len();
+                    total_observations += store.observations_for_entity(candidate.id).await?.len();
                 }
                 related_results.push(serde_json::to_value(entity_summary(candidate, &lookup))?);
             }
         }
 
         results.push(ActivityResult {
-            primary_result: primary_summary(store, row)?,
+            primary_result: primary_summary(store, row).await?,
             observations,
             related_results,
         });
@@ -218,11 +222,14 @@ pub fn recent_context(
 }
 
 /// Shape one primary search row into its `ContextResultRow` payload.
-fn primary_summary(store: &Store, row: &crate::domain::search::SearchResult) -> Result<Value> {
-    let created_at = row
-        .entity_id
-        .and_then(|id| store.entity_created_at(id).ok().flatten())
-        .unwrap_or_default();
+async fn primary_summary(
+    store: &Store,
+    row: &crate::domain::search::SearchResult,
+) -> Result<Value> {
+    let created_at = match row.entity_id {
+        Some(id) => store.entity_created_at(id).await?.unwrap_or_default(),
+        None => String::new(),
+    };
     let value = match row.item_type {
         SearchItemType::Entity => serde_json::to_value(EntitySummary {
             item_type: "entity",
@@ -268,13 +275,13 @@ fn primary_summary(store: &Store, row: &crate::domain::search::SearchResult) -> 
 }
 
 /// Observation summaries for one entity id, or an empty list when the row is gone.
-fn observation_summaries_for(
+async fn observation_summaries_for(
     store: &Store,
     entity_id: i64,
     lookup: &std::collections::HashMap<i64, (String, String)>,
 ) -> Result<Vec<ObservationSummary>> {
-    match store.entity_by_id(entity_id)? {
-        Some(entity) => observation_summaries(store, &entity, lookup),
+    match store.entity_by_id(entity_id).await? {
+        Some(entity) => observation_summaries(store, &entity, lookup).await,
         None => Ok(Vec::new()),
     }
 }

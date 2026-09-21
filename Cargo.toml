@@ -45,11 +45,11 @@ base64 = "0.22"
 unicode-general-category = "1.1.0"
 strum = { version = "0.28.0", features = ["derive"] }
 walkdir = "2.5.0"
-# The event-loop surfaces (MCP stdio transport, `watch`) run on tokio; the core
-# API (parser, storage, ranking, ONNX) stays synchronous for compatibility. SQLite
-# uses tokio-rusqlite's dedicated connection thread; other blocking work reaches the
-# runtime through `block_in_place`/`spawn_blocking`. Features are the minimum that
-# covers that: `rt-multi-thread` for the blocking pool `block_in_place` needs, `io-std` /
+# The MCP transports, watcher, CLI database commands, application services, and
+# storage layer all run on tokio. SQLite uses tokio-rusqlite's dedicated connection
+# thread; CPU-heavy ONNX work still reaches the runtime through
+# `block_in_place`/`spawn_blocking`. Features are the minimum that covers that:
+# `rt-multi-thread` for the blocking pool `block_in_place` needs, `io-std` /
 # `io-util` for the stdio frames, `sync` for the notify→runtime channel, `time` for
 # the debounce ticker, `signal` for Ctrl-C, `macros` for `select!` and `#[tokio::test]`.
 tokio = { version = "1.53", features = [

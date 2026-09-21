@@ -103,8 +103,8 @@ fn assert_multiset(case_name: &str, page: &SearchPage) {
     );
 }
 
-#[test]
-fn text_queries_match_reference_order_and_scores() {
+#[tokio::test(flavor = "multi_thread")]
+async fn text_queries_match_reference_order_and_scores() {
     let (_dir, store, project_id) = indexed_store("text");
     for (case_name, query) in [
         ("text-rust", "rust"),
@@ -118,13 +118,16 @@ fn text_queries_match_reference_order_and_scores() {
             query: Some(query.to_owned()),
             ..TextSearchOptions::default()
         };
-        let page = store.search_text(project_id, &options).expect("search");
+        let page = store
+            .search_text(project_id, &options)
+            .await
+            .expect("search");
         assert_ordered(case_name, &page);
     }
 }
 
-#[test]
-fn title_type_tag_and_metadata_filters_match_reference() {
+#[tokio::test(flavor = "multi_thread")]
+async fn title_type_tag_and_metadata_filters_match_reference() {
     let (_dir, store, project_id) = indexed_store("filters");
     let title = store
         .search_text(
@@ -134,6 +137,7 @@ fn title_type_tag_and_metadata_filters_match_reference() {
                 ..TextSearchOptions::default()
             },
         )
+        .await
         .expect("title search");
     assert_ordered("title-alpha", &title);
 
@@ -145,6 +149,7 @@ fn title_type_tag_and_metadata_filters_match_reference() {
                 ..TextSearchOptions::default()
             },
         )
+        .await
         .expect("type search");
     assert_multiset("type-project", &note_type);
 
@@ -156,6 +161,7 @@ fn title_type_tag_and_metadata_filters_match_reference() {
                 ..TextSearchOptions::default()
             },
         )
+        .await
         .expect("tag search");
     assert_multiset("tag-rust", &tag);
 
@@ -169,6 +175,7 @@ fn title_type_tag_and_metadata_filters_match_reference() {
                 ..TextSearchOptions::default()
             },
         )
+        .await
         .expect("metadata search");
     assert_multiset("metadata-status-active", &metadata);
 
@@ -180,12 +187,13 @@ fn title_type_tag_and_metadata_filters_match_reference() {
                 ..TextSearchOptions::default()
             },
         )
+        .await
         .expect("permalink glob");
     assert_multiset("permalink-glob", &glob);
 }
 
-#[test]
-fn observation_category_filter_matches_reference() {
+#[tokio::test(flavor = "multi_thread")]
+async fn observation_category_filter_matches_reference() {
     let (_dir, store, project_id) = indexed_store("observations");
     let page = store
         .search_text(
@@ -196,6 +204,7 @@ fn observation_category_filter_matches_reference() {
                 ..TextSearchOptions::default()
             },
         )
+        .await
         .expect("observation search");
     assert_multiset("entity-type-observation", &page);
 
@@ -212,6 +221,7 @@ fn observation_category_filter_matches_reference() {
                 ..TextSearchOptions::default()
             },
         )
+        .await
         .expect("implicit category search");
     assert_ordered("category-decision-implicit", &implicit);
     assert_eq!(implicit.results.len(), 1, "only the decision observation");
@@ -226,6 +236,7 @@ fn observation_category_filter_matches_reference() {
                 ..TextSearchOptions::default()
             },
         )
+        .await
         .expect("relation search");
     assert_multiset("entity-type-relation", &relations);
 
@@ -238,6 +249,7 @@ fn observation_category_filter_matches_reference() {
                 ..TextSearchOptions::default()
             },
         )
+        .await
         .expect("status search");
     assert_multiset("status-archived", &archived);
 
@@ -253,6 +265,7 @@ fn observation_category_filter_matches_reference() {
                 ..TextSearchOptions::default()
             },
         )
+        .await
         .expect("date-filtered search");
     assert_multiset("after-date-absolute-rust", &bounded);
     assert_eq!(bounded.total, 2);
@@ -266,13 +279,14 @@ fn observation_category_filter_matches_reference() {
                 ..TextSearchOptions::default()
             },
         )
+        .await
         .expect("future-bounded search");
     assert_ordered("after-date-future-rust", &future);
     assert_eq!(future.total, 0);
 }
 
-#[test]
-fn pagination_matches_reference_counts() {
+#[tokio::test(flavor = "multi_thread")]
+async fn pagination_matches_reference_counts() {
     let (_dir, store, project_id) = indexed_store("pagination");
     let page = store
         .search_text(
@@ -284,6 +298,7 @@ fn pagination_matches_reference_counts() {
                 ..TextSearchOptions::default()
             },
         )
+        .await
         .expect("paginated search");
     assert_eq!(page.total, 15);
     assert_eq!(page.current_page, 2);
@@ -301,14 +316,15 @@ fn pagination_matches_reference_counts() {
                 ..TextSearchOptions::default()
             },
         )
+        .await
         .expect("page one");
     let first_pairs = actual_pairs(&first);
     let second_pairs = actual_pairs(&page);
     assert_ne!(first_pairs, second_pairs, "pages must advance");
 }
 
-#[test]
-fn non_matching_query_falls_back_to_relaxed_search() {
+#[tokio::test(flavor = "multi_thread")]
+async fn non_matching_query_falls_back_to_relaxed_search() {
     let (_dir, store, project_id) = indexed_store("relaxed");
     let page = store
         .search_text(
@@ -318,17 +334,19 @@ fn non_matching_query_falls_back_to_relaxed_search() {
                 ..TextSearchOptions::default()
             },
         )
+        .await
         .expect("relaxed search");
     assert_eq!(page.total, 15, "reference relaxation matches every entity");
     assert_eq!(page.results.len(), 10, "default page size is 10");
     assert!(page.has_more);
 }
 
-#[test]
-fn empty_query_without_filters_returns_nothing() {
+#[tokio::test(flavor = "multi_thread")]
+async fn empty_query_without_filters_returns_nothing() {
     let (_dir, store, project_id) = indexed_store("empty");
     let page = store
         .search_text(project_id, &TextSearchOptions::default())
+        .await
         .expect("filter-only search");
     // Filter-only searches with no filters still return every entity (reference behavior).
     assert_eq!(page.total, 15);
@@ -339,8 +357,8 @@ fn empty_query_without_filters_returns_nothing() {
 /// tool exposes `title`), unlike in the reference, where `search_type="title"` drops the
 /// text leg. It used to fail with "unable to use function MATCH in the requested context"
 /// because the two legs became two `MATCH` predicates.
-#[test]
-fn title_filter_combines_with_a_text_query() {
+#[tokio::test(flavor = "multi_thread")]
+async fn title_filter_combines_with_a_text_query() {
     let (_dir, store, project_id) = indexed_store("title-and-query");
     let page = store
         .search_text(
@@ -351,6 +369,7 @@ fn title_filter_combines_with_a_text_query() {
                 ..TextSearchOptions::default()
             },
         )
+        .await
         .expect("title + query search");
     // Alpha's body mentions rust; Simple Note mentions rust but its title does not match.
     assert_eq!(
@@ -360,8 +379,8 @@ fn title_filter_combines_with_a_text_query() {
     assert!(page.results[0].score < 0.0, "the fused MATCH still scores");
 }
 
-#[test]
-fn permalink_match_filter_combines_with_a_text_query() {
+#[tokio::test(flavor = "multi_thread")]
+async fn permalink_match_filter_combines_with_a_text_query() {
     let (_dir, store, project_id) = indexed_store("permalink-match-and-query");
     let page = store
         .search_text(
@@ -372,6 +391,7 @@ fn permalink_match_filter_combines_with_a_text_query() {
                 ..TextSearchOptions::default()
             },
         )
+        .await
         .expect("permalink match + query search");
     assert_eq!(
         actual_pairs(&page),

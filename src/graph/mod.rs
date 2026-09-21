@@ -155,22 +155,22 @@ pub fn traverse_relations(
 ///
 /// Matches, in order: exact permalink, file path, file path without `.md`, and a
 /// project-prefixed permalink followed by the bare path.
-pub fn resolve_entity_path(
+pub async fn resolve_entity_path(
     store: &crate::storage::Store,
     project_id: i64,
     path: &str,
 ) -> Result<Option<crate::storage::EntityRow>> {
-    if let Some(entity) = store.entity_by_permalink(project_id, path)? {
+    if let Some(entity) = store.entity_by_permalink(project_id, path).await? {
         return Ok(Some(entity));
     }
-    if let Some(entity) = store.entity_by_file_path(project_id, path)? {
+    if let Some(entity) = store.entity_by_file_path(project_id, path).await? {
         return Ok(Some(entity));
     }
     let with_md = format!("{path}.md");
-    if let Some(entity) = store.entity_by_file_path(project_id, &with_md)? {
+    if let Some(entity) = store.entity_by_file_path(project_id, &with_md).await? {
         return Ok(Some(entity));
     }
-    for entity in store.entities(project_id)? {
+    for entity in store.entities(project_id).await? {
         let matches = entity
             .permalink
             .as_deref()

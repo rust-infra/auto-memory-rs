@@ -287,18 +287,18 @@ impl<'a> VaultWatcher<'a> {
     }
 
     /// Apply every event whose quiet window elapsed.
-    pub fn poll(&mut self, now: Instant) -> Result<WatchReport> {
+    pub async fn poll(&mut self, now: Instant) -> Result<WatchReport> {
         let ready = self.debouncer.drain_ready(now);
-        self.apply(ready)
+        self.apply(ready).await
     }
 
     /// Apply everything still pending (shutdown path).
-    pub fn flush(&mut self) -> Result<WatchReport> {
+    pub async fn flush(&mut self) -> Result<WatchReport> {
         let pending = self.debouncer.flush();
-        self.apply(pending)
+        self.apply(pending).await
     }
 
-    fn apply(&mut self, events: Vec<FileEvent>) -> Result<WatchReport> {
+    async fn apply(&mut self, events: Vec<FileEvent>) -> Result<WatchReport> {
         let mut report = WatchReport::default();
         // Paths that vanished inside this window stay in the index until the batch is
         // finished: a rename arrives as remove + create, and the delete/create pair
@@ -312,7 +312,7 @@ impl<'a> VaultWatcher<'a> {
         }
         let mut candidates: BTreeMap<String, String> = BTreeMap::new();
         for path in &missing {
-            if let Some(checksum) = self.service.entity_checksum(path)? {
+            if let Some(checksum) = self.service.entity_checksum(path).await? {
                 candidates.insert(checksum, path.clone());
             }
         }
@@ -331,11 +331,11 @@ impl<'a> VaultWatcher<'a> {
                 .filter(|from| *from != event.path)
             {
                 missing.remove(&from);
-                self.service.move_file(&from, &event.path)?;
+                self.service.move_file(&from, &event.path).await?;
                 report.moved += 1;
                 continue;
             }
-            match self.service.index_file(&event.path)? {
+            match self.service.index_file(&event.path).await? {
                 IndexOutcome::Indexed => report.indexed += 1,
                 IndexOutcome::Unchanged => report.unchanged += 1,
                 IndexOutcome::SkippedMalformed | IndexOutcome::Missing => report.skipped += 1,
@@ -343,8 +343,8 @@ impl<'a> VaultWatcher<'a> {
         }
 
         for path in missing {
-            if self.service.entity_checksum(&path)?.is_some() {
-                self.service.remove_file(&path)?;
+            if self.service.entity_checksum(&path).await?.is_some() {
+                self.service.remove_file(&path).await?;
                 report.removed += 1;
             }
         }
@@ -414,10 +414,8 @@ pub fn map_notify_event(root: &Path, event: &Event) -> Vec<(String, ChangeKind)>
 /// than a polled flag — which is what makes a graceful stop (Ctrl-C, then flush the
 /// pending window) possible without racing the signal.
 ///
-/// Indexing is synchronous by design (`docs/auto-memory-rs-spec.md` §6), so the poll
-/// and the final flush run through [`tokio::task::block_in_place`]: a caller that
-/// shares this runtime with, say, an MCP server keeps its reactor while SQLite and the
-/// file reads run. That needs a multi-thread runtime — see
+/// Indexing and SQLite are awaited directly; CPU-heavy work inside the index path can
+/// still move to the blocking pool. The loop runs on the multi-thread runtime built by
 /// [`crate::runtime::executor`].
 pub async fn watch_vault(
     mut watcher: VaultWatcher<'_>,
@@ -462,13 +460,13 @@ pub async fn watch_vault(
             WatchWake::Shutdown => break,
             WatchWake::Tick => {}
         }
-        let report = tokio::task::block_in_place(|| watcher.poll(Instant::now()))?;
+        let report = watcher.poll(Instant::now()).await?;
         if !report.is_empty() {
             batches += 1;
             log_watch_report("watch batch", &report);
         }
     }
-    let report = tokio::task::block_in_place(|| watcher.flush())?;
+    let report = watcher.flush().await?;
     if !report.is_empty() {
         batches += 1;
         log_watch_report("final flush", &report);
@@ -522,7 +520,7 @@ pub async fn shutdown_when(predicate: impl Fn() -> bool) {
 ///
 /// This is the `watch --once` primitive: useful for scripts or for a single manual
 /// sync, without running the loop forever.
-pub fn watch_once(mut watcher: VaultWatcher<'_>, window: Duration) -> Result<WatchReport> {
+pub async fn watch_once(mut watcher: VaultWatcher<'_>, window: Duration) -> Result<WatchReport> {
     let (sender, receiver) = std::sync::mpsc::channel();
     let mut handle = notify::recommended_watcher(move |event| {
         let _ = sender.send(event);
@@ -548,7 +546,7 @@ pub fn watch_once(mut watcher: VaultWatcher<'_>, window: Duration) -> Result<Wat
             Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
         }
     }
-    watcher.flush()
+    watcher.flush().await
 }
 
 #[cfg(test)]

@@ -379,7 +379,7 @@ fn candidate_limit(limit: u32, offset: u32) -> u32 {
 }
 
 /// Rank the stored index for one query, applying the similarity threshold.
-fn ranked_matches(
+async fn ranked_matches(
     store: &Store,
     project_id: i64,
     query_vector: &[f32],
@@ -387,7 +387,7 @@ fn ranked_matches(
     k: usize,
     min_similarity: f32,
 ) -> Result<Vec<RowMatch>> {
-    let chunks = store.vector_chunks(project_id, model)?;
+    let chunks = store.vector_chunks(project_id, model).await?;
     let mut matches = aggregate_matches(&chunks, query_vector, k.min(MAX_VECTOR_K));
     if min_similarity > 0.0 {
         matches.retain(|row| row.score >= min_similarity);
@@ -412,7 +412,7 @@ struct HydrationEntry {
 }
 
 /// Hydrate entries into the reference result shape.
-fn hydrate_entries(
+async fn hydrate_entries(
     store: &Store,
     project_id: i64,
     entries: Vec<HydrationEntry>,
@@ -420,7 +420,7 @@ fn hydrate_entries(
     let mut ids: Vec<i64> = entries.iter().map(|entry| entry.key.id).collect();
     ids.sort_unstable();
     ids.dedup();
-    let rows = store.search_rows_by_ids(project_id, &ids)?;
+    let rows = store.search_rows_by_ids(project_id, &ids).await?;
     let lookup: HashMap<(String, i64), &SearchRowView> = rows
         .iter()
         .map(|row| ((row.item_type.clone(), row.id), row))
@@ -443,7 +443,7 @@ fn hydrate_entries(
                 .then(|| snippet.map(str::to_owned))
                 .flatten()
         });
-        let hydration = entity_hydration(store, row.entity_id)?;
+        let hydration = entity_hydration(store, row.entity_id).await?;
         results.push(SearchResult {
             title: row.title.clone().unwrap_or_default(),
             item_type,
@@ -475,7 +475,7 @@ fn hydrate_entries(
 /// Semantic searches cannot be counted exactly, so the page is a probe: the caller
 /// asks for `page_size + 1` rows, derives `has_more` from the extra row, and the
 /// response reports `total = 0`, `total_is_exact = false` (reference behavior).
-pub fn search_vector(
+pub async fn search_vector(
     store: &Store,
     project_id: i64,
     query_vector: &[f32],
@@ -506,8 +506,9 @@ pub fn search_vector(
         model,
         candidate_chunks,
         options.min_similarity,
-    )?;
-    let matches = apply_row_filters(store, project_id, matches, options)?;
+    )
+    .await?;
+    let matches = apply_row_filters(store, project_id, matches, options).await?;
     let matches: Vec<RowMatch> = matches
         .into_iter()
         .filter(|row| type_allowed(&row.key.item_type, options))
@@ -522,7 +523,7 @@ pub fn search_vector(
             fallback_to_content: false,
         })
         .collect();
-    let results = hydrate_entries(store, project_id, entries)?;
+    let results = hydrate_entries(store, project_id, entries).await?;
     let mut results = match rerank {
         Some(request) => rerank_and_paginate(results, offset as usize, limit as usize, request)?,
         None => results
@@ -544,7 +545,7 @@ pub fn search_vector(
 }
 
 /// Run one hybrid page: FTS and vector legs fused with the reference formula.
-pub fn search_hybrid(
+pub async fn search_hybrid(
     store: &Store,
     project_id: i64,
     text: &str,
@@ -583,8 +584,9 @@ pub fn search_hybrid(
         model,
         vector_chunk_pool,
         options.min_similarity,
-    )?;
-    let vector_matches = apply_row_filters(store, project_id, vector_matches, options)?;
+    )
+    .await?;
+    let vector_matches = apply_row_filters(store, project_id, vector_matches, options).await?;
     let vector_matches: Vec<RowMatch> = vector_matches
         .into_iter()
         .filter(|row| type_allowed(&row.key.item_type, options))
@@ -601,7 +603,7 @@ pub fn search_hybrid(
     fts_options.query = Some(text.to_owned());
     fts_options.page = 1;
     fts_options.page_size = candidate_window;
-    let fts_page = store.search_text(project_id, &fts_options)?;
+    let fts_page = store.search_text(project_id, &fts_options).await?;
     let fts_raw: Vec<f32> = fts_page.results.iter().map(|result| result.score).collect();
     let normalized = normalize_fts_scores(&fts_raw);
     let fts_scores: Vec<(SearchKey, f32)> = fts_page
@@ -640,7 +642,7 @@ pub fn search_hybrid(
             }
         })
         .collect();
-    let results = hydrate_entries(store, project_id, entries)?;
+    let results = hydrate_entries(store, project_id, entries).await?;
     let mut page_results = match rerank {
         Some(request) => rerank_and_paginate(results, offset as usize, limit as usize, request)?,
         None => results
@@ -675,7 +677,7 @@ fn type_allowed(item_type: &str, options: &VectorSearchOptions) -> bool {
 /// intersected with a filter-only FTS scan keyed on `(type, id)` — reusing the text
 /// path's filter semantics (including the legacy note-type spellings) — and the
 /// similarity ordering of the survivors is preserved.
-fn apply_row_filters(
+async fn apply_row_filters(
     store: &Store,
     project_id: i64,
     matches: Vec<RowMatch>,
@@ -684,7 +686,9 @@ fn apply_row_filters(
     if !options.filter_requested() {
         return Ok(matches);
     }
-    let page = store.search_text(project_id, &options.filter_options())?;
+    let page = store
+        .search_text(project_id, &options.filter_options())
+        .await?;
     let allowed: HashSet<(String, i64)> = page
         .results
         .iter()
@@ -709,14 +713,16 @@ fn parse_item_type(value: &str) -> Option<SearchItemType> {
 }
 
 /// `(permalink, external_id)` for one entity, when the row has an owning entity.
-fn entity_hydration(
+async fn entity_hydration(
     store: &Store,
     entity_id: Option<i64>,
 ) -> Result<(Option<String>, Option<String>)> {
     let Some(entity_id) = entity_id else {
         return Ok((None, None));
     };
-    let lookup = store.entity_permalinks_and_external_ids(&[entity_id])?;
+    let lookup = store
+        .entity_permalinks_and_external_ids(&[entity_id])
+        .await?;
     Ok(lookup
         .get(&entity_id)
         .map_or((None, None), |(permalink, external)| {

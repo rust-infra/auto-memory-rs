@@ -221,7 +221,7 @@ pub struct GraphContext {
 }
 
 /// Build context for a `memory://` URL.
-pub fn build_context(
+pub async fn build_context(
     store: &Store,
     project_id: i64,
     url: &str,
@@ -237,7 +237,7 @@ pub fn build_context(
     // then loads `search(permalink, limit=page_size+1, offset=offset)`; an unresolved
     // URL — or any page past the first for a direct lookup — is an empty result set
     // rather than an error, and the metadata still echoes the resolved permalink.
-    let resolved = resolve_entity_path(store, project_id, &path)?;
+    let resolved = resolve_entity_path(store, project_id, &path).await?;
     let resolved_uri = resolved
         .as_ref()
         .and_then(|entity| entity.permalink.clone())
@@ -255,16 +255,18 @@ pub fn build_context(
     let since = options
         .since
         .map(|instant| timeframe::since_bound(&instant));
-    let rows = store.find_related(
-        project_id,
-        &[entity.id],
-        options.depth,
-        options.max_related,
-        since.as_deref(),
-    )?;
-    let entity_lookup = hydration_lookup(store, &[entity.id], &rows)?;
+    let rows = store
+        .find_related(
+            project_id,
+            &[entity.id],
+            options.depth,
+            options.max_related,
+            since.as_deref(),
+        )
+        .await?;
+    let entity_lookup = hydration_lookup(store, &[entity.id], &rows).await?;
 
-    let observations = observation_summaries(store, &entity, &entity_lookup)?;
+    let observations = observation_summaries(store, &entity, &entity_lookup).await?;
     let mut total_observations = observations.len();
 
     let mut related_results = Vec::with_capacity(rows.len());
@@ -278,7 +280,7 @@ pub fn build_context(
             }
             _ => {
                 if related_entity_ids.insert(row.id) {
-                    total_observations += store.observations_for_entity(row.id)?.len();
+                    total_observations += store.observations_for_entity(row.id).await?.len();
                 }
                 related_results.push(serde_json::to_value(entity_summary(row, &entity_lookup))?);
             }
@@ -292,9 +294,12 @@ pub fn build_context(
         entity_id: entity.id,
         permalink: entity.permalink.clone(),
         title: entity.title.clone(),
-        content: Some(store.entity_content(entity.id).unwrap_or_default()),
+        content: Some(store.entity_content(entity.id).await.unwrap_or_default()),
         file_path: entity.file_path.clone(),
-        created_at: store.entity_created_at(entity.id)?.unwrap_or_default(),
+        created_at: store
+            .entity_created_at(entity.id)
+            .await?
+            .unwrap_or_default(),
     };
 
     Ok(GraphContext {
@@ -342,7 +347,7 @@ fn empty_metadata(path: &str, options: &ContextOptions) -> MemoryMetadata {
 }
 
 /// Entity titles and external ids for every id the response has to hydrate.
-pub(crate) fn hydration_lookup(
+pub(crate) async fn hydration_lookup(
     store: &Store,
     primary_ids: &[i64],
     rows: &[RelatedRow],
@@ -357,16 +362,21 @@ pub(crate) fn hydration_lookup(
             ids.insert(to_id);
         }
     }
-    store.entity_titles_and_external_ids(&ids.into_iter().collect::<Vec<_>>())
+    store
+        .entity_titles_and_external_ids(&ids.into_iter().collect::<Vec<_>>())
+        .await
 }
 
 /// Build the observation summaries owned by the primary entity.
-pub(crate) fn observation_summaries(
+pub(crate) async fn observation_summaries(
     store: &Store,
     entity: &EntityRow,
     lookup: &HashMap<i64, (String, String)>,
 ) -> Result<Vec<ObservationSummary>> {
-    let created_at = store.entity_created_at(entity.id)?.unwrap_or_default();
+    let created_at = store
+        .entity_created_at(entity.id)
+        .await?
+        .unwrap_or_default();
     let entity_external_id = lookup.get(&entity.id).map_or_else(
         || entity.external_id.clone(),
         |(_, external)| external.clone(),
@@ -376,7 +386,7 @@ pub(crate) fn observation_summaries(
         .map_or_else(|| entity.title.clone(), |(title, _)| title.clone());
 
     let mut summaries = Vec::new();
-    for observation in store.observations_for_entity(entity.id)? {
+    for observation in store.observations_for_entity(entity.id).await? {
         let permalink = entity.permalink.as_ref().map_or_else(String::new, |base| {
             crate::domain::permalink::generate_permalink(&format!(
                 "{base}/observations/{}/{}",
@@ -657,11 +667,12 @@ mod tests {
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/vault")
     }
 
-    fn store() -> (Store, i64) {
-        let mut store = Store::open_in_memory().expect("store");
+    async fn store() -> (Store, i64) {
+        let mut store = Store::open_in_memory().await.expect("store");
         let vault = vault();
         let project_id = store
             .upsert_project("oracle", "oracle", &vault.to_string_lossy())
+            .await
             .expect("project");
         rebuild_vault(
             &mut store,
@@ -669,6 +680,7 @@ mod tests {
             &vault,
             &RebuildOptions::new("oracle"),
         )
+        .await
         .expect("rebuild");
         (store, project_id)
     }
@@ -703,15 +715,16 @@ mod tests {
         );
     }
 
-    #[test]
-    fn observation_summaries_use_the_entity_title_and_synthetic_permalink() {
-        let (store, project_id) = store();
+    #[tokio::test(flavor = "multi_thread")]
+    async fn observation_summaries_use_the_entity_title_and_synthetic_permalink() {
+        let (store, project_id) = store().await;
         let context = build_context(
             &store,
             project_id,
             "memory://notes/simple",
             &ContextOptions::default(),
         )
+        .await
         .expect("context");
         let observation = &context.results[0].observations[0];
         assert_eq!(observation.title.as_deref(), Some("simple"));
@@ -721,9 +734,9 @@ mod tests {
         );
     }
 
-    #[test]
-    fn a_timeframe_can_exclude_fixture_notes() {
-        let (store, project_id) = store();
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_timeframe_can_exclude_fixture_notes() {
+        let (store, project_id) = store().await;
         // `notes/frontmatter.md` declares `created: 2026-01-02`, so a 7-day window
         // drops it from the related entities of `notes/relations`.
         let since = timeframe::parse_timeframe("7d").expect("since");
@@ -736,6 +749,7 @@ mod tests {
                 ..ContextOptions::default()
             },
         )
+        .await
         .expect("context");
         let permalinks: Vec<&str> = context.results[0]
             .related_results
@@ -749,9 +763,9 @@ mod tests {
         );
     }
 
-    #[test]
-    fn pages_past_the_first_are_empty_like_a_direct_lookup() {
-        let (store, project_id) = store();
+    #[tokio::test(flavor = "multi_thread")]
+    async fn pages_past_the_first_are_empty_like_a_direct_lookup() {
+        let (store, project_id) = store().await;
         let context = build_context(
             &store,
             project_id,
@@ -761,6 +775,7 @@ mod tests {
                 ..ContextOptions::default()
             },
         )
+        .await
         .expect("context");
         assert!(context.results.is_empty());
         assert_eq!(context.metadata.primary_count, 0);

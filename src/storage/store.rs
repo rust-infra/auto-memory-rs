@@ -1,10 +1,7 @@
 //! Transactional access to the rebuildable SQLite index.
 
 use std::collections::HashMap;
-use std::future::Future;
 use std::path::Path;
-use std::sync::Arc;
-use std::task::{Context, Poll, Wake, Waker};
 
 use rusqlite::{Connection, OptionalExtension, named_params, params};
 use serde_json::{Map, Value};
@@ -25,47 +22,10 @@ use crate::storage::schema;
 /// Handle to the derived SQLite index.
 ///
 /// The index is a cache: every row is rebuildable from the markdown corpus. SQLite
-/// work runs on a dedicated `tokio-rusqlite` connection thread while this type keeps
-/// the synchronous API the rest of the application already uses.
+/// work runs on a dedicated `tokio-rusqlite` connection thread and every operation is
+/// exposed as an async method.
 pub struct Store {
     conn: Option<tokio_rusqlite::Connection>,
-}
-
-impl Drop for Store {
-    fn drop(&mut self) {
-        if let Some(conn) = self.conn.take() {
-            let _ = block_on_db(conn.close());
-        }
-    }
-}
-
-/// Minimal executor for the `tokio-rusqlite` oneshot-backed futures.
-///
-/// `Connection::call` only needs a waker: the actual SQLite work runs on the
-/// dedicated `tokio-rusqlite` thread. Parking the calling thread therefore preserves
-/// the synchronous `Store` API without nesting runtimes or requiring `block_in_place`.
-fn block_on_db<F: Future>(future: F) -> F::Output {
-    struct ThreadWaker(std::thread::Thread);
-
-    impl Wake for ThreadWaker {
-        fn wake(self: Arc<Self>) {
-            self.0.unpark();
-        }
-
-        fn wake_by_ref(self: &Arc<Self>) {
-            self.0.unpark();
-        }
-    }
-
-    let mut future = std::pin::pin!(future);
-    let waker = Waker::from(Arc::new(ThreadWaker(std::thread::current())));
-    let mut context = Context::from_waker(&waker);
-    loop {
-        match future.as_mut().poll(&mut context) {
-            Poll::Ready(value) => return value,
-            Poll::Pending => std::thread::park(),
-        }
-    }
 }
 
 /// Map a `tokio-rusqlite` error back to the crate error, preserving application
@@ -82,16 +42,17 @@ fn map_async_error(error: tokio_rusqlite::Error) -> Error {
 }
 
 /// Run one fallible closure on a `tokio-rusqlite` connection.
-fn call_connection<T>(
+async fn call_connection<T>(
     conn: &tokio_rusqlite::Connection,
     function: impl FnOnce(&mut Connection) -> Result<T> + Send + 'static,
 ) -> Result<T>
 where
     T: Send + 'static,
 {
-    block_on_db(conn.call(move |conn| {
+    conn.call(move |conn| {
         function(conn).map_err(|error| tokio_rusqlite::Error::Other(Box::new(error)))
-    }))
+    })
+    .await
     .map_err(map_async_error)
 }
 
@@ -293,18 +254,18 @@ impl Store {
     }
 
     /// Run one closure on the `tokio-rusqlite` connection thread.
-    fn call<T>(
+    async fn call<T>(
         &self,
         function: impl FnOnce(&mut Connection) -> Result<T> + Send + 'static,
     ) -> Result<T>
     where
         T: Send + 'static,
     {
-        call_connection(self.connection(), function)
+        call_connection(self.connection(), function).await
     }
 
     /// Open (or create) an index at `path` and run migrations.
-    pub fn open(path: impl AsRef<Path>) -> Result<Self> {
+    pub async fn open(path: impl AsRef<Path>) -> Result<Self> {
         let path = path.as_ref();
         // SQLite creates the database file but not its directory; the CLI/MCP are
         // routinely pointed at `~/.local/share/auto-memory/memory.db` on a fresh machine.
@@ -314,30 +275,42 @@ impl Store {
             std::fs::create_dir_all(parent)?;
         }
         let path = path.to_owned();
-        let conn = block_on_db(tokio_rusqlite::Connection::open(path)).map_err(Error::from)?;
-        Self::prepare(&conn, true)?;
+        let conn = tokio_rusqlite::Connection::open(path)
+            .await
+            .map_err(Error::from)?;
+        Self::prepare(&conn, true).await?;
         Ok(Self { conn: Some(conn) })
     }
 
     /// Open a throwaway in-memory index (used by tests and short-lived CLIs).
-    pub fn open_in_memory() -> Result<Self> {
-        let conn =
-            block_on_db(tokio_rusqlite::Connection::open_in_memory()).map_err(Error::from)?;
-        Self::prepare(&conn, false)?;
+    pub async fn open_in_memory() -> Result<Self> {
+        let conn = tokio_rusqlite::Connection::open_in_memory()
+            .await
+            .map_err(Error::from)?;
+        Self::prepare(&conn, false).await?;
         Ok(Self { conn: Some(conn) })
     }
 
     /// Configure a fresh connection and run the schema migrations.
-    fn prepare(conn: &tokio_rusqlite::Connection, file_backed: bool) -> Result<()> {
+    async fn prepare(conn: &tokio_rusqlite::Connection, file_backed: bool) -> Result<()> {
         call_connection(conn, move |conn| {
             configure_connection(conn, file_backed)?;
             schema::migrate(conn)?;
             Ok(())
         })
+        .await
+    }
+
+    /// Close the underlying connection and wait for its SQLite thread to exit.
+    pub async fn close(mut self) -> Result<()> {
+        if let Some(conn) = self.conn.take() {
+            conn.close().await.map_err(Error::from)?;
+        }
+        Ok(())
     }
 
     /// Read the semantic chunk inputs (search rows) for a project.
-    pub fn semantic_rows(&self, project_id: i64) -> Result<Vec<SemanticRow>> {
+    pub async fn semantic_rows(&self, project_id: i64) -> Result<Vec<SemanticRow>> {
         self.call(move |conn| {
             let mut statement = conn.prepare(
                 "SELECT id, type, title, permalink, content_snippet, category, relation_type, entity_id
@@ -358,49 +331,56 @@ impl Store {
                 })?
                 .collect::<std::result::Result<Vec<_>, _>>()?;
             Ok(rows)
-        })
+        }).await
     }
 
     /// Run a text search against this index.
-    pub fn search_text(&self, project_id: i64, options: &TextSearchOptions) -> Result<SearchPage> {
+    pub async fn search_text(
+        &self,
+        project_id: i64,
+        options: &TextSearchOptions,
+    ) -> Result<SearchPage> {
         let options = options.clone();
         self.call(move |conn| search_text(conn, project_id, &options))
+            .await
     }
 
     /// Run a closure with the underlying SQLite connection.
-    pub fn with_connection<T>(
+    pub async fn with_connection<T>(
         &self,
         function: impl FnOnce(&Connection) -> T + Send + 'static,
     ) -> Result<T>
     where
         T: Send + 'static,
     {
-        self.call(move |conn| Ok(function(conn)))
+        self.call(move |conn| Ok(function(conn))).await
     }
 
     /// Schema version recorded in the index.
-    pub fn schema_version(&self) -> Result<i64> {
+    pub async fn schema_version(&self) -> Result<i64> {
         self.call(|conn| {
             Ok(schema::metadata(conn, "schema_version")?
                 .and_then(|value| value.parse().ok())
                 .unwrap_or_default())
         })
+        .await
     }
 
     /// Whether this SQLite build supports FTS5 virtual tables.
-    pub fn has_fts5(&self) -> bool {
+    pub async fn has_fts5(&self) -> bool {
         self.call(|conn| Ok(schema::has_fts5(conn)))
+            .await
             .unwrap_or(false)
     }
 
     /// Read a metadata value recorded during indexing.
-    pub fn metadata(&self, key: &str) -> Result<Option<String>> {
+    pub async fn metadata(&self, key: &str) -> Result<Option<String>> {
         let key = key.to_owned();
-        self.call(move |conn| schema::metadata(conn, &key))
+        self.call(move |conn| schema::metadata(conn, &key)).await
     }
 
     /// Write a metadata value (index version tracking, rebuild timestamps).
-    pub fn set_metadata(&self, key: &str, value: &str) -> Result<()> {
+    pub async fn set_metadata(&self, key: &str, value: &str) -> Result<()> {
         let key = key.to_owned();
         let value = value.to_owned();
         self.call(move |conn| {
@@ -411,20 +391,22 @@ impl Store {
             )?;
             Ok(())
         })
+        .await
     }
 
     /// Rows in the FTS5 `search_index` table, across every project.
     ///
     /// Only used to prove the index carries no stranded rows (an FTS table has no
     /// foreign keys, so it is the one place a delete cannot cascade).
-    pub fn search_index_count(&self) -> Result<i64> {
+    pub async fn search_index_count(&self) -> Result<i64> {
         self.call(|conn| {
             Ok(conn.query_row("SELECT count(*) FROM search_index", [], |row| row.get(0))?)
         })
+        .await
     }
 
     /// Register a project (or refresh its path/permalink) and return its row id.
-    pub fn upsert_project(&self, name: &str, permalink: &str, path: &str) -> Result<i64> {
+    pub async fn upsert_project(&self, name: &str, permalink: &str, path: &str) -> Result<i64> {
         let external_id = deterministic_uuid(&format!("project:{permalink}"));
         let name = name.to_owned();
         let permalink = permalink.to_owned();
@@ -442,10 +424,11 @@ impl Store {
             )?;
             Ok(id)
         })
+        .await
     }
 
     /// Every registered project, ordered by name (the reference merge sorts by permalink).
-    pub fn projects(&self) -> Result<Vec<ProjectRow>> {
+    pub async fn projects(&self) -> Result<Vec<ProjectRow>> {
         self.call(|conn| {
             let mut statement = conn.prepare(
                 "SELECT id, external_id, name, permalink, path FROM project ORDER BY name",
@@ -463,10 +446,11 @@ impl Store {
                 .collect::<std::result::Result<Vec<_>, _>>()?;
             Ok(rows)
         })
+        .await
     }
 
     /// Find a project by permalink.
-    pub fn project_by_permalink(&self, permalink: &str) -> Result<Option<ProjectRow>> {
+    pub async fn project_by_permalink(&self, permalink: &str) -> Result<Option<ProjectRow>> {
         let permalink = permalink.to_owned();
         self.call(move |conn| {
             let row = conn
@@ -485,14 +469,14 @@ impl Store {
                 )
                 .optional()?;
             Ok(row)
-        })
+        }).await
     }
 
     /// Insert or replace one parsed document and its semantic rows.
     ///
     /// The entity row is updated in place so ids and `created_at` stay stable
     /// across re-indexing; observations and relations are replaced atomically.
-    pub fn replace_document(
+    pub async fn replace_document(
         &mut self,
         project_id: i64,
         project_permalink: &str,
@@ -677,10 +661,11 @@ impl Store {
             tx.commit()?;
             Ok(entity_id)
         })
+        .await
     }
 
     /// Remove one indexed document (cascades to observations and relations).
-    pub fn remove_document(&mut self, project_id: i64, file_path: &str) -> Result<()> {
+    pub async fn remove_document(&mut self, project_id: i64, file_path: &str) -> Result<()> {
         let file_path = file_path.to_owned();
         self.call(move |conn| {
             let entity_id: Option<i64> = conn
@@ -699,6 +684,7 @@ impl Store {
             )?;
             Ok(())
         })
+        .await
     }
 
     /// Unregister a project and drop its derived rows. Returns whether it existed.
@@ -709,8 +695,8 @@ impl Store {
     /// `project`, but `search_index` is an FTS5 table with no foreign keys, so its rows
     /// are removed explicitly — otherwise a removed project would keep answering text
     /// searches whose target rows no longer exist.
-    pub fn delete_project(&mut self, permalink: &str) -> Result<bool> {
-        let Some(project) = self.project_by_permalink(permalink)? else {
+    pub async fn delete_project(&mut self, permalink: &str) -> Result<bool> {
+        let Some(project) = self.project_by_permalink(permalink).await? else {
             return Ok(false);
         };
         self.call(move |conn| {
@@ -727,6 +713,7 @@ impl Store {
             transaction.commit()?;
             Ok(true)
         })
+        .await
     }
 
     /// Resolve relation targets to entity ids after a rebuild.
@@ -734,7 +721,7 @@ impl Store {
     /// Targets may be an explicit permalink, a project-relative path with or
     /// without `.md`, or a bare permalink segment; the reference resolver is more
     /// elaborate and is ported incrementally.
-    pub fn resolve_relations(&self, project_id: i64) -> Result<usize> {
+    pub async fn resolve_relations(&self, project_id: i64) -> Result<usize> {
         let resolved = self.call(move |conn| {
             let mut statement = conn.prepare(
                 "SELECT r.id, r.to_name FROM relation r WHERE r.project_id = ?1 AND r.to_id IS NULL",
@@ -769,15 +756,15 @@ impl Store {
                 }
             }
             Ok(resolved)
-        })?;
+        }).await?;
         if resolved > 0 {
-            self.refresh_relation_search_rows(project_id)?;
+            self.refresh_relation_search_rows(project_id).await?;
         }
         Ok(resolved)
     }
 
     /// Rebuild relation-level search rows so titles reflect resolved targets.
-    pub fn refresh_relation_search_rows(&self, project_id: i64) -> Result<()> {
+    pub async fn refresh_relation_search_rows(&self, project_id: i64) -> Result<()> {
         self.call(move |conn| {
             #[derive(Debug)]
             struct RelationSearchSource {
@@ -850,10 +837,11 @@ impl Store {
             }
             insert_search_rows(conn, project_id, &search_rows)
         })
+        .await
     }
 
     /// Fetch one entity by internal row id.
-    pub fn entity_by_id(&self, entity_id: i64) -> Result<Option<EntityRow>> {
+    pub async fn entity_by_id(&self, entity_id: i64) -> Result<Option<EntityRow>> {
         self.call(move |conn| {
             let row = conn
                 .query_row(
@@ -864,11 +852,11 @@ impl Store {
             )
             .optional()?;
             Ok(row)
-        })
+        }).await
     }
 
     /// Fetch one entity by project-relative file path.
-    pub fn entity_by_file_path(
+    pub async fn entity_by_file_path(
         &self,
         project_id: i64,
         file_path: &str,
@@ -884,11 +872,11 @@ impl Store {
                 )
                 .optional()?;
             Ok(row)
-        })
+        }).await
     }
 
     /// Fetch one entity by permalink.
-    pub fn entity_by_permalink(
+    pub async fn entity_by_permalink(
         &self,
         project_id: i64,
         permalink: &str,
@@ -918,14 +906,14 @@ impl Store {
                 )
                 .optional()?;
             Ok(row)
-        })
+        }).await
     }
 
     /// Entities with an exactly matching title, shortest path first.
     ///
     /// Mirrors `EntityRepository.get_by_title`, which link resolution uses to break
     /// ties between same-titled notes in different folders.
-    pub fn entities_by_title(&self, project_id: i64, title: &str) -> Result<Vec<EntityRow>> {
+    pub async fn entities_by_title(&self, project_id: i64, title: &str) -> Result<Vec<EntityRow>> {
         let title = title.to_owned();
         self.call(move |conn| {
             let mut statement = conn.prepare(
@@ -937,11 +925,11 @@ impl Store {
                 .query_map(params![project_id, title], map_entity_row)?
                 .collect::<std::result::Result<Vec<_>, _>>()?;
             Ok(rows)
-        })
+        }).await
     }
 
     /// Observations owned by one entity.
-    pub fn observations_for_entity(&self, entity_id: i64) -> Result<Vec<ObservationRow>> {
+    pub async fn observations_for_entity(&self, entity_id: i64) -> Result<Vec<ObservationRow>> {
         self.call(move |conn| {
             let mut statement = conn.prepare(
                 "SELECT id, entity_id, category, content, context, tags FROM observation
@@ -962,10 +950,11 @@ impl Store {
                 .collect::<std::result::Result<Vec<_>, _>>()?;
             Ok(rows)
         })
+        .await
     }
 
     /// Note body recorded for an entity (frontmatter removed).
-    pub fn entity_content(&self, entity_id: i64) -> Option<String> {
+    pub async fn entity_content(&self, entity_id: i64) -> Option<String> {
         self.call(move |conn| {
             Ok(conn.query_row(
                 "SELECT content_snippet FROM search_index
@@ -974,13 +963,14 @@ impl Store {
                 |row| row.get::<_, Option<String>>(0),
             ))
         })
+        .await
         .ok()
         .and_then(std::result::Result::ok)
         .flatten()
     }
 
     /// Indexed creation timestamp for an entity.
-    pub fn entity_created_at(&self, entity_id: i64) -> Result<Option<String>> {
+    pub async fn entity_created_at(&self, entity_id: i64) -> Result<Option<String>> {
         self.call(move |conn| {
             let value = conn
                 .query_row(
@@ -991,13 +981,14 @@ impl Store {
                 .optional()?;
             Ok(value)
         })
+        .await
     }
 
     /// Titles and external ids for a set of entity ids.
     ///
     /// Context hydration looks entities up across projects, matching
     /// `find_by_ids_for_hydration(..., include_cross_project=True)`.
-    pub fn entity_titles_and_external_ids(
+    pub async fn entity_titles_and_external_ids(
         &self,
         entity_ids: &[i64],
     ) -> Result<HashMap<i64, (String, String)>> {
@@ -1025,6 +1016,7 @@ impl Store {
             }
             Ok(lookup)
         })
+        .await
     }
 
     /// Vectors already stored for a project, keyed by chunk key.
@@ -1032,7 +1024,7 @@ impl Store {
     /// The reference reuses a chunk's vector while its `source_hash` is unchanged
     /// (`SQLiteVecIndex.upsert` matches on `(entity_id, chunk_key, source_hash)`), so
     /// callers can skip re-embedding unchanged text.
-    pub fn vector_embeddings(
+    pub async fn vector_embeddings(
         &self,
         project_id: i64,
         model: &str,
@@ -1060,6 +1052,7 @@ impl Store {
             }
             Ok(embeddings)
         })
+        .await
     }
 
     /// Replace a project's vector index with `rows`.
@@ -1067,7 +1060,7 @@ impl Store {
     /// The reference maintains the same rows incrementally (pending → ready across
     /// worker passes); replacing them transactionally is the local equivalent and
     /// keeps changed chunks from leaving stale vectors behind.
-    pub fn replace_vector_index(
+    pub async fn replace_vector_index(
         &mut self,
         project_id: i64,
         model: &str,
@@ -1118,10 +1111,11 @@ impl Store {
             tx.commit()?;
             Ok(row_count)
         })
+        .await
     }
 
     /// Stored chunks and vectors for one project (vector-search candidates).
-    pub fn vector_chunks(&self, project_id: i64, model: &str) -> Result<Vec<VectorChunkRow>> {
+    pub async fn vector_chunks(&self, project_id: i64, model: &str) -> Result<Vec<VectorChunkRow>> {
         let model = model.to_owned();
         self.call(move |conn| {
             let mut statement = conn.prepare(
@@ -1146,12 +1140,17 @@ impl Store {
                 })?;
             Ok(rows.collect::<std::result::Result<Vec<_>, _>>()?)
         })
+        .await
     }
 
     /// `search_index` rows for the given ids, in the reference hydration shape.
     ///
     /// Ids collide across row types, so callers key the results by `(type, id)`.
-    pub fn search_rows_by_ids(&self, project_id: i64, ids: &[i64]) -> Result<Vec<SearchRowView>> {
+    pub async fn search_rows_by_ids(
+        &self,
+        project_id: i64,
+        ids: &[i64],
+    ) -> Result<Vec<SearchRowView>> {
         if ids.is_empty() {
             return Ok(Vec::new());
         }
@@ -1190,10 +1189,11 @@ impl Store {
             )?;
             Ok(rows.collect::<std::result::Result<Vec<_>, _>>()?)
         })
+        .await
     }
 
     /// `(permalink, external_id)` for the given entity ids.
-    pub fn entity_permalinks_and_external_ids(
+    pub async fn entity_permalinks_and_external_ids(
         &self,
         entity_ids: &[i64],
     ) -> Result<HashMap<i64, (Option<String>, String)>> {
@@ -1224,6 +1224,7 @@ impl Store {
             }
             Ok(lookup)
         })
+        .await
     }
 
     /// Traverse the relation graph from `roots`, mirroring reference `find_related`.
@@ -1235,7 +1236,7 @@ impl Store {
     /// `since` filters rows exactly where the reference does — the seed entity,
     /// the relation source, and the connected entity's `created_at`, plus the
     /// relation's own timestamp for the entity hop.
-    pub fn find_related(
+    pub async fn find_related(
         &self,
         project_id: i64,
         roots: &[i64],
@@ -1284,10 +1285,11 @@ impl Store {
                 .collect::<std::result::Result<Vec<_>, _>>()?;
             Ok(rows)
         })
+        .await
     }
 
     /// Every relation edge in a project with entity titles resolved.
-    pub fn relation_edges(&self) -> Result<Vec<crate::graph::RelationEdge>> {
+    pub async fn relation_edges(&self) -> Result<Vec<crate::graph::RelationEdge>> {
         self.call(|conn| {
             let mut statement = conn.prepare(
                 "SELECT r.id, r.from_id, r.to_id, r.to_name, r.relation_type, r.context,
@@ -1319,10 +1321,11 @@ impl Store {
                 .collect::<std::result::Result<Vec<_>, _>>()?;
             Ok(rows)
         })
+        .await
     }
 
     /// Every indexed file path for a project (used by reconciliation).
-    pub fn file_paths(&self, project_id: i64) -> Result<Vec<String>> {
+    pub async fn file_paths(&self, project_id: i64) -> Result<Vec<String>> {
         self.call(move |conn| {
             let mut statement = conn
                 .prepare("SELECT file_path FROM entity WHERE project_id = ?1 ORDER BY file_path")?;
@@ -1331,13 +1334,14 @@ impl Store {
                 .collect::<std::result::Result<Vec<String>, _>>()?;
             Ok(rows)
         })
+        .await
     }
 
     /// Move an indexed document to a new path, optionally updating its permalink.
     ///
     /// Returns `true` when a row was moved. The caller re-indexes the new path
     /// afterwards so content, checksum, and semantic rows are refreshed.
-    pub fn move_document(
+    pub async fn move_document(
         &mut self,
         project_id: i64,
         from: &str,
@@ -1361,7 +1365,7 @@ impl Store {
             };
             tx.commit()?;
             Ok(updated > 0)
-        })
+        }).await
     }
 
     /// Entities under a directory prefix, in the reference repository's row order.
@@ -1370,7 +1374,7 @@ impl Store {
     /// returns every entity, anything else matches `file_path LIKE '<prefix>/%'`. The
     /// pattern is passed through to SQLite, so `_`/`%` keep their `LIKE` meaning and
     /// ASCII matching stays case-insensitive — the same quirks the reference inherits.
-    pub fn directory_rows(
+    pub async fn directory_rows(
         &self,
         project_id: i64,
         directory_prefix: &str,
@@ -1397,10 +1401,11 @@ impl Store {
             }
             Ok(rows)
         })
+        .await
     }
 
     /// List entities for a project, ordered by file path.
-    pub fn entities(&self, project_id: i64) -> Result<Vec<EntityRow>> {
+    pub async fn entities(&self, project_id: i64) -> Result<Vec<EntityRow>> {
         self.call(move |conn| {
             let mut statement = conn.prepare(
                 "SELECT id, external_id, title, note_type, permalink, file_path, checksum, entity_metadata
@@ -1424,11 +1429,11 @@ impl Store {
                 })?
                 .collect::<std::result::Result<Vec<_>, _>>()?;
             Ok(rows)
-        })
+        }).await
     }
 
     /// List observations for a project, ordered by entity id then insertion order.
-    pub fn observations(&self, project_id: i64) -> Result<Vec<ObservationRow>> {
+    pub async fn observations(&self, project_id: i64) -> Result<Vec<ObservationRow>> {
         self.call(move |conn| {
             let mut statement = conn.prepare(
                 "SELECT id, entity_id, category, content, context, tags
@@ -1449,10 +1454,11 @@ impl Store {
                 .collect::<std::result::Result<Vec<_>, _>>()?;
             Ok(rows)
         })
+        .await
     }
 
     /// List relations for a project, ordered by source entity then insertion order.
-    pub fn relations(&self, project_id: i64) -> Result<Vec<RelationRow>> {
+    pub async fn relations(&self, project_id: i64) -> Result<Vec<RelationRow>> {
         self.call(move |conn| {
             let mut statement = conn.prepare(
                 "SELECT from_id, to_id, to_name, relation_type, context
@@ -1471,10 +1477,11 @@ impl Store {
                 .collect::<std::result::Result<Vec<_>, _>>()?;
             Ok(rows)
         })
+        .await
     }
 
     /// Row counts for a project.
-    pub fn counts(&self, project_id: i64) -> Result<Counts> {
+    pub async fn counts(&self, project_id: i64) -> Result<Counts> {
         self.call(move |conn| {
             let count = |table: &str| -> Result<i64> {
                 let sql = format!("SELECT count(*) FROM {table} WHERE project_id = ?1");
@@ -1486,6 +1493,7 @@ impl Store {
                 relations: count("relation")?,
             })
         })
+        .await
     }
 }
 
@@ -1622,25 +1630,26 @@ mod tests {
     use super::*;
     use crate::markdown::parse_document;
 
-    fn store() -> Store {
-        Store::open_in_memory().expect("store")
+    async fn store() -> Store {
+        Store::open_in_memory().await.expect("store")
     }
 
-    #[test]
-    fn schema_version_and_fts5_are_available() {
-        let store = store();
+    #[tokio::test(flavor = "multi_thread")]
+    async fn schema_version_and_fts5_are_available() {
+        let store = store().await;
         assert_eq!(
-            store.schema_version().expect("version"),
+            store.schema_version().await.expect("version"),
             schema::SCHEMA_VERSION
         );
-        assert!(store.has_fts5(), "bundled SQLite must provide FTS5");
+        assert!(store.has_fts5().await, "bundled SQLite must provide FTS5");
     }
 
-    #[test]
-    fn replacing_a_document_is_idempotent() {
-        let mut store = store();
+    #[tokio::test(flavor = "multi_thread")]
+    async fn replacing_a_document_is_idempotent() {
+        let mut store = store().await;
         let project_id = store
             .upsert_project("oracle", "oracle", "/tmp/vault")
+            .await
             .expect("project");
         let document = parse_document(
             "notes/simple.md",
@@ -1657,6 +1666,7 @@ mod tests {
                 &document,
                 &DocumentTimestamps::now(),
             )
+            .await
             .expect("first");
         store
             .replace_document(
@@ -1667,19 +1677,21 @@ mod tests {
                 &document,
                 &DocumentTimestamps::now(),
             )
+            .await
             .expect("second");
 
-        let counts = store.counts(project_id).expect("counts");
+        let counts = store.counts(project_id).await.expect("counts");
         assert_eq!(counts.entities, 1);
         assert_eq!(counts.observations, 1);
         assert_eq!(counts.relations, 1);
     }
 
-    #[test]
-    fn removing_a_document_cascades() {
-        let mut store = store();
+    #[tokio::test(flavor = "multi_thread")]
+    async fn removing_a_document_cascades() {
+        let mut store = store().await;
         let project_id = store
             .upsert_project("oracle", "oracle", "/tmp/vault")
+            .await
             .expect("project");
         let document = parse_document("a.md", "- [fact] x\n").expect("parse");
         store
@@ -1691,9 +1703,13 @@ mod tests {
                 &document,
                 &DocumentTimestamps::now(),
             )
+            .await
             .expect("insert");
-        store.remove_document(project_id, "a.md").expect("remove");
-        let counts = store.counts(project_id).expect("counts");
+        store
+            .remove_document(project_id, "a.md")
+            .await
+            .expect("remove");
+        let counts = store.counts(project_id).await.expect("counts");
         assert_eq!(counts.entities, 0);
         assert_eq!(counts.observations, 0);
     }

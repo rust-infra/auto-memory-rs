@@ -14,11 +14,12 @@ mod common;
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::net::TcpStream;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use auto_memory::adapters::mcp::http::{HttpServer, bind, serve_on};
 use common::indexed_store;
 use serde_json::{Value, json};
+use tokio::sync::Mutex;
 
 /// One HTTP response, decoded enough to assert on.
 struct Response {
@@ -152,8 +153,7 @@ fn dechunk(raw: &[u8]) -> String {
 /// A server over the fixture vault, listening on an ephemeral port.
 async fn spawn(read_only: bool, tag: &str) -> (common::Scratch, std::net::SocketAddr) {
     let (scratch, store, project_id) = indexed_store(tag);
-    let external_id = store
-        .project_by_permalink("oracle")
+    let external_id = common::block_on(store.project_by_permalink("oracle"))
         .expect("read project")
         .expect("project row")
         .external_id;

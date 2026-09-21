@@ -13,8 +13,8 @@ use auto_memory::storage::Store;
 mod common;
 use common::Scratch;
 
-#[test]
-fn created_at_is_the_insert_time_and_updated_at_is_the_file_mtime() {
+#[tokio::test(flavor = "multi_thread")]
+async fn created_at_is_the_insert_time_and_updated_at_is_the_file_mtime() {
     let dir = Scratch::new("fresh");
     let vault = dir.join("vault");
     fs::create_dir_all(&vault).expect("vault");
@@ -38,9 +38,10 @@ fn created_at_is_the_insert_time_and_updated_at_is_the_file_mtime() {
     );
     std::thread::sleep(Duration::from_millis(1100));
 
-    let mut store = Store::open_in_memory().expect("store");
+    let mut store = Store::open_in_memory().await.expect("store");
     let project_id = store
         .upsert_project("oracle", "oracle", &vault.to_string_lossy())
+        .await
         .expect("project");
     rebuild_vault(
         &mut store,
@@ -48,18 +49,22 @@ fn created_at_is_the_insert_time_and_updated_at_is_the_file_mtime() {
         &vault,
         &RebuildOptions::new("oracle"),
     )
+    .await
     .expect("rebuild");
 
     let entity = store
         .entity_by_file_path(project_id, "note.md")
+        .await
         .expect("lookup")
         .expect("indexed");
     let created = store
         .entity_created_at(entity.id)
+        .await
         .expect("created")
         .expect("a row always has created_at");
     let updated = store
         .search_rows_by_ids(project_id, &[entity.id])
+        .await
         .expect("search rows")
         .first()
         .and_then(|row| row.updated_at.clone())
@@ -80,15 +85,17 @@ fn created_at_is_the_insert_time_and_updated_at_is_the_file_mtime() {
     .expect("write");
     let mut service =
         IndexService::new(&mut store, project_id, &vault, IndexOptions::new("oracle"));
-    service.force_index_file("note.md").expect("reindex");
+    service.force_index_file("note.md").await.expect("reindex");
     let same = store
         .entity_by_file_path(project_id, "note.md")
+        .await
         .expect("lookup");
     let same = same.expect("still indexed");
     assert_eq!(same.id, entity.id, "the row keeps its identity");
     assert_eq!(
         store
             .entity_created_at(same.id)
+            .await
             .expect("created")
             .expect("created_at"),
         created,

@@ -141,8 +141,8 @@ fn project_add_refuses_a_missing_vault() {
 
 /// Removing a project drops its derived rows — including the FTS rows, which have no
 /// foreign key to cascade them — and leaves the markdown vault alone.
-#[test]
-fn project_remove_drops_the_index_and_keeps_the_vault() {
+#[tokio::test(flavor = "multi_thread")]
+async fn project_remove_drops_the_index_and_keeps_the_vault() {
     let (_dir, vault, index) = scratch();
     let (payload, ok) = run_json(&[
         "project",
@@ -168,13 +168,15 @@ fn project_remove_drops_the_index_and_keeps_the_vault() {
 
     // The search rows must be gone too, or a removed project would keep answering
     // searches whose target rows no longer exist.
-    let store = auto_memory::storage::Store::open(Path::new(&index)).expect("store");
+    let store = auto_memory::storage::Store::open(Path::new(&index))
+        .await
+        .expect("store");
     assert_eq!(
-        store.search_index_count().expect("search rows"),
+        store.search_index_count().await.expect("search rows"),
         0,
         "FTS rows survived the project deletion"
     );
-    assert_eq!(store.projects().expect("projects").len(), 0);
+    assert_eq!(store.projects().await.expect("projects").len(), 0);
 
     // The vault is the source of truth and must be untouched.
     assert_eq!(

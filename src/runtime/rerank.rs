@@ -40,7 +40,7 @@ pub struct RerankRequest<'a> {
 }
 
 /// A cross-encoder scorer.
-pub trait RerankProvider {
+pub trait RerankProvider: Send + Sync {
     /// Score every document against `query`, in input order, each in `[0, 1]`.
     fn rerank(&self, query: &str, documents: &[String]) -> Result<Vec<f32>>;
     /// Model identifier.

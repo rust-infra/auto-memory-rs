@@ -1,12 +1,9 @@
-//! Tokio runtime plumbing for the two event-loop surfaces (`mcp`, `watch`).
+//! Tokio runtime plumbing for the async CLI and event-loop surfaces.
 //!
-//! Only those two commands build a runtime. Every other subcommand is a one-shot
-//! pass over the vault or the index, so it stays synchronous: paying for a worker
-//! pool at startup to run `search` or `status` would be cost without benefit. The
-//! rule behind that split is `docs/auto-memory-rs-spec.md` §6 — CPU- and
-//! database-bound work stays synchronous; async covers transport, event loops and
-//! background work. `docs/patterns.md` records where the boundary sits and what
-//! would move it.
+//! Database-backed subcommands build a runtime and await the shared async application
+//! services; `parse` remains synchronous because it is pure CPU/parsing work. CPU-heavy
+//! ONNX work still moves to the blocking pool. See `docs/auto-memory-rs-spec.md` §6 and
+//! `docs/patterns.md` for the boundary.
 
 use std::future::Future;
 

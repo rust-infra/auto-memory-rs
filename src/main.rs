@@ -15,8 +15,9 @@ use std::process::ExitCode;
 
 use clap::{Args, Parser, Subcommand};
 use serde_json::{Value, json};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::Duration;
+use tokio::sync::Mutex;
 
 use auto_memory::adapters::mcp::http::{
     DEFAULT_HTTP_HOST, DEFAULT_HTTP_PATH, DEFAULT_HTTP_PORT, HttpServer, serve,
@@ -468,16 +469,14 @@ fn main() -> ExitCode {
     }
     match Cli::parse().command {
         Command::Parse { path } => parse_command(&path),
-        Command::Reindex(args) => reindex_command(args),
-        Command::Status(args) => status_command(args),
-        Command::Doctor(args) => doctor_command(args),
-        Command::Project(command) => project_command(command),
-        Command::Search(args) => search_command(args),
-        Command::Context(args) => context_command(args),
-        Command::Schema(command) => schema_command(command),
-        Command::Hook(args) => hook_command(args),
-        // The two event-loop surfaces run on a tokio runtime; everything else is a
-        // one-shot pass over the vault or the index and stays synchronous.
+        Command::Reindex(args) => async_command(reindex_command(args)),
+        Command::Status(args) => async_command(status_command(args)),
+        Command::Doctor(args) => async_command(doctor_command(args)),
+        Command::Project(command) => async_command(project_command(command)),
+        Command::Search(args) => async_command(search_command(args)),
+        Command::Context(args) => async_command(context_command(args)),
+        Command::Schema(command) => async_command(schema_command(command)),
+        Command::Hook(args) => async_command(hook_command(args)),
         Command::Watch(args) => async_command(watch_command(args)),
         Command::Mcp(args) => async_command(mcp_command(args)),
     }
@@ -539,24 +538,26 @@ fn async_command(future: impl Future<Output = ExitCode>) -> ExitCode {
 /// `output_format="json"` and print the result through
 /// `json.dumps(..., indent=2, ensure_ascii=True, default=str)`. `--text` prints the
 /// MCP text surface instead (the markdown report or the guidance block).
-fn schema_command(command: SchemaCommand) -> ExitCode {
+async fn schema_command(command: SchemaCommand) -> ExitCode {
     match command {
-        SchemaCommand::Validate(args) => schema_validate_command(args),
-        SchemaCommand::Infer(args) => schema_infer_command(args),
-        SchemaCommand::Diff(args) => schema_diff_command(args),
+        SchemaCommand::Validate(args) => schema_validate_command(args).await,
+        SchemaCommand::Infer(args) => schema_infer_command(args).await,
+        SchemaCommand::Diff(args) => schema_diff_command(args).await,
     }
 }
 
 /// Open the index and resolve the project (and vault) a schema command runs against.
-fn schema_context(
+async fn schema_context(
     index: &Path,
     permalink: &str,
     vault: Option<&Path>,
 ) -> Result<(Store, i64, PathBuf), String> {
     let store = Store::open(index)
+        .await
         .map_err(|error| format!("failed to open index {}: {error}", index.display()))?;
     let project = store
         .project_by_permalink(permalink)
+        .await
         .map_err(|error| format!("failed to read project: {error}"))?
         .ok_or_else(|| format!("project not found: {permalink}"))?;
     // Schema definitions are read from their files, so the vault matters: it defaults
@@ -565,12 +566,14 @@ fn schema_context(
     Ok((store, project.id, vault))
 }
 
-fn schema_validate_command(args: SchemaArgs) -> ExitCode {
+async fn schema_validate_command(args: SchemaArgs) -> ExitCode {
     let (store, project_id, vault) = match schema_context(
         &args.common.index,
         &args.common.project,
         args.common.vault.as_deref(),
-    ) {
+    )
+    .await
+    {
         Ok(context) => context,
         Err(message) => return usage(&message),
     };
@@ -584,18 +587,19 @@ fn schema_validate_command(args: SchemaArgs) -> ExitCode {
     };
 
     let service = SchemaService::new(&store, project_id, &vault);
-    let outcome = schema_tools::validate(&service, note_type, identifier);
+    let outcome = schema_tools::validate(&service, note_type, identifier).await;
     let payload = outcome.payload();
+    let text = outcome.text();
     let status = if args.strict && payload["error_count"].as_u64().unwrap_or(0) > 0 {
         ExitCode::FAILURE
     } else {
         ExitCode::SUCCESS
     };
-    print_schema_outcome(&payload, &outcome.text(), args.text);
+    print_schema_outcome(&payload, &text, args.text);
     status
 }
 
-fn schema_infer_command(args: SchemaInferArgs) -> ExitCode {
+async fn schema_infer_command(args: SchemaInferArgs) -> ExitCode {
     let threshold = args
         .threshold
         .unwrap_or(auto_memory::application::schema::OPTIONAL_THRESHOLD);
@@ -603,18 +607,22 @@ fn schema_infer_command(args: SchemaInferArgs) -> ExitCode {
         &args.common.index,
         &args.common.project,
         args.common.vault.as_deref(),
-    ) {
+    )
+    .await
+    {
         Ok(context) => context,
         Err(message) => return usage(&message),
     };
 
     let service = SchemaService::new(&store, project_id, &vault);
-    let outcome = schema_tools::infer(&service, &args.note_type, threshold);
-    print_schema_outcome(&outcome.payload(), &outcome.text(), args.text);
+    let outcome = schema_tools::infer(&service, &args.note_type, threshold).await;
+    let payload = outcome.payload();
+    let text = outcome.text();
+    print_schema_outcome(&payload, &text, args.text);
     ExitCode::SUCCESS
 }
 
-fn schema_diff_command(args: SchemaArgs) -> ExitCode {
+async fn schema_diff_command(args: SchemaArgs) -> ExitCode {
     let Some(note_type) = args.target.clone() else {
         return usage("schema diff requires a note type");
     };
@@ -622,14 +630,18 @@ fn schema_diff_command(args: SchemaArgs) -> ExitCode {
         &args.common.index,
         &args.common.project,
         args.common.vault.as_deref(),
-    ) {
+    )
+    .await
+    {
         Ok(context) => context,
         Err(message) => return usage(&message),
     };
 
     let service = SchemaService::new(&store, project_id, &vault);
-    let outcome = schema_tools::diff(&service, &note_type);
-    print_schema_outcome(&outcome.payload(), &outcome.text(), args.text);
+    let outcome = schema_tools::diff(&service, &note_type).await;
+    let payload = outcome.payload();
+    let text = outcome.text();
+    print_schema_outcome(&payload, &text, args.text);
     ExitCode::SUCCESS
 }
 
@@ -648,7 +660,7 @@ fn print_schema_outcome(payload: &serde_json::Value, text: &str, text_surface: b
 /// prints context on stdout; stdout stays clean because the verb prints exactly
 /// once. Every failure is **fail-open** (exit 0): a hook is advisory and must
 /// never disrupt an agent session.
-fn hook_command(args: HookArgs) -> ExitCode {
+async fn hook_command(args: HookArgs) -> ExitCode {
     let harness = match args.harness.as_deref() {
         None => Harness::Claude,
         Some(value) => match Harness::parse(value) {
@@ -662,7 +674,7 @@ fn hook_command(args: HookArgs) -> ExitCode {
     };
     // A hook verb never fails the caller; diagnostics go to stderr and the
     // process still exits 0.
-    if let Err(message) = run_hook(&args.verb, harness, &args) {
+    if let Err(message) = run_hook(&args.verb, harness, &args).await {
         tracing::warn!("hook {} failed: {message}", args.verb);
         eprintln!("auto-memory hook {}: {message}", args.verb);
     }
@@ -670,7 +682,7 @@ fn hook_command(args: HookArgs) -> ExitCode {
 }
 
 /// Run one hook verb. `Err` is a diagnostic, not a failure.
-fn run_hook(verb: &str, harness: Harness, args: &HookArgs) -> Result<(), String> {
+async fn run_hook(verb: &str, harness: Harness, args: &HookArgs) -> Result<(), String> {
     let hook_event = match verb {
         "session-start" => HookEvent::SessionStarted,
         "pre-compact" => HookEvent::CompactionImminent,
@@ -710,9 +722,11 @@ fn run_hook(verb: &str, harness: Harness, args: &HookArgs) -> Result<(), String>
         .or_else(|| std::env::var_os("AUTO_MEMORY_INDEX").map(PathBuf::from))
         .unwrap_or_else(default_index_path);
     let store = Store::open(&index)
+        .await
         .map_err(|error| format!("failed to open index {}: {error}", index.display()))?;
     let Some(project) = store
         .project_by_permalink(&permalink)
+        .await
         .map_err(|error| format!("failed to read project {permalink}: {error}"))?
     else {
         return Err(format!("project not found: {permalink}"));
@@ -733,7 +747,8 @@ fn run_hook(verb: &str, harness: Harness, args: &HookArgs) -> Result<(), String>
         &settings,
         configured,
         checkpoint.as_deref(),
-    );
+    )
+    .await;
     let brief: String = brief
         .chars()
         .take(auto_memory::hooks::profiles::MAX_BRIEF_CHARS)
@@ -772,16 +787,16 @@ fn default_index_path() -> PathBuf {
 /// server and tell the caller to use the CLI, and until now that meant hand-editing the
 /// index. The argument shape is the reference's (`project add <name> <path>`) so the
 /// refusal text only has to differ by the binary name.
-fn project_command(command: ProjectCommand) -> ExitCode {
+async fn project_command(command: ProjectCommand) -> ExitCode {
     match command {
-        ProjectCommand::Add(args) => project_add_command(args),
-        ProjectCommand::List(args) => project_list_command(args),
-        ProjectCommand::Remove(args) => project_remove_command(args),
+        ProjectCommand::Add(args) => project_add_command(args).await,
+        ProjectCommand::List(args) => project_list_command(args).await,
+        ProjectCommand::Remove(args) => project_remove_command(args).await,
     }
 }
 
 /// `project add <name> <path>` — register a vault, then index it.
-fn project_add_command(args: ProjectAddArgs) -> ExitCode {
+async fn project_add_command(args: ProjectAddArgs) -> ExitCode {
     let ProjectAddArgs {
         name,
         path,
@@ -799,27 +814,30 @@ fn project_add_command(args: ProjectAddArgs) -> ExitCode {
     let permalink = permalink.unwrap_or_else(|| generate_permalink(&name));
     let index = index.unwrap_or_else(default_index_path);
 
-    let mut store = match Store::open(&index) {
+    let mut store = match Store::open(&index).await {
         Ok(store) => store,
         Err(error) => {
             eprintln!("failed to open index {}: {error}", index.display());
             return ExitCode::FAILURE;
         }
     };
-    let existed = matches!(store.project_by_permalink(&permalink), Ok(Some(_)));
+    let existed = matches!(store.project_by_permalink(&permalink).await, Ok(Some(_)));
 
     // Registering without indexing leaves a project that every query reports as empty,
     // which reads as a bug; index by default and let `--no-index` opt out.
     let indexed = if no_index {
         store
             .upsert_project(&name, &permalink, &path.to_string_lossy())
+            .await
             .map(|_| None::<Value>)
     } else {
-        ensure_project(&mut store, &name, &permalink, &path).and_then(|project_id| {
-            store
+        match ensure_project(&mut store, &name, &permalink, &path).await {
+            Ok(project_id) => store
                 .counts(project_id)
-                .map(|counts| Some(serde_json::to_value(counts).unwrap_or(Value::Null)))
-        })
+                .await
+                .map(|counts| Some(serde_json::to_value(counts).unwrap_or(Value::Null))),
+            Err(error) => Err(error),
+        }
     };
     let indexed = match indexed {
         Ok(indexed) => indexed,
@@ -859,17 +877,17 @@ fn project_add_command(args: ProjectAddArgs) -> ExitCode {
 }
 
 /// `project list` — every registered project with its index counts.
-fn project_list_command(args: ProjectListArgs) -> ExitCode {
+async fn project_list_command(args: ProjectListArgs) -> ExitCode {
     let ProjectListArgs { index, json } = args;
     let index = index.unwrap_or_else(default_index_path);
-    let store = match Store::open(&index) {
+    let store = match Store::open(&index).await {
         Ok(store) => store,
         Err(error) => {
             eprintln!("failed to open index {}: {error}", index.display());
             return ExitCode::FAILURE;
         }
     };
-    let projects = match store.projects() {
+    let projects = match store.projects().await {
         Ok(projects) => projects,
         Err(error) => {
             eprintln!("failed to read projects: {error}");
@@ -877,9 +895,9 @@ fn project_list_command(args: ProjectListArgs) -> ExitCode {
         }
     };
     // Counts come per project; a failure there should not hide the project list.
-    let rows: Vec<Value> = projects
-        .iter()
-        .map(|project| match store.counts(project.id) {
+    let mut rows: Vec<Value> = Vec::with_capacity(projects.len());
+    for project in &projects {
+        rows.push(match store.counts(project.id).await {
             Ok(counts) => json!({
                 "name": project.name,
                 "permalink": project.permalink,
@@ -894,8 +912,8 @@ fn project_list_command(args: ProjectListArgs) -> ExitCode {
                 "path": project.path,
                 "error": error.to_string(),
             }),
-        })
-        .collect();
+        });
+    }
 
     if json {
         print_json(&json!({ "index": index.to_string_lossy(), "projects": rows }))
@@ -932,14 +950,14 @@ fn project_list_command(args: ProjectListArgs) -> ExitCode {
 ///
 /// The vault is left alone: it is the source of truth, and deleting a user's notes is
 /// not something a project-lifecycle command should ever do.
-fn project_remove_command(args: ProjectRemoveArgs) -> ExitCode {
+async fn project_remove_command(args: ProjectRemoveArgs) -> ExitCode {
     let ProjectRemoveArgs {
         identifier,
         index,
         json,
     } = args;
     let index = index.unwrap_or_else(default_index_path);
-    let mut store = match Store::open(&index) {
+    let mut store = match Store::open(&index).await {
         Ok(store) => store,
         Err(error) => {
             eprintln!("failed to open index {}: {error}", index.display());
@@ -948,11 +966,11 @@ fn project_remove_command(args: ProjectRemoveArgs) -> ExitCode {
     };
     // Accept either the name or the permalink: the reference's CLI takes the name, but
     // the permalink is what every other command here uses to identify a project.
-    let permalink = match store.project_by_permalink(&identifier) {
+    let permalink = match store.project_by_permalink(&identifier).await {
         Ok(Some(_)) => identifier.clone(),
         _ => generate_permalink(&identifier),
     };
-    match store.delete_project(&permalink) {
+    match store.delete_project(&permalink).await {
         Ok(true) => {
             if json {
                 print_json(&json!({ "name": identifier, "permalink": permalink, "deleted": true }))
@@ -1021,7 +1039,7 @@ impl Check {
 /// warning, not a failure: text search, context, schema, and the MCP server do not need
 /// it, and treating an optional capability as a broken installation would make the
 /// command useless in exactly the setups it exists for.
-fn doctor_command(args: DoctorArgs) -> ExitCode {
+async fn doctor_command(args: DoctorArgs) -> ExitCode {
     let DoctorArgs {
         index,
         vault,
@@ -1037,7 +1055,7 @@ fn doctor_command(args: DoctorArgs) -> ExitCode {
     // does not exist: a diagnostic that writes is a diagnostic you cannot trust.
     let index = index.unwrap_or_else(default_index_path);
     let store = if index.exists() {
-        match Store::open(&index) {
+        match Store::open(&index).await {
             Ok(store) => {
                 checks.push(Check::ok("index", index.display().to_string()));
                 Some(store)
@@ -1062,7 +1080,7 @@ fn doctor_command(args: DoctorArgs) -> ExitCode {
         None
     };
     if let Some(store) = &store {
-        match store.schema_version() {
+        match store.schema_version().await {
             Ok(version) => checks.push(Check::ok(
                 "schema",
                 format!(
@@ -1072,7 +1090,7 @@ fn doctor_command(args: DoctorArgs) -> ExitCode {
             )),
             Err(error) => checks.push(Check::fail("schema", error.to_string())),
         }
-        match store.projects() {
+        match store.projects().await {
             Ok(projects) if projects.is_empty() => checks.push(Check::warn(
                 "projects",
                 "none registered — run `auto-memory project add <name> <path>`",
@@ -1121,8 +1139,11 @@ fn doctor_command(args: DoctorArgs) -> ExitCode {
         }
     }
     if let (Some(permalink), Some(store)) = (project.as_deref(), store.as_ref()) {
-        match store.project_by_permalink(&generate_permalink(permalink)) {
-            Ok(Some(project)) => match store.counts(project.id) {
+        match store
+            .project_by_permalink(&generate_permalink(permalink))
+            .await
+        {
+            Ok(Some(project)) => match store.counts(project.id).await {
                 Ok(counts) if counts.entities == 0 => checks.push(Check::warn(
                     "project",
                     format!("'{}' is registered but its index is empty", project.name),
@@ -1275,7 +1296,7 @@ fn parse_command(path: &Path) -> ExitCode {
     }
 }
 
-fn reindex_command(args: ReindexArgs) -> ExitCode {
+async fn reindex_command(args: ReindexArgs) -> ExitCode {
     let ReindexArgs {
         vault,
         index,
@@ -1298,14 +1319,17 @@ fn reindex_command(args: ReindexArgs) -> ExitCode {
     };
     let permalink = generate_permalink(&name);
 
-    let mut store = match Store::open(&index) {
+    let mut store = match Store::open(&index).await {
         Ok(store) => store,
         Err(error) => {
             eprintln!("failed to open index {}: {error}", index.display());
             return ExitCode::FAILURE;
         }
     };
-    let project_id = match store.upsert_project(&name, &permalink, &vault.to_string_lossy()) {
+    let project_id = match store
+        .upsert_project(&name, &permalink, &vault.to_string_lossy())
+        .await
+    {
         Ok(id) => id,
         Err(error) => {
             eprintln!("failed to register project: {error}");
@@ -1319,7 +1343,7 @@ fn reindex_command(args: ReindexArgs) -> ExitCode {
     // is reconciled first so an embeddings-only run still sees the vault (the
     // reference runs `reindex --full --search` followed by `--embeddings`).
     if embeddings {
-        if let Err(error) = service.reconcile() {
+        if let Err(error) = service.reconcile().await {
             eprintln!("incremental reindex failed: {error}");
             return ExitCode::FAILURE;
         }
@@ -1330,7 +1354,7 @@ fn reindex_command(args: ReindexArgs) -> ExitCode {
                 return ExitCode::FAILURE;
             }
         };
-        return match service.reindex_embeddings(provider.as_ref()) {
+        return match service.reindex_embeddings(provider.as_ref()).await {
             Ok(report) => print_json(&report),
             Err(error) => {
                 eprintln!("embedding reindex failed: {error}");
@@ -1340,7 +1364,7 @@ fn reindex_command(args: ReindexArgs) -> ExitCode {
     }
 
     if full {
-        match service.full_rebuild() {
+        match service.full_rebuild().await {
             Ok(report) => print_json(&report),
             Err(error) => {
                 eprintln!("full reindex failed: {error}");
@@ -1348,7 +1372,7 @@ fn reindex_command(args: ReindexArgs) -> ExitCode {
             }
         }
     } else {
-        match service.reconcile() {
+        match service.reconcile().await {
             Ok(report) => print_json(&report),
             Err(error) => {
                 eprintln!("incremental reindex failed: {error}");
@@ -1387,14 +1411,14 @@ async fn mcp_command(args: McpArgs) -> ExitCode {
     };
     let permalink = generate_permalink(&name);
 
-    let mut store = match Store::open(&index) {
+    let mut store = match Store::open(&index).await {
         Ok(store) => store,
         Err(error) => {
             eprintln!("failed to open index {}: {error}", index.display());
             return ExitCode::FAILURE;
         }
     };
-    let project_id = match ensure_project(&mut store, &name, &permalink, &vault) {
+    let project_id = match ensure_project(&mut store, &name, &permalink, &vault).await {
         Ok(project_id) => project_id,
         Err(error) => {
             eprintln!("failed to prepare the project: {error}");
@@ -1402,7 +1426,7 @@ async fn mcp_command(args: McpArgs) -> ExitCode {
         }
     };
 
-    let external_id = match store.project_by_permalink(&permalink) {
+    let external_id = match store.project_by_permalink(&permalink).await {
         Ok(Some(project)) => project.external_id,
         Ok(None) => {
             eprintln!("project not registered: {permalink}");
@@ -1598,14 +1622,17 @@ async fn watch_command(args: WatchArgs) -> ExitCode {
         ),
     };
     let permalink = generate_permalink(&name);
-    let mut store = match Store::open(&index) {
+    let mut store = match Store::open(&index).await {
         Ok(store) => store,
         Err(error) => {
             eprintln!("failed to open index {}: {error}", index.display());
             return ExitCode::FAILURE;
         }
     };
-    let project_id = match store.upsert_project(&name, &permalink, &vault.to_string_lossy()) {
+    let project_id = match store
+        .upsert_project(&name, &permalink, &vault.to_string_lossy())
+        .await
+    {
         Ok(id) => id,
         Err(error) => {
             eprintln!("failed to register project: {error}");
@@ -1630,7 +1657,7 @@ async fn watch_command(args: WatchArgs) -> ExitCode {
     );
     // The reconcile is a full vault pass (read, parse, write); like the per-batch
     // indexing below it runs off the reactor.
-    let reconciled = match tokio::task::block_in_place(|| service.reconcile()) {
+    let reconciled = match service.reconcile().await {
         Ok(report) => report,
         Err(error) => {
             eprintln!("initial reconcile failed: {error}");
@@ -1649,7 +1676,7 @@ async fn watch_command(args: WatchArgs) -> ExitCode {
     let watcher = VaultWatcher::new(service, &vault).with_window(window);
     if once {
         // The one-shot path is a bounded blocking collect; keep it off the reactor.
-        return match tokio::task::block_in_place(|| watch_once(watcher, window)) {
+        return match watch_once(watcher, window).await {
             Ok(applied) => {
                 log_batch("one-shot batch", &applied);
                 print_json(&serde_json::json!({
@@ -1680,19 +1707,19 @@ async fn watch_command(args: WatchArgs) -> ExitCode {
 fn log_batch(label: &str, report: &auto_memory::indexing::WatchReport) {
     auto_memory::indexing::log_watch_report(label, report);
 }
-fn status_command(args: StatusArgs) -> ExitCode {
+async fn status_command(args: StatusArgs) -> ExitCode {
     let StatusArgs {
         index,
         project: permalink,
     } = args;
-    let store = match Store::open(&index) {
+    let store = match Store::open(&index).await {
         Ok(store) => store,
         Err(error) => {
             eprintln!("failed to open index {}: {error}", index.display());
             return ExitCode::FAILURE;
         }
     };
-    let project = match store.project_by_permalink(&permalink) {
+    let project = match store.project_by_permalink(&permalink).await {
         Ok(Some(project)) => project,
         Ok(None) => {
             eprintln!("project not found: {permalink}");
@@ -1703,7 +1730,7 @@ fn status_command(args: StatusArgs) -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    match store.counts(project.id) {
+    match store.counts(project.id).await {
         Ok(counts) => print_json(&counts),
         Err(error) => {
             eprintln!("failed to read counts: {error}");
@@ -1716,7 +1743,7 @@ fn status_command(args: StatusArgs) -> ExitCode {
 ///
 /// Defaults mirror the reference CLI (`--depth 1`, `--timeframe 7d`, page 1,
 /// page size 10, max related 10) and errors print as `Error: …` with exit code 1.
-fn context_command(args: ContextArgs) -> ExitCode {
+async fn context_command(args: ContextArgs) -> ExitCode {
     let ContextArgs {
         url,
         index,
@@ -1750,14 +1777,14 @@ fn context_command(args: ContextArgs) -> ExitCode {
         }
     };
 
-    let store = match Store::open(&index) {
+    let store = match Store::open(&index).await {
         Ok(store) => store,
         Err(error) => {
             eprintln!("Error: failed to open index {}: {error}", index.display());
             return ExitCode::FAILURE;
         }
     };
-    let project = match store.project_by_permalink(&permalink) {
+    let project = match store.project_by_permalink(&permalink).await {
         Ok(Some(project)) => project,
         Ok(None) => {
             eprintln!("Error: project not found: {permalink}");
@@ -1770,7 +1797,7 @@ fn context_command(args: ContextArgs) -> ExitCode {
     };
 
     let context_options = context;
-    let graph = match build_context(&store, project.id, &url, &context_options) {
+    let graph = match build_context(&store, project.id, &url, &context_options).await {
         Ok(graph) => graph,
         Err(error) => {
             eprintln!("Error: {error}");
@@ -1801,7 +1828,7 @@ fn context_command(args: ContextArgs) -> ExitCode {
     }
 }
 
-fn search_command(args: SearchArgs) -> ExitCode {
+async fn search_command(args: SearchArgs) -> ExitCode {
     let SearchArgs {
         query,
         index,
@@ -1823,14 +1850,14 @@ fn search_command(args: SearchArgs) -> ExitCode {
         embed,
         rerank,
     } = args;
-    let store = match Store::open(&index) {
+    let store = match Store::open(&index).await {
         Ok(store) => store,
         Err(error) => {
             eprintln!("failed to open index {}: {error}", index.display());
             return ExitCode::FAILURE;
         }
     };
-    let project = match store.project_by_permalink(&permalink) {
+    let project = match store.project_by_permalink(&permalink).await {
         Ok(Some(project)) => project,
         Ok(None) => {
             eprintln!("project not found: {permalink}");
@@ -1970,6 +1997,7 @@ fn search_command(args: SearchArgs) -> ExitCode {
                 &vector_options,
                 rerank_request.as_ref(),
             )
+            .await
         } else {
             search_vector(
                 &store,
@@ -1979,6 +2007,7 @@ fn search_command(args: SearchArgs) -> ExitCode {
                 &vector_options,
                 rerank_request.as_ref(),
             )
+            .await
         };
         return match page {
             Ok(page) => print_json(&serde_json::json!({
@@ -1996,7 +2025,7 @@ fn search_command(args: SearchArgs) -> ExitCode {
         };
     }
 
-    match store.search_text(project.id, &search) {
+    match store.search_text(project.id, &search).await {
         Ok(page) => print_json(&serde_json::json!({
             "results": page.results,
             "total": page.total,

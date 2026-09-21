@@ -18,7 +18,7 @@ use std::time::{Duration, Instant};
 use auto_memory::storage::Store;
 use rusqlite::{Connection, ErrorCode};
 mod common;
-use common::Scratch;
+use common::{Scratch, block_on};
 
 /// Read one integer-valued pragma (or `query_row`'s panic when the name is wrong).
 fn pragma_i64(connection: &Connection, sql: &str) -> i64 {
@@ -34,51 +34,62 @@ fn pragma_text(connection: &Connection, sql: &str) -> String {
         .unwrap_or_else(|error| panic!("{sql}: {error}"))
 }
 
-#[test]
-fn the_connection_profile_matches_the_reference() {
+#[tokio::test(flavor = "multi_thread")]
+async fn the_connection_profile_matches_the_reference() {
     let dir = Scratch::new("profile");
     let path = dir.join("memory.db");
-    let store = Store::open(&path).expect("open");
+    let store = Store::open(&path).await.expect("open");
 
-    let pragma_value = |store: &Store, sql: &'static str| {
+    async fn pragma_value(store: &Store, sql: &'static str) -> i64 {
         store
             .with_connection(move |connection| pragma_i64(connection, sql))
+            .await
             .expect("pragma")
-    };
-    assert_eq!(pragma_value(&store, "PRAGMA busy_timeout"), 10_000);
-    assert_eq!(pragma_value(&store, "PRAGMA synchronous"), 1, "NORMAL");
-    assert_eq!(pragma_value(&store, "PRAGMA cache_size"), -64_000);
-    assert_eq!(pragma_value(&store, "PRAGMA temp_store"), 2, "MEMORY");
-    assert_eq!(pragma_value(&store, "PRAGMA wal_autocheckpoint"), 1_000);
-    assert_eq!(pragma_value(&store, "PRAGMA foreign_keys"), 1);
+    }
+    assert_eq!(pragma_value(&store, "PRAGMA busy_timeout").await, 10_000);
+    assert_eq!(
+        pragma_value(&store, "PRAGMA synchronous").await,
+        1,
+        "NORMAL"
+    );
+    assert_eq!(pragma_value(&store, "PRAGMA cache_size").await, -64_000);
+    assert_eq!(pragma_value(&store, "PRAGMA temp_store").await, 2, "MEMORY");
+    assert_eq!(
+        pragma_value(&store, "PRAGMA wal_autocheckpoint").await,
+        1_000
+    );
+    assert_eq!(pragma_value(&store, "PRAGMA foreign_keys").await, 1);
     assert_eq!(
         store
             .with_connection(|connection| pragma_text(connection, "PRAGMA journal_mode"))
+            .await
             .expect("journal mode"),
         "wal"
     );
 
     // In-memory databases cannot use WAL, so the reference skips that one pragma;
     // the rest of the profile still applies.
-    let memory = Store::open_in_memory().expect("memory");
+    let memory = Store::open_in_memory().await.expect("memory");
     assert_ne!(
         memory
             .with_connection(|connection| pragma_text(connection, "PRAGMA journal_mode"))
+            .await
             .expect("journal mode"),
         "wal"
     );
     assert_eq!(
         memory
             .with_connection(|connection| pragma_i64(connection, "PRAGMA busy_timeout"))
+            .await
             .expect("busy timeout"),
         10_000
     );
 
-    drop(store);
+    store.close().await.expect("close");
 }
 
-#[test]
-fn a_writer_waits_for_a_locked_index_instead_of_failing() {
+#[tokio::test(flavor = "multi_thread")]
+async fn a_writer_waits_for_a_locked_index_instead_of_failing() {
     let dir = Scratch::new("locked");
     let path = dir.join("memory.db");
     // Both stores open before the lock exists, so the only statement issued while the
@@ -86,8 +97,8 @@ fn a_writer_waits_for_a_locked_index_instead_of_failing() {
     // themselves wait). This arm shows a shared index does not make the second writer
     // fail outright; it holds for any busy handler at least as long as `hold`, so the
     // exact profile — 10 s, WAL — is what the first test pins.
-    let _reader = Store::open(&path).expect("open");
-    let writer = Store::open(&path).expect("open");
+    let _reader = Store::open(&path).await.expect("open");
+    let writer = Store::open(&path).await.expect("open");
 
     let blocker = Connection::open(&path).expect("blocker");
     blocker
@@ -115,7 +126,8 @@ fn a_writer_waits_for_a_locked_index_instead_of_failing() {
 
     let hold = Duration::from_millis(400);
     let started = Instant::now();
-    let handle = thread::spawn(move || writer.upsert_project("oracle", "oracle", "/tmp/vault"));
+    let handle =
+        thread::spawn(move || block_on(writer.upsert_project("oracle", "oracle", "/tmp/vault")));
     thread::sleep(hold);
     blocker.execute_batch("COMMIT").expect("release the lock");
 

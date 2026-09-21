@@ -15,26 +15,27 @@ mod common;
 use common::{Scratch, copy_dir};
 
 /// Temp vault with an indexed project.
-fn fixture(tag: &str) -> (Scratch, PathBuf, Store, i64) {
+async fn fixture(tag: &str) -> (Scratch, PathBuf, Store, i64) {
     let dir = Scratch::new(tag);
     let vault = dir.join("vault");
     copy_dir(
         &PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/vault"),
         &vault,
     );
-    let mut store = Store::open_in_memory().expect("store");
+    let mut store = Store::open_in_memory().await.expect("store");
     let project_id = store
         .upsert_project("oracle", "oracle", &vault.to_string_lossy())
+        .await
         .expect("project");
     let mut service =
         IndexService::new(&mut store, project_id, &vault, IndexOptions::new("oracle"));
-    service.full_rebuild().expect("rebuild");
+    service.full_rebuild().await.expect("rebuild");
     (dir, vault, store, project_id)
 }
 
-#[test]
-fn write_then_read_round_trips_through_the_index() {
-    let (_dir, vault, mut store, project_id) = fixture("write");
+#[tokio::test(flavor = "multi_thread")]
+async fn write_then_read_round_trips_through_the_index() {
+    let (_dir, vault, mut store, project_id) = fixture("write").await;
     {
         let mut notes =
             NoteService::new(&mut store, project_id, &vault, IndexOptions::new("oracle"));
@@ -45,6 +46,7 @@ fn write_then_read_round_trips_through_the_index() {
         let metadata = NoteMetadata::from_pairs(metadata);
         let written = notes
             .write_note("notes/fresh.md", "Body text\n", &metadata, false)
+            .await
             .expect("write");
         assert_eq!(written.file_path, "notes/fresh.md");
         assert_eq!(written.title, "fresh");
@@ -62,7 +64,11 @@ fn write_then_read_round_trips_through_the_index() {
 
         // Reading by permalink works too.
         assert_eq!(
-            notes.read_note("oracle/notes/fresh").expect("read").content,
+            notes
+                .read_note("oracle/notes/fresh")
+                .await
+                .expect("read")
+                .content,
             "Body text"
         );
     }
@@ -70,6 +76,7 @@ fn write_then_read_round_trips_through_the_index() {
     // The derived index saw the new note, with the merged metadata.
     let entry = store
         .entity_by_file_path(project_id, "notes/fresh.md")
+        .await
         .expect("lookup")
         .expect("indexed");
     assert_eq!(entry.title, "fresh");
@@ -89,19 +96,21 @@ fn write_then_read_round_trips_through_the_index() {
         assert!(
             notes
                 .write_note("notes/fresh.md", "Other\n", &NoteMetadata::default(), false)
+                .await
                 .is_err(),
             "existing files are not clobbered"
         );
         let overwritten = notes
             .write_note("notes/fresh.md", "Other\n", &NoteMetadata::default(), true)
+            .await
             .expect("overwrite");
         assert_eq!(overwritten.content, "Other");
     }
 }
 
-#[test]
-fn edits_update_file_and_index_together() {
-    let (_dir, vault, mut store, project_id) = fixture("edit");
+#[tokio::test(flavor = "multi_thread")]
+async fn edits_update_file_and_index_together() {
+    let (_dir, vault, mut store, project_id) = fixture("edit").await;
     {
         let mut notes =
             NoteService::new(&mut store, project_id, &vault, IndexOptions::new("oracle"));
@@ -114,6 +123,7 @@ fn edits_update_file_and_index_together() {
                 &options,
                 &NoteMetadata::default(),
             )
+            .await
             .expect("append");
         let text = fs::read_to_string(vault.join("notes/simple.md")).expect("file");
         assert!(text.ends_with("Appended body."), "body appended: {text}");
@@ -128,6 +138,7 @@ fn edits_update_file_and_index_together() {
                 &section,
                 &NoteMetadata::default(),
             )
+            .await
             .expect("replace section");
         let text = fs::read_to_string(vault.join("notes/simple.md")).expect("file");
         assert!(text.contains("## Extra\nReplaced body."), "{text}");
@@ -146,6 +157,7 @@ fn edits_update_file_and_index_together() {
                 &options,
                 &metadata,
             )
+            .await
             .expect("metadata merge");
         let text = fs::read_to_string(vault.join("notes/simple.md")).expect("file");
         assert!(text.contains("\nstatus: active\n"), "{text}");
@@ -154,6 +166,7 @@ fn edits_update_file_and_index_together() {
         assert_eq!(
             notes
                 .read_note("notes/simple")
+                .await
                 .expect("read")
                 .permalink
                 .as_deref(),
@@ -173,6 +186,7 @@ fn edits_update_file_and_index_together() {
                     &missing,
                     &NoteMetadata::default(),
                 )
+                .await
                 .is_err()
         );
         assert_eq!(
@@ -184,21 +198,23 @@ fn edits_update_file_and_index_together() {
     // The index reflects the newest body.
     let entity = store
         .entity_by_file_path(project_id, "notes/simple.md")
+        .await
         .expect("lookup")
         .expect("indexed");
-    let content = store.entity_content(entity.id).expect("content");
+    let content = store.entity_content(entity.id).await.expect("content");
     assert!(content.contains("Replaced body."), "{content}");
 }
 
-#[test]
-fn move_and_delete_keep_the_index_consistent() {
-    let (_dir, vault, mut store, project_id) = fixture("move");
+#[tokio::test(flavor = "multi_thread")]
+async fn move_and_delete_keep_the_index_consistent() {
+    let (_dir, vault, mut store, project_id) = fixture("move").await;
     {
         let mut notes =
             NoteService::new(&mut store, project_id, &vault, IndexOptions::new("oracle"));
 
         let moved = notes
             .move_note("notes/simple", "notes/simple-moved.md")
+            .await
             .expect("move");
         assert_eq!(moved.file_path, "notes/simple-moved.md");
         assert_eq!(
@@ -208,21 +224,26 @@ fn move_and_delete_keep_the_index_consistent() {
         );
         assert!(!vault.join("notes/simple.md").exists());
 
-        let deleted = notes.delete_note("notes/simple-moved").expect("delete");
+        let deleted = notes
+            .delete_note("notes/simple-moved")
+            .await
+            .expect("delete");
         assert_eq!(deleted, "notes/simple-moved.md");
         assert!(!vault.join("notes/simple-moved.md").exists());
-        assert!(notes.read_note("notes/simple-moved").is_err());
+        assert!(notes.read_note("notes/simple-moved").await.is_err());
     }
 
     assert!(
         store
             .entity_by_file_path(project_id, "notes/simple-moved.md")
+            .await
             .expect("lookup")
             .is_none()
     );
     assert!(
         store
             .entity_by_file_path(project_id, "notes/simple.md")
+            .await
             .expect("lookup")
             .is_none()
     );

@@ -147,7 +147,7 @@ impl Default for DirectoryOptions {
 }
 
 /// List one page of a vault directory.
-pub fn list_directory(
+pub async fn list_directory(
     store: &Store,
     project_id: i64,
     options: &DirectoryOptions,
@@ -172,7 +172,9 @@ pub fn list_directory(
     }
 
     let dir_name = normalize_dir_name(&options.dir_name);
-    let rows = store.directory_rows(project_id, dir_name.trim_matches('/'))?;
+    let rows = store
+        .directory_rows(project_id, dir_name.trim_matches('/'))
+        .await?;
     let arena = Arena::build(&rows, &dir_name);
     let mut result = Vec::new();
     arena.collect(

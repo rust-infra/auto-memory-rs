@@ -23,11 +23,11 @@ use crate::error::{Error, Result};
 use crate::markdown::serialize::split_frontmatter;
 use crate::schema::diff::diff_schema;
 use crate::schema::inference::{NoteData, ObservationData, RelationData, infer_schema};
-use crate::schema::parser::{SchemaDefinition, SchemaParseError};
+use crate::schema::parser::{SchemaDefinition, SchemaParseError, parse_schema_note};
 use crate::schema::report::{
     DriftReport, InferenceReport, NoteValidationResponse, TypeValidationSummary, ValidationReport,
 };
-use crate::schema::resolver::resolve_schema;
+use crate::schema::resolver::schema_from_inline;
 use crate::schema::validator::validate_note;
 use crate::search::text::TextSearchOptions;
 use crate::storage::{EntityRow, RelationRow, Store};
@@ -61,19 +61,19 @@ impl<'a> SchemaService<'a> {
     }
 
     /// Validate one note, every note of a type, or every schema-covered type.
-    pub fn validate(
+    pub async fn validate(
         &self,
         note_type: Option<&str>,
         identifier: Option<&str>,
     ) -> Result<ValidationReport> {
         if let Some(identifier) = identifier {
-            return self.validate_identifier(note_type, identifier);
+            return self.validate_identifier(note_type, identifier).await;
         }
 
         if let Some(note_type) = note_type {
             let canonical = normalize_note_type(note_type);
-            let entities = self.notes_of_type(&canonical)?;
-            let results = self.validate_entities(&entities)?;
+            let entities = self.notes_of_type(&canonical).await?;
+            let results = self.validate_entities(&entities).await?;
             return Ok(ValidationReport::new(
                 Some(canonical),
                 entities.len(),
@@ -86,9 +86,9 @@ impl<'a> SchemaService<'a> {
         let mut results = Vec::new();
         let mut summaries = Vec::new();
         let mut total_entities = 0;
-        for (display_label, _stored) in self.schema_covered_note_types()? {
-            let entities = self.notes_of_type(&display_label)?;
-            let type_results = self.validate_entities(&entities)?;
+        for (display_label, _stored) in self.schema_covered_note_types().await? {
+            let entities = self.notes_of_type(&display_label).await?;
+            let type_results = self.validate_entities(&entities).await?;
             summaries.push(TypeValidationSummary::new(
                 display_label,
                 entities.len(),
@@ -104,10 +104,10 @@ impl<'a> SchemaService<'a> {
     }
 
     /// Infer a schema definition from every note of one type.
-    pub fn infer(&self, note_type: &str, threshold: f64) -> Result<InferenceReport> {
+    pub async fn infer(&self, note_type: &str, threshold: f64) -> Result<InferenceReport> {
         let canonical = normalize_note_type(note_type);
-        let entities = self.notes_of_type(&canonical)?;
-        let notes = self.notes_data(&entities)?;
+        let entities = self.notes_of_type(&canonical).await?;
+        let notes = self.notes_data(&entities).await?;
         let result = infer_schema(
             &canonical,
             &notes,
@@ -119,19 +119,19 @@ impl<'a> SchemaService<'a> {
     }
 
     /// Compare a type's schema against how its notes are actually structured.
-    pub fn diff(&self, note_type: &str) -> Result<DriftReport> {
+    pub async fn diff(&self, note_type: &str) -> Result<DriftReport> {
         let canonical = normalize_note_type(note_type);
         let mut frontmatter = Map::new();
         frontmatter.insert("type".to_owned(), Value::String(canonical.clone()));
         let frontmatter = Value::Object(frontmatter);
 
-        let schema = match self.resolve_schema_for(&frontmatter)? {
+        let schema = match self.resolve_schema_for(&frontmatter).await? {
             Some(schema) => schema,
             None => return Ok(DriftReport::missing_schema(canonical)),
         };
 
-        let entities = self.notes_of_type(&canonical)?;
-        let notes = self.notes_data(&entities)?;
+        let entities = self.notes_of_type(&canonical).await?;
+        let notes = self.notes_data(&entities).await?;
         let drift = diff_schema(
             &schema,
             &notes,
@@ -148,8 +148,8 @@ impl<'a> SchemaService<'a> {
     /// notes *and* from notes carrying an inline schema or an explicit reference; the
     /// returned order is by normalized type, and the first spelling seen for a type
     /// becomes its display label.
-    pub fn schema_covered_note_types(&self) -> Result<Vec<(String, Vec<String>)>> {
-        let entities = self.store.entities(self.project_id)?;
+    pub async fn schema_covered_note_types(&self) -> Result<Vec<(String, Vec<String>)>> {
+        let entities = self.store.entities(self.project_id).await?;
         let mut targets: BTreeMap<String, (String, BTreeSet<String>)> = BTreeMap::new();
 
         for entity in entities
@@ -201,12 +201,12 @@ impl<'a> SchemaService<'a> {
 
     // --- Validation paths ---
 
-    fn validate_identifier(
+    async fn validate_identifier(
         &self,
         note_type: Option<&str>,
         identifier: &str,
     ) -> Result<ValidationReport> {
-        let Some(entity) = self.resolve_identifier(identifier)? else {
+        let Some(entity) = self.resolve_identifier(identifier).await? else {
             // An unknown identifier is an empty report, not an error.
             return Ok(ValidationReport::new(
                 note_type.map(str::to_owned),
@@ -217,8 +217,8 @@ impl<'a> SchemaService<'a> {
 
         let frontmatter = entity_frontmatter(&entity);
         let mut results = Vec::new();
-        if let Some(schema) = self.resolve_schema_for(&frontmatter)? {
-            results.push(self.validate_entity(&entity, &schema, &frontmatter)?);
+        if let Some(schema) = self.resolve_schema_for(&frontmatter).await? {
+            results.push(self.validate_entity(&entity, &schema, &frontmatter).await?);
         }
 
         let resolved_type = note_type
@@ -235,16 +235,17 @@ impl<'a> SchemaService<'a> {
     /// the best hit. Kept here rather than in the graph module because the schema
     /// tools are the local surface that needs the forgiving end of that chain: a
     /// search hit that names a *different* note is still the reference's answer.
-    fn resolve_identifier(&self, identifier: &str) -> Result<Option<EntityRow>> {
+    async fn resolve_identifier(&self, identifier: &str) -> Result<Option<EntityRow>> {
         if let Some(entity) =
-            crate::graph::resolve_entity_path(self.store, self.project_id, identifier)?
+            crate::graph::resolve_entity_path(self.store, self.project_id, identifier).await?
         {
             return Ok(Some(entity));
         }
 
         if let Some(entity) = self
             .store
-            .entities_by_title(self.project_id, identifier)?
+            .entities_by_title(self.project_id, identifier)
+            .await?
             .into_iter()
             .next()
         {
@@ -256,29 +257,37 @@ impl<'a> SchemaService<'a> {
         if identifier.contains('*') {
             return Ok(None);
         }
-        let found = self.store.search_text(
-            self.project_id,
-            &TextSearchOptions {
-                query: Some(identifier.to_owned()),
-                ..TextSearchOptions::default()
-            },
-        )?;
+        let found = self
+            .store
+            .search_text(
+                self.project_id,
+                &TextSearchOptions {
+                    query: Some(identifier.to_owned()),
+                    ..TextSearchOptions::default()
+                },
+            )
+            .await?;
         let Some(permalink) = found.results.first().and_then(|row| row.permalink.clone()) else {
             return Ok(None);
         };
-        self.store.entity_by_permalink(self.project_id, &permalink)
+        self.store
+            .entity_by_permalink(self.project_id, &permalink)
+            .await
     }
 
-    fn validate_entities(&self, entities: &[EntityRow]) -> Result<Vec<NoteValidationResponse>> {
-        let relations = self.store.relations(self.project_id)?;
-        let target_types = self.entity_target_types()?;
+    async fn validate_entities(
+        &self,
+        entities: &[EntityRow],
+    ) -> Result<Vec<NoteValidationResponse>> {
+        let relations = self.store.relations(self.project_id).await?;
+        let target_types = self.entity_target_types().await?;
         let mut results = Vec::new();
         for entity in entities {
             let frontmatter = entity_frontmatter(entity);
             // Entities whose frontmatter resolves to no schema are skipped, which is
             // why a report's `total_notes` can be lower than its `total_entities`.
-            if let Some(schema) = self.resolve_schema_for(&frontmatter)? {
-                let observations = self.entity_observations(entity)?;
+            if let Some(schema) = self.resolve_schema_for(&frontmatter).await? {
+                let observations = self.entity_observations(entity).await?;
                 let entity_relations = relations_for(&relations, &target_types, entity.id);
                 let result = validate_note(
                     &reporting_identifier(entity, None),
@@ -293,15 +302,15 @@ impl<'a> SchemaService<'a> {
         Ok(results)
     }
 
-    fn validate_entity(
+    async fn validate_entity(
         &self,
         entity: &EntityRow,
         schema: &SchemaDefinition,
         frontmatter: &Value,
     ) -> Result<NoteValidationResponse> {
-        let observations = self.entity_observations(entity)?;
-        let relations = self.store.relations(self.project_id)?;
-        let target_types = self.entity_target_types()?;
+        let observations = self.entity_observations(entity).await?;
+        let relations = self.store.relations(self.project_id).await?;
+        let target_types = self.entity_target_types().await?;
         let result = validate_note(
             &reporting_identifier(entity, None),
             schema,
@@ -319,41 +328,75 @@ impl<'a> SchemaService<'a> {
     /// `allow_reference_match` is decided per query, exactly as the router's closure
     /// does: only a lookup whose query equals the note's own `schema` reference may
     /// fall back to matching schema notes by title or permalink.
-    fn resolve_schema_for(&self, frontmatter: &Value) -> Result<Option<SchemaDefinition>> {
-        let search = |query: &str| -> Vec<Value> {
-            let schema_ref = frontmatter.get("schema");
-            let allow_reference_match = schema_ref.is_some_and(Value::is_string)
-                && schema_ref.and_then(Value::as_str) == Some(query);
-            self.schema_frontmatters_for(query, allow_reference_match)
-                .unwrap_or_default()
+    async fn resolve_schema_for(&self, frontmatter: &Value) -> Result<Option<SchemaDefinition>> {
+        let frontmatter_value = frontmatter;
+        let empty = Map::new();
+        let frontmatter = frontmatter.as_object().unwrap_or(&empty);
+        let schema_ref = frontmatter.get("schema");
+        let allow_reference_match = |query: &str| {
+            schema_ref.is_some_and(Value::is_string)
+                && schema_ref.and_then(Value::as_str) == Some(query)
         };
 
-        resolve_schema(frontmatter, &search).map_err(schema_parse_error)
+        if let Some(Value::Object(schema_dict)) = frontmatter.get("schema") {
+            return schema_from_inline(schema_dict, frontmatter_value)
+                .map(Some)
+                .map_err(schema_parse_error);
+        }
+
+        if let Some(Value::String(reference)) = frontmatter.get("schema")
+            && let Some(first) = self
+                .schema_frontmatters_for(reference, allow_reference_match(reference))
+                .await?
+                .first()
+        {
+            return parse_schema_note(first)
+                .map(Some)
+                .map_err(schema_parse_error);
+        }
+
+        if let Some(note_type) = frontmatter
+            .get("type")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            && let Some(first) = self
+                .schema_frontmatters_for(note_type, allow_reference_match(note_type))
+                .await?
+                .first()
+        {
+            return parse_schema_note(first)
+                .map(Some)
+                .map_err(schema_parse_error);
+        }
+
+        Ok(None)
     }
 
     /// Look up schema notes for a resolver query, returning their frontmatter.
     ///
     /// Mirrors `_find_schema_entities` plus `_schema_frontmatter_from_file`.
-    fn schema_frontmatters_for(
+    async fn schema_frontmatters_for(
         &self,
         query: &str,
         allow_reference_match: bool,
     ) -> Result<Vec<Value>> {
         Ok(self
-            .schema_entities_for(query, allow_reference_match)?
+            .schema_entities_for(query, allow_reference_match)
+            .await?
             .iter()
             .map(|entity| self.schema_frontmatter(entity))
             .collect())
     }
 
-    fn schema_entities_for(
+    async fn schema_entities_for(
         &self,
         target: &str,
         allow_reference_match: bool,
     ) -> Result<Vec<EntityRow>> {
         let schemas: Vec<EntityRow> = self
             .store
-            .entities(self.project_id)?
+            .entities(self.project_id)
+            .await?
             .into_iter()
             .filter(|entity| entity.note_type == "schema")
             .collect();
@@ -412,9 +455,9 @@ impl<'a> SchemaService<'a> {
     // --- Note-type queries ---
 
     /// Every note whose stored type normalizes to `note_type`.
-    fn notes_of_type(&self, note_type: &str) -> Result<Vec<EntityRow>> {
+    async fn notes_of_type(&self, note_type: &str) -> Result<Vec<EntityRow>> {
         let canonical = normalize_note_type(note_type);
-        let entities = self.store.entities(self.project_id)?;
+        let entities = self.store.entities(self.project_id).await?;
         let stored_types: BTreeSet<String> = entities
             .iter()
             .map(|entity| entity.note_type.clone())
@@ -431,19 +474,21 @@ impl<'a> SchemaService<'a> {
 
     // --- Entity projection ---
 
-    fn entity_target_types(&self) -> Result<HashMap<i64, String>> {
+    async fn entity_target_types(&self) -> Result<HashMap<i64, String>> {
         Ok(self
             .store
-            .entities(self.project_id)?
+            .entities(self.project_id)
+            .await?
             .into_iter()
             .map(|entity| (entity.id, entity.note_type))
             .collect())
     }
 
-    fn entity_observations(&self, entity: &EntityRow) -> Result<Vec<ObservationData>> {
+    async fn entity_observations(&self, entity: &EntityRow) -> Result<Vec<ObservationData>> {
         Ok(self
             .store
-            .observations_for_entity(entity.id)?
+            .observations_for_entity(entity.id)
+            .await?
             .into_iter()
             .map(|observation| ObservationData {
                 category: observation.category,
@@ -453,14 +498,14 @@ impl<'a> SchemaService<'a> {
     }
 
     /// Project entities as inference/diff input rows.
-    fn notes_data(&self, entities: &[EntityRow]) -> Result<Vec<NoteData>> {
-        let relations = self.store.relations(self.project_id)?;
-        let target_types = self.entity_target_types()?;
+    async fn notes_data(&self, entities: &[EntityRow]) -> Result<Vec<NoteData>> {
+        let relations = self.store.relations(self.project_id).await?;
+        let target_types = self.entity_target_types().await?;
         let mut notes = Vec::with_capacity(entities.len());
         for entity in entities {
             notes.push(NoteData {
                 identifier: reporting_identifier(entity, None),
-                observations: self.entity_observations(entity)?,
+                observations: self.entity_observations(entity).await?,
                 relations: relations_for(&relations, &target_types, entity.id),
             });
         }

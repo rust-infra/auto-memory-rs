@@ -30,10 +30,13 @@ use serde_json::Value;
 mod common;
 use common::{indexed_store, repo_root};
 
-#[test]
-fn chunks_match_reference_corpus() {
+#[tokio::test(flavor = "multi_thread")]
+async fn chunks_match_reference_corpus() {
     let (_dir, store, project_id) = indexed_store("chunks");
-    let rows = store.semantic_rows(project_id).expect("semantic rows");
+    let rows = store
+        .semantic_rows(project_id)
+        .await
+        .expect("semantic rows");
     let records = build_chunk_records(&rows);
 
     let golden: Value = serde_json::from_str(
@@ -131,10 +134,13 @@ fn chunks_match_reference_corpus() {
 /// (the reference's own vector search).
 ///
 /// Scores are compared inside [`SCORE_TOLERANCE`]; ranking and `matched_chunk` are exact.
-#[test]
-fn vector_search_replays_reference_scores() {
+#[tokio::test(flavor = "multi_thread")]
+async fn vector_search_replays_reference_scores() {
     let (_dir, store, project_id) = indexed_store("vector-replay");
-    let rows = store.semantic_rows(project_id).expect("semantic rows");
+    let rows = store
+        .semantic_rows(project_id)
+        .await
+        .expect("semantic rows");
     let chunks = build_chunk_records(&rows);
 
     let embeddings =
@@ -238,14 +244,14 @@ fn vector_search_replays_reference_scores() {
     }
 }
 
-#[test]
-fn cosine_similarity_ranks_expected_vectors() {
+#[tokio::test(flavor = "multi_thread")]
+async fn cosine_similarity_ranks_expected_vectors() {
     assert!((cosine_similarity(&[1.0, 0.0], &[1.0, 0.0]) - 1.0).abs() < 1e-6);
     assert!(cosine_similarity(&[1.0, 0.0], &[0.0, 1.0]).abs() < 1e-6);
 }
 
-#[test]
-fn vector_ranking_applies_threshold_and_limit() {
+#[tokio::test(flavor = "multi_thread")]
+async fn vector_ranking_applies_threshold_and_limit() {
     let rows = auto_memory::search::chunking::SemanticRow {
         id: 1,
         item_type: "entity".to_owned(),
@@ -269,8 +275,8 @@ fn vector_ranking_applies_threshold_and_limit() {
     assert!(filtered.is_empty(), "below-threshold matches are filtered");
 }
 
-#[test]
-fn hybrid_fusion_uses_reference_formula() {
+#[tokio::test(flavor = "multi_thread")]
+async fn hybrid_fusion_uses_reference_formula() {
     let key = SearchKey {
         item_type: "entity".to_owned(),
         id: 1,
@@ -289,8 +295,8 @@ fn hybrid_fusion_uses_reference_formula() {
 /// needed), then both `--vector` and `--hybrid` are compared against the reference
 /// search goldens: same rank order, same `matched_chunk`, scores inside the shared
 /// envelope the reference itself has run-to-run.
-#[test]
-fn stored_vector_index_replays_reference_search() {
+#[tokio::test(flavor = "multi_thread")]
+async fn stored_vector_index_replays_reference_search() {
     let (dir, mut store, project_id) = indexed_store("stored-vector");
     let vault = dir.join("vault");
     let embeddings =
@@ -303,6 +309,7 @@ fn stored_vector_index_replays_reference_search() {
     let mut service = IndexService::new(&mut store, project_id, &vault, options);
     let first = service
         .reindex_embeddings(&provider)
+        .await
         .expect("embedding reindex");
     assert_eq!(first.chunks, 78, "chunk corpus size");
     assert_eq!(first.reused, 0);
@@ -311,6 +318,7 @@ fn stored_vector_index_replays_reference_search() {
     // Unchanged chunks keep their vectors (reference upsert matches on source hash).
     let second = service
         .reindex_embeddings(&provider)
+        .await
         .expect("second embedding reindex");
     assert_eq!(second.reused, second.chunks);
     assert_eq!(second.embedded, 0);
@@ -318,8 +326,9 @@ fn stored_vector_index_replays_reference_search() {
 
     let query = provider.embed_query("local index").expect("query vector");
     let vector_options = VectorSearchOptions::default();
-    let page =
-        search_vector(&store, project_id, &query, &model, &vector_options, None).expect("vector");
+    let page = search_vector(&store, project_id, &query, &model, &vector_options, None)
+        .await
+        .expect("vector");
     let golden: Value = serde_json::from_str(
         &fs::read_to_string(repo_root().join("tests/golden/search/vector-local-index.json"))
             .expect("golden"),
@@ -340,6 +349,7 @@ fn stored_vector_index_replays_reference_search() {
         &vector_options,
         None,
     )
+    .await
     .expect("hybrid");
     let golden: Value = serde_json::from_str(
         &fs::read_to_string(repo_root().join("tests/golden/search/hybrid-rust.json"))
@@ -405,9 +415,11 @@ fn stored_vector_index_replays_reference_search() {
                 &filters,
                 None,
             )
+            .await
             .expect("hybrid")
         } else {
             search_vector(&store, project_id, &query_vector, &model, &filters, None)
+                .await
                 .expect("vector")
         };
         let golden: Value = serde_json::from_str(

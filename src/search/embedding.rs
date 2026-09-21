@@ -17,7 +17,7 @@ pub const REFERENCE_DIMENSIONS: usize = 384;
 pub const REFERENCE_MODEL: &str = "BAAI/bge-small-en-v1.5";
 
 /// Something that can embed documents and queries.
-pub trait EmbeddingProvider {
+pub trait EmbeddingProvider: Send + Sync {
     /// Model identifier (stored with every chunk).
     fn model_name(&self) -> &str;
     /// Vector dimensions.

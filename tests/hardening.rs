@@ -46,8 +46,8 @@ fn call(id: u64, name: &str, arguments: Value) -> Value {
 }
 
 /// Phase 15: identifiers and paths may never leave the vault.
-#[test]
-fn mcp_paths_cannot_escape_the_vault() {
+#[tokio::test(flavor = "multi_thread")]
+async fn mcp_paths_cannot_escape_the_vault() {
     let dir = Scratch::new("traversal");
     let vault = dir.join("vault");
     copy_dir(&repo_root().join("tests/fixtures/vault"), &vault);
@@ -143,8 +143,8 @@ fn mcp_paths_cannot_escape_the_vault() {
 /// The reference validates `directory` against the project boundary and answers with its
 /// `SECURITY_VALIDATION_ERROR` payload; `/etc/cron.d` must not create anything, inside the
 /// vault or outside it.
-#[test]
-fn mcp_absolute_directory_paths_are_refused() {
+#[tokio::test(flavor = "multi_thread")]
+async fn mcp_absolute_directory_paths_are_refused() {
     let dir = Scratch::new("absolute");
     let vault = dir.join("vault");
     copy_dir(&repo_root().join("tests/fixtures/vault"), &vault);
@@ -193,8 +193,8 @@ fn mcp_absolute_directory_paths_are_refused() {
 }
 
 /// Phase 15: a file the indexer cannot decode must not take the rest of the vault down.
-#[test]
-fn malformed_utf8_file_is_skipped_without_losing_the_vault() {
+#[tokio::test(flavor = "multi_thread")]
+async fn malformed_utf8_file_is_skipped_without_losing_the_vault() {
     let dir = Scratch::new("utf8");
     let vault = dir.join("vault");
     copy_dir(&repo_root().join("tests/fixtures/vault"), &vault);
@@ -223,14 +223,18 @@ fn malformed_utf8_file_is_skipped_without_losing_the_vault() {
     assert_eq!(report["skipped"], 2, "{report}");
     assert!(report["added"].as_u64().unwrap_or(0) > 0, "{report}");
 
-    let store = auto_memory::storage::Store::open(&index).expect("store");
+    let store = auto_memory::storage::Store::open(&index)
+        .await
+        .expect("store");
     let project = store
         .project_by_permalink("oracle")
+        .await
         .expect("lookup")
         .expect("project");
     assert!(
         store
             .entity_by_file_path(project.id, "notes/binary.md")
+            .await
             .expect("lookup")
             .is_none(),
         "an undecodable file is not indexed"
@@ -238,6 +242,7 @@ fn malformed_utf8_file_is_skipped_without_losing_the_vault() {
     assert!(
         store
             .entity_by_file_path(project.id, "notes/simple.md")
+            .await
             .expect("lookup")
             .is_some(),
         "its neighbours are indexed normally"
@@ -248,15 +253,18 @@ fn malformed_utf8_file_is_skipped_without_losing_the_vault() {
 ///
 /// This is the property the whole edit path leans on: the frontmatter writer must emit
 /// something the parser reads back identically, for arbitrary bodies and metadata.
-#[test]
-fn writing_and_reparsing_notes_is_a_fixed_point() {
+#[tokio::test(flavor = "multi_thread")]
+async fn writing_and_reparsing_notes_is_a_fixed_point() {
     let dir = Scratch::new("roundtrip");
     let vault = dir.join("vault");
     fs::create_dir_all(&vault).expect("vault");
     let index = dir.join("memory.db");
-    let mut store = auto_memory::storage::Store::open(&index).expect("store");
+    let mut store = auto_memory::storage::Store::open(&index)
+        .await
+        .expect("store");
     let project_id = store
         .upsert_project("oracle", "oracle", &vault.to_string_lossy())
+        .await
         .expect("project");
 
     // Deterministic pseudo-random bodies: a small LCG keeps this dependency-free.
@@ -300,12 +308,14 @@ fn writing_and_reparsing_notes_is_a_fixed_point() {
                 &vault,
                 auto_memory::indexing::IndexOptions::new("oracle"),
             );
-            let written = service.write_note(
-                "notes/generated.md",
-                &note.content,
-                &NoteMetadata::default(),
-                true,
-            );
+            let written = service
+                .write_note(
+                    "notes/generated.md",
+                    &note.content,
+                    &NoteMetadata::default(),
+                    true,
+                )
+                .await;
             assert!(written.is_ok(), "round {round}: {written:?}");
         }
 
@@ -326,6 +336,7 @@ fn writing_and_reparsing_notes_is_a_fixed_point() {
                     &NoteMetadata::default(),
                     true,
                 )
+                .await
                 .expect("rewrite");
             assert_eq!(rewritten.file_path, "notes/generated.md");
         }

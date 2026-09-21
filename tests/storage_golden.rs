@@ -12,7 +12,7 @@ use std::path::Path;
 
 use serde_json::Value;
 mod common;
-use common::{Scratch, fixtures_vault, load_golden_json};
+use common::{Scratch, block_on, fixtures_vault, load_golden_json};
 
 fn golden(name: &str) -> Vec<Value> {
     load_golden_json(&format!("parse/{name}"))
@@ -26,13 +26,17 @@ fn rebuild(
     project_id: i64,
 ) -> auto_memory::indexing::RebuildReport {
     let options = auto_memory::indexing::RebuildOptions::new("oracle");
-    auto_memory::indexing::rebuild_vault(store, project_id, &fixtures_vault(), &options)
-        .expect("rebuild")
+    block_on(auto_memory::indexing::rebuild_vault(
+        store,
+        project_id,
+        &fixtures_vault(),
+        &options,
+    ))
+    .expect("rebuild")
 }
 
 fn project(store: &auto_memory::storage::Store) -> i64 {
-    store
-        .upsert_project("oracle", "oracle", &fixtures_vault().to_string_lossy())
+    block_on(store.upsert_project("oracle", "oracle", &fixtures_vault().to_string_lossy()))
         .expect("project")
 }
 
@@ -47,14 +51,12 @@ fn entity_key(entity: &auto_memory::storage::EntityRow) -> String {
 }
 
 fn observation_keys(store: &auto_memory::storage::Store, project_id: i64) -> Vec<String> {
-    let entities: BTreeMap<i64, String> = store
-        .entities(project_id)
+    let entities: BTreeMap<i64, String> = block_on(store.entities(project_id))
         .expect("entities")
         .into_iter()
         .map(|entity| (entity.id, entity.permalink.unwrap_or(entity.file_path)))
         .collect();
-    let mut keys: Vec<String> = store
-        .observations(project_id)
+    let mut keys: Vec<String> = block_on(store.observations(project_id))
         .expect("observations")
         .into_iter()
         .map(|observation| {
@@ -77,14 +79,12 @@ fn observation_keys(store: &auto_memory::storage::Store, project_id: i64) -> Vec
 }
 
 fn relation_keys(store: &auto_memory::storage::Store, project_id: i64) -> Vec<String> {
-    let entities: BTreeMap<i64, String> = store
-        .entities(project_id)
+    let entities: BTreeMap<i64, String> = block_on(store.entities(project_id))
         .expect("entities")
         .into_iter()
         .map(|entity| (entity.id, entity.permalink.unwrap_or(entity.file_path)))
         .collect();
-    let mut keys: Vec<String> = store
-        .relations(project_id)
+    let mut keys: Vec<String> = block_on(store.relations(project_id))
         .expect("relations")
         .into_iter()
         .map(|relation| {
@@ -102,9 +102,11 @@ fn relation_keys(store: &auto_memory::storage::Store, project_id: i64) -> Vec<St
     keys
 }
 
-#[test]
-fn rebuild_matches_reference_projection() {
-    let mut store = auto_memory::storage::Store::open_in_memory().expect("store");
+#[tokio::test(flavor = "multi_thread")]
+async fn rebuild_matches_reference_projection() {
+    let mut store = auto_memory::storage::Store::open_in_memory()
+        .await
+        .expect("store");
     let project_id = project(&store);
     let report = rebuild(&mut store, project_id);
 
@@ -131,6 +133,7 @@ fn rebuild_matches_reference_projection() {
     expected.sort();
     let mut actual: Vec<String> = store
         .entities(project_id)
+        .await
         .expect("entities")
         .iter()
         .map(entity_key)
@@ -188,16 +191,19 @@ fn rebuild_matches_reference_projection() {
     );
 }
 
-#[test]
-fn rebuild_is_idempotent() {
-    let mut store = auto_memory::storage::Store::open_in_memory().expect("store");
+#[tokio::test(flavor = "multi_thread")]
+async fn rebuild_is_idempotent() {
+    let mut store = auto_memory::storage::Store::open_in_memory()
+        .await
+        .expect("store");
     let project_id = project(&store);
     rebuild(&mut store, project_id);
-    let first_counts = store.counts(project_id).expect("counts");
+    let first_counts = store.counts(project_id).await.expect("counts");
     let first_observations = observation_keys(&store, project_id);
     let first_relations = relation_keys(&store, project_id);
     let first_ids: Vec<String> = store
         .entities(project_id)
+        .await
         .expect("entities")
         .into_iter()
         .map(|entity| entity.external_id)
@@ -205,11 +211,15 @@ fn rebuild_is_idempotent() {
 
     rebuild(&mut store, project_id);
 
-    assert_eq!(store.counts(project_id).expect("counts"), first_counts);
+    assert_eq!(
+        store.counts(project_id).await.expect("counts"),
+        first_counts
+    );
     assert_eq!(observation_keys(&store, project_id), first_observations);
     assert_eq!(relation_keys(&store, project_id), first_relations);
     let second_ids: Vec<String> = store
         .entities(project_id)
+        .await
         .expect("entities")
         .into_iter()
         .map(|entity| entity.external_id)
@@ -221,35 +231,39 @@ fn rebuild_is_idempotent() {
     assert!(first_counts.entities > 0);
 }
 
-#[test]
-fn rebuild_recovers_after_database_is_deleted() {
+#[tokio::test(flavor = "multi_thread")]
+async fn rebuild_recovers_after_database_is_deleted() {
     let dir = Scratch::new("rebuild");
     let db = dir.join("index.sqlite3");
 
     let first_counts = {
-        let mut store = auto_memory::storage::Store::open(&db).expect("open");
+        let mut store = auto_memory::storage::Store::open(&db).await.expect("open");
         let project_id = project(&store);
         rebuild(&mut store, project_id);
-        store.counts(project_id).expect("counts")
+        store.counts(project_id).await.expect("counts")
     };
 
     drop(std::fs::metadata(&db));
     fs::remove_file(&db).expect("delete derived index");
     assert!(!db.exists());
 
-    let mut store = auto_memory::storage::Store::open(&db).expect("reopen");
+    let mut store = auto_memory::storage::Store::open(&db)
+        .await
+        .expect("reopen");
     let project_id = project(&store);
     rebuild(&mut store, project_id);
-    let second_counts = store.counts(project_id).expect("counts");
+    let second_counts = store.counts(project_id).await.expect("counts");
     assert_eq!(
         second_counts, first_counts,
         "index must rebuild from markdown"
     );
 }
 
-#[test]
-fn rebuilt_index_resolves_relation_targets() {
-    let mut store = auto_memory::storage::Store::open_in_memory().expect("store");
+#[tokio::test(flavor = "multi_thread")]
+async fn rebuilt_index_resolves_relation_targets() {
+    let mut store = auto_memory::storage::Store::open_in_memory()
+        .await
+        .expect("store");
     let project_id = project(&store);
     let report = rebuild(&mut store, project_id);
     assert!(
@@ -258,6 +272,7 @@ fn rebuilt_index_resolves_relation_targets() {
     );
     let resolved = store
         .relations(project_id)
+        .await
         .expect("relations")
         .into_iter()
         .filter(|relation| relation.to_id.is_some())
@@ -266,20 +281,24 @@ fn rebuilt_index_resolves_relation_targets() {
     assert!(resolved <= report.relations);
 }
 
-#[test]
-fn markdown_files_are_discovered_recursively_but_not_dot_dirs() {
+#[tokio::test(flavor = "multi_thread")]
+async fn markdown_files_are_discovered_recursively_but_not_dot_dirs() {
     let dir = Scratch::new("scan");
     fs::create_dir_all(dir.join("a")).expect("dir");
     fs::create_dir_all(dir.join(".obsidian")).expect("dir");
     fs::write(dir.join("a/note.md"), "# A\n").expect("write");
     fs::write(dir.join(".obsidian/hidden.md"), "# Hidden\n").expect("write");
 
-    let mut store = auto_memory::storage::Store::open_in_memory().expect("store");
+    let mut store = auto_memory::storage::Store::open_in_memory()
+        .await
+        .expect("store");
     let project_id = store
         .upsert_project("scan", "scan", &dir.path().to_string_lossy())
+        .await
         .expect("project");
     let options = auto_memory::indexing::RebuildOptions::new("scan");
     let report = auto_memory::indexing::rebuild_vault(&mut store, project_id, dir.path(), &options)
+        .await
         .expect("rebuild");
 
     assert_eq!(report.files_seen, 1);

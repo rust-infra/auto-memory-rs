@@ -7,6 +7,7 @@
 #![allow(dead_code)]
 
 use std::fs;
+use std::future::Future;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -16,6 +17,14 @@ use auto_memory::domain::timeframe;
 use auto_memory::indexing::{RebuildOptions, rebuild_vault};
 use auto_memory::storage::Store;
 use serde_json::Value;
+
+/// Run an async operation on a test runtime without forcing an entire test to async.
+pub fn block_on<F: Future>(future: F) -> F::Output {
+    match tokio::runtime::Handle::try_current() {
+        Ok(handle) => tokio::task::block_in_place(|| handle.block_on(future)),
+        Err(_) => auto_memory::runtime::block_on(future).expect("test runtime"),
+    }
+}
 
 /// Root of the repository (`CARGO_MANIFEST_DIR`).
 pub fn repo_root() -> PathBuf {
@@ -180,10 +189,14 @@ pub fn fixture(tag: &str) -> (Scratch, PathBuf, Store, i64) {
     let dir = Scratch::new(tag);
     let vault = dir.join("vault");
     copy_dir(&fixtures_vault(), &vault);
-    let store = Store::open_in_memory().expect("store");
-    let project_id = store
-        .upsert_project("oracle", "oracle", &vault.to_string_lossy())
-        .expect("project");
+    let (store, project_id) = block_on(async {
+        let store = Store::open_in_memory().await.expect("store");
+        let project_id = store
+            .upsert_project("oracle", "oracle", &vault.to_string_lossy())
+            .await
+            .expect("project");
+        (store, project_id)
+    });
     (dir, vault, store, project_id)
 }
 
@@ -192,16 +205,20 @@ pub fn indexed_store(tag: &str) -> (Scratch, Store, i64) {
     let dir = Scratch::new(tag);
     let vault = dir.join("vault");
     copy_fixture_vault(&vault);
-    let mut store = Store::open_in_memory().expect("store");
-    let project_id = store
-        .upsert_project("oracle", "oracle", &vault.to_string_lossy())
-        .expect("project");
-    rebuild_vault(
+    let (mut store, project_id) = block_on(async {
+        let store = Store::open_in_memory().await.expect("store");
+        let project_id = store
+            .upsert_project("oracle", "oracle", &vault.to_string_lossy())
+            .await
+            .expect("project");
+        (store, project_id)
+    });
+    block_on(rebuild_vault(
         &mut store,
         project_id,
         &vault,
         &RebuildOptions::new("oracle"),
-    )
+    ))
     .expect("rebuild");
     (dir, store, project_id)
 }

@@ -15,15 +15,15 @@
 //! `clientInfo` it recorded during `initialize`, so two HTTP clients no longer share
 //! one identity the way the earlier single-identity port did.
 //!
-//! ## Blocking core work
+//! ## Async core work
 //!
-//! Tool dispatch touches the tokio-rusqlite bridge, ONNX, and the vault, so it runs
-//! under [`tokio::task::block_in_place`]. That requires the multi-thread runtime built
-//! by [`crate::runtime::executor`], which is what `main` uses.
+//! Tool dispatch awaits the async application services and the tokio-rusqlite bridge.
+//! CPU-heavy ONNX work can still move to the blocking pool on the multi-thread runtime
+//! built by [`crate::runtime::executor`], which is what `main` uses.
 
 use std::future::Future;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex as StdMutex, PoisonError};
 
 use axum::Router;
 use rmcp::ServerHandler;
@@ -38,6 +38,7 @@ use rmcp::transport::streamable_http_server::{
 };
 use serde_json::{Value, json};
 use tokio::net::TcpListener;
+use tokio::sync::Mutex as AsyncMutex;
 
 use super::server::{ClientInfo, McpServer, SERVER_NAME, advertised_tools};
 use crate::error::{Error, Result};
@@ -64,12 +65,12 @@ pub const DEFAULT_HTTP_PATH: &str = "/mcp";
 /// Shared backend behind every HTTP session.
 ///
 /// One instance is built in `main` and cloned (as an `Arc`) into each session's
-/// `HttpSession`. The [`Store`] sits behind a [`Mutex`] because tool dispatch needs
-/// `&mut Store` and SQLite serializes writers anyway; the provider and reranker are
+/// `HttpSession`. The [`Store`] sits behind an async mutex because tool dispatch needs
+/// `&mut Store` and its SQLite methods are asynchronous; the provider and reranker are
 /// already `Arc`-shared with the stdio server, so both transports use the same
 /// instances.
 pub struct HttpServer {
-    store: Arc<Mutex<Store>>,
+    store: Arc<AsyncMutex<Store>>,
     project_id: i64,
     project_name: String,
     project_external_id: String,
@@ -85,7 +86,7 @@ pub struct HttpServer {
 impl HttpServer {
     /// Bind the HTTP transport to one indexed project.
     pub fn new(
-        store: Arc<Mutex<Store>>,
+        store: Arc<AsyncMutex<Store>>,
         project_id: i64,
         project_name: impl Into<String>,
         project_external_id: impl Into<String>,
@@ -170,15 +171,15 @@ impl HttpServer {
     }
 
     /// Dispatch one `tools/call` through the same [`McpServer`] the stdio transport
-    /// uses. Synchronous so it can run under `block_in_place`.
-    fn dispatch_tool(
+    /// uses.
+    async fn dispatch_tool(
         &self,
         params: &Value,
         client_info: Option<ClientInfo>,
     ) -> std::result::Result<CallToolResult, rmcp::ErrorData> {
         // Recovery, not propagation: a poisoned mutex only means one earlier request
         // panicked, and refusing every later call would turn that into an outage.
-        let mut store = self.store.lock().unwrap_or_else(PoisonError::into_inner);
+        let mut store = self.store.lock().await;
         let mut server = McpServer::new(
             &mut store,
             self.project_id,
@@ -199,7 +200,7 @@ impl HttpServer {
                 .with_reranker_max_document_chars(self.reranker_max_document_chars);
         }
         let name = params["name"].as_str().unwrap_or_default();
-        let result = server.call_tool(params).map_err(|error| {
+        let result = server.call_tool(params).await.map_err(|error| {
             tracing::warn!(%error, tool = name, "mcp http: tool call failed");
             rmcp::ErrorData::internal_error(error.to_string(), None)
         })?;
@@ -220,14 +221,14 @@ impl HttpServer {
 #[derive(Clone)]
 struct HttpSession {
     backend: Arc<HttpServer>,
-    client_info: Arc<Mutex<Option<ClientInfo>>>,
+    client_info: Arc<StdMutex<Option<ClientInfo>>>,
 }
 
 impl HttpSession {
     fn new(backend: Arc<HttpServer>) -> Self {
         Self {
             backend,
-            client_info: Arc::new(Mutex::new(None)),
+            client_info: Arc::new(StdMutex::new(None)),
         }
     }
 
@@ -301,10 +302,9 @@ impl ServerHandler for HttpSession {
             "arguments": request.arguments.unwrap_or_default(),
         });
         let client_info = self.client_info();
-        let backend = Arc::clone(&self.backend);
-        // The tool surface keeps a synchronous API; move it off the reactor exactly
-        // like the stdio transport does. SQLite itself runs on tokio-rusqlite's thread.
-        tokio::task::block_in_place(move || backend.dispatch_tool(&params, client_info))
+        Arc::clone(&self.backend)
+            .dispatch_tool(&params, client_info)
+            .await
     }
 }
 
@@ -398,17 +398,18 @@ mod tests {
     use crate::indexing::{RebuildOptions, rebuild_vault};
 
     /// A server over the fixture vault, backed by an in-memory index.
-    fn server(read_only: bool, tag: &str) -> (tempfile::TempDir, HttpServer) {
+    async fn server(read_only: bool, tag: &str) -> (tempfile::TempDir, HttpServer) {
         let dir = tempfile::Builder::new()
             .prefix(&format!("auto-memory-rs-http-{tag}-"))
             .tempdir()
             .expect("scratch dir");
         let vault = dir.path().join("vault");
         copy_dir(&repo_fixtures_vault(), &vault);
-        let mut store = Store::open_in_memory().expect("store");
+        let mut store = Store::open_in_memory().await.expect("store");
         let permalink = generate_permalink("oracle");
         let project_id = store
             .upsert_project("oracle", &permalink, &vault.to_string_lossy())
+            .await
             .expect("project");
         rebuild_vault(
             &mut store,
@@ -416,14 +417,16 @@ mod tests {
             &vault,
             &RebuildOptions::new(&permalink),
         )
+        .await
         .expect("rebuild");
         let external_id = store
             .project_by_permalink(&permalink)
+            .await
             .expect("read project")
             .expect("project row")
             .external_id;
         let server = HttpServer::new(
-            Arc::new(Mutex::new(store)),
+            Arc::new(AsyncMutex::new(store)),
             project_id,
             "oracle",
             external_id,
@@ -460,9 +463,9 @@ mod tests {
         assert!(normalize_path("mcp").is_err());
     }
 
-    #[test]
-    fn tools_match_the_stdio_definitions_and_hide_mutating_tools_when_read_only() {
-        let (_full_dir, full) = server(false, "tools-full");
+    #[tokio::test(flavor = "multi_thread")]
+    async fn tools_match_the_stdio_definitions_and_hide_mutating_tools_when_read_only() {
+        let (_full_dir, full) = server(false, "tools-full").await;
         let names: Vec<String> = full
             .tools()
             .expect("tools")
@@ -471,7 +474,7 @@ mod tests {
             .collect();
         assert!(names.contains(&"write_note".to_owned()));
 
-        let (_ro_dir, read_only) = server(true, "tools-readonly");
+        let (_ro_dir, read_only) = server(true, "tools-readonly").await;
         let names: Vec<String> = read_only
             .tools()
             .expect("tools")
@@ -482,24 +485,27 @@ mod tests {
         assert!(names.contains(&"read_note".to_owned()));
     }
 
-    #[test]
-    fn dispatch_tool_reaches_the_core_and_shapes_an_mcp_result() {
-        let (_dir, server) = server(false, "dispatch");
+    #[tokio::test(flavor = "multi_thread")]
+    async fn dispatch_tool_reaches_the_core_and_shapes_an_mcp_result() {
+        let (_dir, server) = server(false, "dispatch").await;
         let params = json!({ "name": "read_note", "arguments": { "identifier": "notes/welcome" } });
-        let result = server.dispatch_tool(&params, None).expect("tool result");
+        let result = server
+            .dispatch_tool(&params, None)
+            .await
+            .expect("tool result");
         assert_eq!(result.is_error, Some(false));
         assert_eq!(result.content.len(), 1);
         assert!(result.structured_content.is_some());
     }
 
-    #[test]
-    fn dispatch_tool_refuses_a_mutating_tool_in_read_only_mode() {
-        let (_dir, server) = server(true, "dispatch-readonly");
+    #[tokio::test(flavor = "multi_thread")]
+    async fn dispatch_tool_refuses_a_mutating_tool_in_read_only_mode() {
+        let (_dir, server) = server(true, "dispatch-readonly").await;
         let params = json!({
             "name": "write_note",
             "arguments": { "title": "x", "content": "y" },
         });
-        assert!(server.dispatch_tool(&params, None).is_err());
+        assert!(server.dispatch_tool(&params, None).await.is_err());
     }
 
     #[test]

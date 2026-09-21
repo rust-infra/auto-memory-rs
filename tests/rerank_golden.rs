@@ -30,13 +30,14 @@ mod common;
 use common::{Scratch, copy_dir, load_golden_json, repo_root};
 
 /// A fixture-indexed vault whose vector index is filled from the reference embeddings.
-fn indexed(tag: &str) -> (Scratch, Store, i64, FixtureEmbeddingProvider) {
+async fn indexed(tag: &str) -> (Scratch, Store, i64, FixtureEmbeddingProvider) {
     let dir = Scratch::new(tag);
     let vault = dir.join("vault");
     copy_dir(&repo_root().join("tests/fixtures/vault"), &vault);
-    let mut store = Store::open_in_memory().expect("store");
+    let mut store = Store::open_in_memory().await.expect("store");
     let project_id = store
         .upsert_project("oracle", "oracle", &vault.to_string_lossy())
+        .await
         .expect("project");
     rebuild_vault(
         &mut store,
@@ -44,6 +45,7 @@ fn indexed(tag: &str) -> (Scratch, Store, i64, FixtureEmbeddingProvider) {
         &vault,
         &RebuildOptions::new("oracle"),
     )
+    .await
     .expect("rebuild");
     let embeddings =
         fs::read_to_string(repo_root().join("tests/golden/vector/embeddings-reference.json"))
@@ -52,7 +54,10 @@ fn indexed(tag: &str) -> (Scratch, Store, i64, FixtureEmbeddingProvider) {
     {
         let mut service =
             IndexService::new(&mut store, project_id, &vault, IndexOptions::new("oracle"));
-        service.reindex_embeddings(&provider).expect("embeddings");
+        service
+            .reindex_embeddings(&provider)
+            .await
+            .expect("embeddings");
     }
     (dir, store, project_id, provider)
 }
@@ -125,9 +130,9 @@ fn fixture_from_golden(case: &Value, query: &str) -> FixtureRerankProvider {
 }
 
 /// The flow: pool, document format, ordering, and tail demotion.
-#[test]
-fn rerank_flow_replays_the_captured_reranked_orders() {
-    let (_dir, store, project_id, provider) = indexed("flow");
+#[tokio::test(flavor = "multi_thread")]
+async fn rerank_flow_replays_the_captured_reranked_orders() {
+    let (_dir, store, project_id, provider) = indexed("flow").await;
     let model = provider.model_name().to_owned();
     let options = VectorSearchOptions::default();
 
@@ -161,6 +166,7 @@ fn rerank_flow_replays_the_captured_reranked_orders() {
                 &per_case,
                 Some(&request),
             )
+            .await
             .expect("hybrid")
         } else {
             search_vector(
@@ -171,6 +177,7 @@ fn rerank_flow_replays_the_captured_reranked_orders() {
                 &per_case,
                 Some(&request),
             )
+            .await
             .expect("vector")
         };
         compare(&page, &case, name);
@@ -178,8 +185,8 @@ fn rerank_flow_replays_the_captured_reranked_orders() {
 }
 
 /// The model: the reference ONNX cross-encoder through `fastembed`/`ort`.
-#[test]
-fn onnx_reranker_reproduces_the_reference_scores() {
+#[tokio::test(flavor = "multi_thread")]
+async fn onnx_reranker_reproduces_the_reference_scores() {
     let cache = std::env::var_os(auto_memory::runtime::MODEL_CACHE_ENV)
         .map(PathBuf::from)
         .unwrap_or_else(auto_memory::runtime::default_model_cache);
@@ -196,7 +203,7 @@ fn onnx_reranker_reproduces_the_reference_scores() {
         }
     };
 
-    let (_dir, store, project_id, provider) = indexed("model");
+    let (_dir, store, project_id, provider) = indexed("model").await;
     let model = provider.model_name().to_owned();
     let options = VectorSearchOptions::default();
     let cases: [(&str, &str); 3] = [
@@ -223,6 +230,7 @@ fn onnx_reranker_reproduces_the_reference_scores() {
                 &options,
                 Some(&request),
             )
+            .await
             .expect("hybrid")
         } else {
             search_vector(
@@ -233,6 +241,7 @@ fn onnx_reranker_reproduces_the_reference_scores() {
                 &options,
                 Some(&request),
             )
+            .await
             .expect("vector")
         };
         compare(&page, &case, name);
@@ -250,11 +259,11 @@ fn onnx_reranker_reproduces_the_reference_scores() {
 }
 
 /// The reranker's own contract: one score per document, in input order.
-#[test]
-fn rerank_provider_scores_documents_in_input_order() {
+#[tokio::test(flavor = "multi_thread")]
+async fn rerank_provider_scores_documents_in_input_order() {
     let mut scores = HashMap::new();
     scores.insert("query", HashMap::from([("doc", 0.9f32)]));
-    let (_dir, store, project_id, provider) = indexed("order");
+    let (_dir, store, project_id, provider) = indexed("order").await;
     let model = provider.model_name().to_owned();
     let request_provider = FixtureRerankProvider::from_json(
         &serde_json::json!({
@@ -282,6 +291,7 @@ fn rerank_provider_scores_documents_in_input_order() {
         },
         Some(&request),
     )
+    .await
     .expect("vector");
     assert_eq!(page.results.len(), 10, "an unknown document scores zero");
     assert!(page.results.iter().all(|row| row.score == 0.0));

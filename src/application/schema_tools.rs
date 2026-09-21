@@ -82,12 +82,12 @@ pub enum DriftOutcome {
 }
 
 /// Classify one `schema_validate` request.
-pub fn validate(
+pub async fn validate(
     service: &SchemaService<'_>,
     note_type: Option<&str>,
     identifier: Option<&str>,
 ) -> ValidationOutcome {
-    let report = match service.validate(note_type, identifier) {
+    let report = match service.validate(note_type, identifier).await {
         Ok(report) => report,
         Err(error) => {
             return ValidationOutcome::Failed {
@@ -117,8 +117,12 @@ pub fn validate(
 }
 
 /// Classify one `schema_infer` request.
-pub fn infer(service: &SchemaService<'_>, note_type: &str, threshold: f64) -> InferenceOutcome {
-    let report = match service.infer(note_type, threshold) {
+pub async fn infer(
+    service: &SchemaService<'_>,
+    note_type: &str,
+    threshold: f64,
+) -> InferenceOutcome {
+    let report = match service.infer(note_type, threshold).await {
         Ok(report) => report,
         Err(error) => {
             return InferenceOutcome::Failed {
@@ -138,8 +142,8 @@ pub fn infer(service: &SchemaService<'_>, note_type: &str, threshold: f64) -> In
 }
 
 /// Classify one `schema_diff` request.
-pub fn diff(service: &SchemaService<'_>, note_type: &str) -> DriftOutcome {
-    match service.diff(note_type) {
+pub async fn diff(service: &SchemaService<'_>, note_type: &str) -> DriftOutcome {
+    match service.diff(note_type).await {
         Ok(report) if report.schema_found => DriftOutcome::Report(Box::new(report)),
         Ok(_) => DriftOutcome::NoSchema {
             note_type: note_type.to_owned(),

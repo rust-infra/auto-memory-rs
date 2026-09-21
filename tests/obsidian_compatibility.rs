@@ -19,10 +19,9 @@ use std::time::{Duration, Instant};
 use auto_memory::indexing::{
     ChangeKind, IndexOptions, IndexService, VaultWatcher, shutdown_when, watch_vault,
 };
-use auto_memory::runtime::block_on;
 use auto_memory::storage::Store;
 mod common;
-use common::{Scratch, copy_dir, fixture, repo_root};
+use common::{Scratch, block_on, copy_dir, fixture, repo_root};
 
 /// Write the way Obsidian does: a sibling temp file, then a rename over the target.
 fn atomic_write(vault: &Path, relative_path: &str, content: &str) {
@@ -34,22 +33,20 @@ fn atomic_write(vault: &Path, relative_path: &str, content: &str) {
 
 /// The `links_to` search row owned by the note that links to a future target.
 fn relation_search_row(store: &Store, project_id: i64) -> auto_memory::domain::SearchResult {
-    store
-        .search_text(
-            project_id,
-            &auto_memory::search::TextSearchOptions {
-                entity_types: vec![auto_memory::domain::SearchItemType::Relation],
-                ..auto_memory::search::TextSearchOptions::default()
-            },
-        )
-        .expect("search")
-        .results
-        .into_iter()
-        .find(|row| {
-            row.file_path == "notes/points-here.md"
-                && row.relation_type.as_deref() == Some("links_to")
-        })
-        .expect("relation search row")
+    block_on(store.search_text(
+        project_id,
+        &auto_memory::search::TextSearchOptions {
+            entity_types: vec![auto_memory::domain::SearchItemType::Relation],
+            ..auto_memory::search::TextSearchOptions::default()
+        },
+    ))
+    .expect("search")
+    .results
+    .into_iter()
+    .find(|row| {
+        row.file_path == "notes/points-here.md" && row.relation_type.as_deref() == Some("links_to")
+    })
+    .expect("relation search row")
 }
 
 /// Phase 14 item 2: an atomic save replaces content without changing the note's identity.
@@ -58,24 +55,28 @@ fn relation_search_row(store: &Store, project_id: i64) -> auto_memory::domain::S
 /// target. The rename produces both a create (for the target) and a delete (for the temp
 /// name), so the watcher must ignore the temp file and treat the target as one write —
 /// keeping the entity id, permalink, and `created_at` while the checksum changes.
-#[test]
-fn obsidian_atomic_save_keeps_the_note_identity() {
+#[tokio::test(flavor = "multi_thread")]
+async fn obsidian_atomic_save_keeps_the_note_identity() {
     let (_dir, vault, mut store, project_id) = fixture("atomic");
     {
         // `IndexService` borrows the store mutably, so every phase that touches the
         // store directly runs in its own scope (the watcher takes ownership).
         let mut service =
             IndexService::new(&mut store, project_id, &vault, IndexOptions::new("oracle"));
-        service.reconcile().expect("initial reconcile");
+        service.reconcile().await.expect("initial reconcile");
     }
 
     let before = store
         .entity_by_file_path(project_id, "notes/simple.md")
+        .await
         .expect("lookup")
         .expect("indexed note");
     let before_checksum = before.checksum.clone();
-    let before_created = store.entity_created_at(before.id).expect("created_at");
-    let before_entities = store.counts(project_id).expect("counts").entities;
+    let before_created = store
+        .entity_created_at(before.id)
+        .await
+        .expect("created_at");
+    let before_entities = store.counts(project_id).await.expect("counts").entities;
 
     atomic_write(
         &vault,
@@ -91,12 +92,13 @@ fn obsidian_atomic_save_keeps_the_note_identity() {
         watcher.record("notes/simple.md.tmp", ChangeKind::Created);
         watcher.record("notes/simple.md", ChangeKind::Created);
         assert_eq!(watcher.pending(), 1, "only the note path is queued");
-        let report = watcher.flush().expect("flush");
+        let report = watcher.flush().await.expect("flush");
         assert_eq!(report.indexed, 1, "{report:?}");
     }
 
     let after = store
         .entity_by_file_path(project_id, "notes/simple.md")
+        .await
         .expect("lookup")
         .expect("still indexed");
     assert_eq!(
@@ -106,18 +108,19 @@ fn obsidian_atomic_save_keeps_the_note_identity() {
     assert_eq!(after.permalink, before.permalink);
     assert_ne!(after.checksum, before_checksum, "the content did change");
     assert_eq!(
-        store.entity_created_at(after.id).expect("created_at"),
+        store.entity_created_at(after.id).await.expect("created_at"),
         before_created,
         "the note was edited, not recreated"
     );
     assert_eq!(
-        store.counts(project_id).expect("counts").entities,
+        store.counts(project_id).await.expect("counts").entities,
         before_entities,
         "no ghost entity for the temp file"
     );
     assert!(
         store
             .entity_by_file_path(project_id, "notes/simple.md.tmp")
+            .await
             .expect("lookup")
             .is_none()
     );
@@ -133,7 +136,7 @@ fn obsidian_atomic_save_keeps_the_note_identity() {
 fn open_index(path: &Path) -> Store {
     let deadline = Instant::now() + Duration::from_secs(10);
     loop {
-        match Store::open(path) {
+        match block_on(Store::open(path)) {
             Ok(store) => return store,
             Err(error) => assert!(Instant::now() < deadline, "opening the index: {error}"),
         }
@@ -142,8 +145,8 @@ fn open_index(path: &Path) -> Store {
 }
 
 /// Phase 14 item 1/2 end to end: the real `notify` loop follows an atomic save.
-#[test]
-fn real_watcher_follows_an_obsidian_atomic_save() {
+#[tokio::test(flavor = "multi_thread")]
+async fn real_watcher_follows_an_obsidian_atomic_save() {
     let dir = Scratch::new("atomic-live");
     let vault = dir.join("vault");
     copy_dir(&repo_root().join("tests/fixtures/vault"), &vault);
@@ -154,26 +157,28 @@ fn real_watcher_follows_an_obsidian_atomic_save() {
     let stop_for_thread = Arc::clone(&stop);
     let index_for_thread = index_path.clone();
     let handle = std::thread::spawn(move || {
-        let mut store = open_index(&index_for_thread);
-        let project_id = store
-            .upsert_project("oracle", "oracle", &vault_for_thread.to_string_lossy())
-            .expect("project");
-        let mut service = IndexService::new(
-            &mut store,
-            project_id,
-            &vault_for_thread,
-            IndexOptions::new("oracle"),
-        );
-        service.reconcile().expect("initial reconcile");
-        let watcher =
-            VaultWatcher::new(service, &vault_for_thread).with_window(Duration::from_millis(50));
-        // The loop is async now; this thread owns the store, so it drives the runtime.
-        block_on(watch_vault(
-            watcher,
-            shutdown_when(|| stop_for_thread.load(Ordering::Relaxed)),
-        ))
-        .expect("runtime")
-        .expect("watch loop")
+        block_on(async move {
+            let mut store = open_index(&index_for_thread);
+            let project_id = store
+                .upsert_project("oracle", "oracle", &vault_for_thread.to_string_lossy())
+                .await
+                .expect("project");
+            let mut service = IndexService::new(
+                &mut store,
+                project_id,
+                &vault_for_thread,
+                IndexOptions::new("oracle"),
+            );
+            service.reconcile().await.expect("initial reconcile");
+            let watcher = VaultWatcher::new(service, &vault_for_thread)
+                .with_window(Duration::from_millis(50));
+            watch_vault(
+                watcher,
+                shutdown_when(|| stop_for_thread.load(Ordering::Relaxed)),
+            )
+            .await
+            .expect("watch loop")
+        })
     });
 
     // The watcher thread reconciles the vault first, so wait for the note to exist
@@ -181,8 +186,8 @@ fn real_watcher_follows_an_obsidian_atomic_save() {
     let before = {
         let deadline = Instant::now() + Duration::from_secs(10);
         loop {
-            if let Ok(store) = Store::open(&index_path)
-                && let Ok(Some(entity)) = store.entity_by_file_path(1, "notes/simple.md")
+            if let Ok(store) = Store::open(&index_path).await
+                && let Ok(Some(entity)) = store.entity_by_file_path(1, "notes/simple.md").await
             {
                 break entity;
             }
@@ -203,8 +208,8 @@ fn real_watcher_follows_an_obsidian_atomic_save() {
     let deadline = Instant::now() + Duration::from_secs(10);
     let mut updated = None;
     while Instant::now() < deadline {
-        if let Ok(store) = Store::open(&index_path)
-            && let Ok(Some(entity)) = store.entity_by_file_path(1, "notes/simple.md")
+        if let Ok(store) = Store::open(&index_path).await
+            && let Ok(Some(entity)) = store.entity_by_file_path(1, "notes/simple.md").await
             && entity.checksum != before.checksum
         {
             updated = Some(entity);
@@ -229,15 +234,15 @@ fn real_watcher_follows_an_obsidian_atomic_save() {
 /// `.obsidian/` holds editor state and `.basic-memory/` holds vault-local config; both
 /// are dot-directories, and the reference ignore rules must keep them out of the index
 /// whether the change arrives through the watcher or through a reconcile.
-#[test]
-fn obsidian_internal_directories_never_enter_the_index() {
+#[tokio::test(flavor = "multi_thread")]
+async fn obsidian_internal_directories_never_enter_the_index() {
     let (_dir, vault, mut store, project_id) = fixture("internal-dirs");
     {
         let mut service =
             IndexService::new(&mut store, project_id, &vault, IndexOptions::new("oracle"));
-        service.reconcile().expect("initial reconcile");
+        service.reconcile().await.expect("initial reconcile");
     }
-    let before = store.counts(project_id).expect("counts");
+    let before = store.counts(project_id).await.expect("counts");
 
     fs::create_dir_all(vault.join(".obsidian/plugins/dataview")).expect("plugin dir");
     fs::write(vault.join(".obsidian/workspace.json"), "{\"open\":[]}").expect("write");
@@ -265,7 +270,7 @@ fn obsidian_internal_directories_never_enter_the_index() {
             watcher.record(path, ChangeKind::Created);
         }
         assert_eq!(watcher.pending(), 0, "editor state must not be queued");
-        let report = watcher.flush().expect("flush");
+        let report = watcher.flush().await.expect("flush");
         assert_eq!(report, Default::default());
     }
 
@@ -274,9 +279,9 @@ fn obsidian_internal_directories_never_enter_the_index() {
     {
         let mut service =
             IndexService::new(&mut store, project_id, &vault, IndexOptions::new("oracle"));
-        service.reconcile().expect("reconcile");
+        service.reconcile().await.expect("reconcile");
     }
-    assert_eq!(store.counts(project_id).expect("counts"), before);
+    assert_eq!(store.counts(project_id).await.expect("counts"), before);
     for path in [
         ".obsidian/app.json",
         ".obsidian/workspace.json",
@@ -285,6 +290,7 @@ fn obsidian_internal_directories_never_enter_the_index() {
         assert!(
             store
                 .entity_by_file_path(project_id, path)
+                .await
                 .expect("lookup")
                 .is_none(),
             "{path} must not be indexed"
@@ -296,13 +302,13 @@ fn obsidian_internal_directories_never_enter_the_index() {
 ///
 /// The link is authored first (as it is while writing), stays unresolved, and then
 /// resolves once the target note is created — without re-editing the source note.
-#[test]
-fn wikilink_to_a_future_note_resolves_when_the_target_appears() {
+#[tokio::test(flavor = "multi_thread")]
+async fn wikilink_to_a_future_note_resolves_when_the_target_appears() {
     let (_dir, vault, mut store, project_id) = fixture("future-link");
     {
         let mut service =
             IndexService::new(&mut store, project_id, &vault, IndexOptions::new("oracle"));
-        service.reconcile().expect("initial reconcile");
+        service.reconcile().await.expect("initial reconcile");
     }
 
     fs::write(
@@ -315,10 +321,10 @@ fn wikilink_to_a_future_note_resolves_when_the_target_appears() {
             IndexService::new(&mut store, project_id, &vault, IndexOptions::new("oracle"));
         let mut watcher = VaultWatcher::new(service, &vault).with_window(Duration::from_millis(20));
         watcher.record("notes/points-here.md", ChangeKind::Created);
-        assert_eq!(watcher.flush().expect("flush").indexed, 1);
+        assert_eq!(watcher.flush().await.expect("flush").indexed, 1);
     }
 
-    let relations = store.relations(project_id).expect("relations");
+    let relations = store.relations(project_id).await.expect("relations");
     assert_eq!(
         relations
             .iter()
@@ -354,14 +360,15 @@ fn wikilink_to_a_future_note_resolves_when_the_target_appears() {
             IndexService::new(&mut store, project_id, &vault, IndexOptions::new("oracle"));
         let mut watcher = VaultWatcher::new(service, &vault).with_window(Duration::from_millis(20));
         watcher.record("notes/later-target.md", ChangeKind::Created);
-        assert_eq!(watcher.flush().expect("flush").indexed, 1);
+        assert_eq!(watcher.flush().await.expect("flush").indexed, 1);
     }
 
     let target = store
         .entity_by_file_path(project_id, "notes/later-target.md")
+        .await
         .expect("lookup")
         .expect("indexed target");
-    let relations = store.relations(project_id).expect("relations");
+    let relations = store.relations(project_id).await.expect("relations");
     let resolved = relations
         .iter()
         .find(|relation| relation.to_name == "notes/later-target")
@@ -394,21 +401,23 @@ fn wikilink_to_a_future_note_resolves_when_the_target_appears() {
 ///
 /// The reference default `update_permalinks_on_move=false` keeps the permalink, which is
 /// exactly what makes other notes' links keep resolving after a rename.
-#[test]
-fn file_explorer_rename_keeps_incoming_links_intact() {
+#[tokio::test(flavor = "multi_thread")]
+async fn file_explorer_rename_keeps_incoming_links_intact() {
     let (_dir, vault, mut store, project_id) = fixture("rename-links");
     {
         let mut service =
             IndexService::new(&mut store, project_id, &vault, IndexOptions::new("oracle"));
-        service.reconcile().expect("initial reconcile");
+        service.reconcile().await.expect("initial reconcile");
     }
 
     let simple = store
         .entity_by_file_path(project_id, "notes/simple.md")
+        .await
         .expect("lookup")
         .expect("indexed note");
     let incoming_before = store
         .relations(project_id)
+        .await
         .expect("relations")
         .into_iter()
         .find(|relation| relation.to_id == Some(simple.id))
@@ -426,18 +435,20 @@ fn file_explorer_rename_keeps_incoming_links_intact() {
         let mut watcher = VaultWatcher::new(service, &vault).with_window(Duration::from_millis(20));
         watcher.record("notes/simple.md", ChangeKind::Removed);
         watcher.record("archive/simple.md", ChangeKind::Created);
-        let report = watcher.flush().expect("flush");
+        let report = watcher.flush().await.expect("flush");
         assert_eq!(report.moved, 1, "{report:?}");
     }
 
     let moved = store
         .entity_by_file_path(project_id, "archive/simple.md")
+        .await
         .expect("lookup")
         .expect("moved note");
     assert_eq!(moved.id, simple.id, "the note keeps its identity");
     assert_eq!(
         store
             .entity_by_permalink(project_id, "oracle/notes/simple")
+            .await
             .expect("lookup")
             .expect("permalink")
             .id,
@@ -447,6 +458,7 @@ fn file_explorer_rename_keeps_incoming_links_intact() {
     assert!(
         store
             .entity_by_file_path(project_id, "notes/simple.md")
+            .await
             .expect("lookup")
             .is_none(),
         "no ghost row at the old path"
@@ -454,6 +466,7 @@ fn file_explorer_rename_keeps_incoming_links_intact() {
 
     let incoming_after = store
         .relations(project_id)
+        .await
         .expect("relations")
         .into_iter()
         .find(|relation| {
@@ -467,13 +480,13 @@ fn file_explorer_rename_keeps_incoming_links_intact() {
 
 /// Phase 14 item 4/8: deleting a note drops its derived state, and the vault alone
 /// restores everything on a full reindex.
-#[test]
-fn deleting_a_note_drops_derived_state_and_a_full_reindex_restores_the_vault() {
+#[tokio::test(flavor = "multi_thread")]
+async fn deleting_a_note_drops_derived_state_and_a_full_reindex_restores_the_vault() {
     let (_dir, vault, mut store, project_id) = fixture("delete-recover");
     {
         let mut service =
             IndexService::new(&mut store, project_id, &vault, IndexOptions::new("oracle"));
-        service.reconcile().expect("initial reconcile");
+        service.reconcile().await.expect("initial reconcile");
     }
 
     // A note that links to `notes/simple.md`, so a deletion has a link to strand.
@@ -485,15 +498,19 @@ fn deleting_a_note_drops_derived_state_and_a_full_reindex_restores_the_vault() {
     {
         let mut service =
             IndexService::new(&mut store, project_id, &vault, IndexOptions::new("oracle"));
-        service.index_file("notes/points-here.md").expect("index");
+        service
+            .index_file("notes/points-here.md")
+            .await
+            .expect("index");
     }
     let simple = store
         .entity_by_file_path(project_id, "notes/simple.md")
+        .await
         .expect("lookup")
         .expect("indexed note");
     assert!(
         store
-            .relations(project_id)
+            .relations(project_id).await
             .expect("relations")
             .iter()
             .any(|relation| relation.to_name == "notes/simple" && relation.to_id == Some(simple.id))
@@ -505,18 +522,20 @@ fn deleting_a_note_drops_derived_state_and_a_full_reindex_restores_the_vault() {
             IndexService::new(&mut store, project_id, &vault, IndexOptions::new("oracle"));
         let mut watcher = VaultWatcher::new(service, &vault).with_window(Duration::from_millis(20));
         watcher.record("notes/simple.md", ChangeKind::Removed);
-        assert_eq!(watcher.flush().expect("flush").removed, 1);
+        assert_eq!(watcher.flush().await.expect("flush").removed, 1);
     }
 
     assert!(
         store
             .entity_by_file_path(project_id, "notes/simple.md")
+            .await
             .expect("lookup")
             .is_none()
     );
     assert!(
         store
             .observations_for_entity(simple.id)
+            .await
             .expect("observations")
             .is_empty(),
         "the deleted note's observations go with it"
@@ -529,6 +548,7 @@ fn deleting_a_note_drops_derived_state_and_a_full_reindex_restores_the_vault() {
                 ..auto_memory::search::TextSearchOptions::default()
             },
         )
+        .await
         .expect("search");
     assert_eq!(page.total, 0, "its search rows are gone");
     // `relation.to_id` is `ON DELETE CASCADE` in the reference schema too, so the
@@ -536,6 +556,7 @@ fn deleting_a_note_drops_derived_state_and_a_full_reindex_restores_the_vault() {
     assert_eq!(
         store
             .relations(project_id)
+            .await
             .expect("relations")
             .iter()
             .filter(|relation| relation.to_name == "notes/simple")
@@ -548,10 +569,10 @@ fn deleting_a_note_drops_derived_state_and_a_full_reindex_restores_the_vault() {
     {
         let mut service =
             IndexService::new(&mut store, project_id, &vault, IndexOptions::new("oracle"));
-        let report = service.full_rebuild().expect("full rebuild");
+        let report = service.full_rebuild().await.expect("full rebuild");
         assert!(report.documents_indexed > 0, "{report:?}");
     }
-    let relations = store.relations(project_id).expect("relations");
+    let relations = store.relations(project_id).await.expect("relations");
     let restored = relations
         .iter()
         .find(|relation| relation.to_name == "notes/simple")
@@ -560,6 +581,7 @@ fn deleting_a_note_drops_derived_state_and_a_full_reindex_restores_the_vault() {
     assert!(
         store
             .entity_by_file_path(project_id, "notes/simple.md")
+            .await
             .expect("lookup")
             .is_none()
     );

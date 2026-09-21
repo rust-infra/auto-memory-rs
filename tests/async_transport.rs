@@ -168,8 +168,8 @@ async fn async_transport_stops_on_shutdown_between_frames() {
 /// `stop` is never set until after the note is indexed, so the shutdown arm of the
 /// `select!` is what releases the second file — the graceful-stop property the
 /// blocking loop could not offer (a killed process dropped the debounce window).
-#[test]
-fn async_watch_loop_indexes_then_flushes_on_shutdown() {
+#[tokio::test(flavor = "multi_thread")]
+async fn async_watch_loop_indexes_then_flushes_on_shutdown() {
     let dir = Scratch::new("async-watch");
     let vault = dir.join("vault");
     let index_path = dir.join("memory.db");
@@ -180,9 +180,10 @@ fn async_watch_loop_indexes_then_flushes_on_shutdown() {
     let (stop, stopped) = tokio::sync::oneshot::channel::<()>();
     let handle = std::thread::spawn(move || {
         block_on(async move {
-            let mut store = Store::open(&index_for_task).expect("store");
+            let mut store = Store::open(&index_for_task).await.expect("store");
             let project_id = store
                 .upsert_project("oracle", "oracle", &vault_for_task.to_string_lossy())
+                .await
                 .expect("project");
             let service = IndexService::new(
                 &mut store,
@@ -212,8 +213,8 @@ fn async_watch_loop_indexes_then_flushes_on_shutdown() {
     let deadline = Instant::now() + Duration::from_secs(10);
     let mut indexed = false;
     while Instant::now() < deadline {
-        if let Ok(store) = Store::open(&index_path)
-            && let Ok(Some(entity)) = store.entity_by_file_path(1, "watched.md")
+        if let Ok(store) = Store::open(&index_path).await
+            && let Ok(Some(entity)) = store.entity_by_file_path(1, "watched.md").await
         {
             assert_eq!(entity.file_path, "watched.md");
             indexed = true;
@@ -237,10 +238,12 @@ fn async_watch_loop_indexes_then_flushes_on_shutdown() {
 
     let batches = handle.join().expect("watcher thread");
     assert!(batches >= 2, "one batch per write, got {batches}");
-    let store = Store::open(&index_path).expect("store");
+    let store = block_on(Store::open(&index_path))
+        .expect("runtime")
+        .expect("store");
     assert!(
-        store
-            .entity_by_file_path(1, "late.md")
+        block_on(store.entity_by_file_path(1, "late.md"))
+            .expect("runtime")
             .expect("read")
             .is_some(),
         "the shutdown flush applied the pending window"
@@ -359,10 +362,12 @@ fn watch_cli_flushes_the_pending_window_on_sigint() {
         );
     }
 
-    let store = Store::open(&index).expect("store");
+    let store = block_on(Store::open(&index))
+        .expect("runtime")
+        .expect("store");
     assert!(
-        store
-            .entity_by_file_path(1, "late.md")
+        block_on(store.entity_by_file_path(1, "late.md"))
+            .expect("runtime")
             .expect("read")
             .is_some(),
         "the note written before Ctrl-C is in the index"

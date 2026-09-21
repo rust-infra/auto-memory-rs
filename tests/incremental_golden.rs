@@ -12,17 +12,21 @@ use auto_memory::indexing::{
 };
 use auto_memory::storage::Store;
 mod common;
-use common::{Scratch, copy_dir, fixtures_vault};
+use common::{Scratch, block_on, copy_dir, fixtures_vault};
 
 /// Fresh temp vault (copy of the tracked fixtures) plus an in-memory store.
 fn setup(tag: &str) -> (Scratch, PathBuf, Store, i64) {
     let dir = Scratch::new(tag);
     let vault = dir.join("vault");
     copy_dir(&fixtures_vault(), &vault);
-    let store = Store::open_in_memory().expect("store");
-    let project_id = store
-        .upsert_project("oracle", "oracle", &vault.to_string_lossy())
-        .expect("project");
+    let (store, project_id) = block_on(async {
+        let store = Store::open_in_memory().await.expect("store");
+        let project_id = store
+            .upsert_project("oracle", "oracle", &vault.to_string_lossy())
+            .await
+            .expect("project");
+        (store, project_id)
+    });
     (dir, vault, store, project_id)
 }
 
@@ -41,7 +45,7 @@ fn service<'a>(
 }
 
 fn snapshot(store: &Store, project_id: i64) -> (Vec<String>, Vec<String>, Vec<String>) {
-    let entities = store.entities(project_id).expect("entities");
+    let entities = block_on(store.entities(project_id)).expect("entities");
     let name_of: BTreeMap<i64, String> = entities
         .iter()
         .map(|entity| {
@@ -69,8 +73,7 @@ fn snapshot(store: &Store, project_id: i64) -> (Vec<String>, Vec<String>, Vec<St
         .collect();
     entity_keys.sort();
 
-    let mut observation_keys: Vec<String> = store
-        .observations(project_id)
+    let mut observation_keys: Vec<String> = block_on(store.observations(project_id))
         .expect("observations")
         .into_iter()
         .map(|observation| {
@@ -89,8 +92,7 @@ fn snapshot(store: &Store, project_id: i64) -> (Vec<String>, Vec<String>, Vec<St
         .collect();
     observation_keys.sort();
 
-    let mut relation_keys: Vec<String> = store
-        .relations(project_id)
+    let mut relation_keys: Vec<String> = block_on(store.relations(project_id))
         .expect("relations")
         .into_iter()
         .map(|relation| {
@@ -108,11 +110,12 @@ fn snapshot(store: &Store, project_id: i64) -> (Vec<String>, Vec<String>, Vec<St
     (entity_keys, observation_keys, relation_keys)
 }
 
-#[test]
-fn reconcile_indexes_new_files() {
+#[tokio::test(flavor = "multi_thread")]
+async fn reconcile_indexes_new_files() {
     let (_dir, vault, mut store, project_id) = setup("reconcile-new");
     let report = service(&mut store, project_id, &vault, false)
         .reconcile()
+        .await
         .expect("reconcile");
 
     assert_eq!(
@@ -122,36 +125,40 @@ fn reconcile_indexes_new_files() {
     assert_eq!(report.skipped, 1);
     assert_eq!(report.removed, 0);
 
-    let counts = store.counts(project_id).expect("counts");
+    let counts = store.counts(project_id).await.expect("counts");
     assert_eq!(counts.entities, 15);
     assert_eq!(counts.observations, 16);
     assert_eq!(counts.relations, 16);
 }
 
-#[test]
-fn reconcile_is_idempotent_for_unchanged_files() {
+#[tokio::test(flavor = "multi_thread")]
+async fn reconcile_is_idempotent_for_unchanged_files() {
     let (_dir, vault, mut store, project_id) = setup("reconcile-idempotent");
     service(&mut store, project_id, &vault, false)
         .reconcile()
+        .await
         .expect("first");
     let second = service(&mut store, project_id, &vault, false)
         .reconcile()
+        .await
         .expect("second");
 
     assert_eq!(second.added, 0);
     assert_eq!(second.updated, 0);
     assert_eq!(second.unchanged, 15);
-    assert_eq!(store.counts(project_id).expect("counts").entities, 15);
+    assert_eq!(store.counts(project_id).await.expect("counts").entities, 15);
 }
 
-#[test]
-fn modified_file_updates_without_duplicates() {
+#[tokio::test(flavor = "multi_thread")]
+async fn modified_file_updates_without_duplicates() {
     let (_dir, vault, mut store, project_id) = setup("modified");
     service(&mut store, project_id, &vault, false)
         .reconcile()
+        .await
         .expect("initial");
     let entity_id = store
         .entity_by_file_path(project_id, "notes/simple.md")
+        .await
         .expect("entity")
         .expect("exists")
         .id;
@@ -163,28 +170,32 @@ fn modified_file_updates_without_duplicates() {
 
     let report = service(&mut store, project_id, &vault, false)
         .reconcile()
+        .await
         .expect("reconcile");
     assert_eq!(report.updated, 1);
     assert_eq!(report.added, 0);
 
-    let counts = store.counts(project_id).expect("counts");
+    let counts = store.counts(project_id).await.expect("counts");
     assert_eq!(counts.entities, 15, "no duplicate entity");
     assert_eq!(counts.observations, 17, "one observation added");
     let entity = store
         .entity_by_file_path(project_id, "notes/simple.md")
+        .await
         .expect("entity")
         .expect("exists");
     assert_eq!(entity.id, entity_id, "row id stays stable across updates");
 }
 
-#[test]
-fn rename_keeps_permalink_and_leaves_no_ghost() {
+#[tokio::test(flavor = "multi_thread")]
+async fn rename_keeps_permalink_and_leaves_no_ghost() {
     let (_dir, vault, mut store, project_id) = setup("rename");
     service(&mut store, project_id, &vault, false)
         .reconcile()
+        .await
         .expect("initial");
     let original = store
         .entity_by_file_path(project_id, "notes/simple.md")
+        .await
         .expect("entity")
         .expect("exists");
 
@@ -195,38 +206,43 @@ fn rename_keeps_permalink_and_leaves_no_ghost() {
     .expect("rename");
     let outcome = service(&mut store, project_id, &vault, false)
         .move_file("notes/simple.md", "notes/renamed.md")
+        .await
         .expect("move");
     assert_eq!(outcome, IndexOutcome::Indexed);
 
     assert!(
         store
             .entity_by_file_path(project_id, "notes/simple.md")
+            .await
             .expect("query")
             .is_none(),
         "old path must not linger"
     );
     let moved = store
         .entity_by_file_path(project_id, "notes/renamed.md")
+        .await
         .expect("query")
         .expect("moved row");
     assert_eq!(
         moved.permalink, original.permalink,
         "update_permalinks_on_move defaults to false"
     );
-    assert_eq!(store.counts(project_id).expect("counts").entities, 15);
+    assert_eq!(store.counts(project_id).await.expect("counts").entities, 15);
 
     let reconcile = service(&mut store, project_id, &vault, false)
         .reconcile()
+        .await
         .expect("reconcile");
     assert_eq!(reconcile.removed, 0);
     assert_eq!(reconcile.added, 0);
 }
 
-#[test]
-fn rename_updates_permalink_when_configured() {
+#[tokio::test(flavor = "multi_thread")]
+async fn rename_updates_permalink_when_configured() {
     let (_dir, vault, mut store, project_id) = setup("rename-permalink");
     service(&mut store, project_id, &vault, true)
         .reconcile()
+        .await
         .expect("initial");
 
     fs::rename(
@@ -236,35 +252,40 @@ fn rename_updates_permalink_when_configured() {
     .expect("rename");
     service(&mut store, project_id, &vault, true)
         .move_file("notes/simple.md", "notes/renamed.md")
+        .await
         .expect("move");
 
     let moved = store
         .entity_by_file_path(project_id, "notes/renamed.md")
+        .await
         .expect("query")
         .expect("moved row");
     assert_eq!(moved.permalink.as_deref(), Some("oracle/notes/renamed"));
 }
 
-#[test]
-fn deleted_file_is_pruned() {
+#[tokio::test(flavor = "multi_thread")]
+async fn deleted_file_is_pruned() {
     let (_dir, vault, mut store, project_id) = setup("delete");
     service(&mut store, project_id, &vault, false)
         .reconcile()
+        .await
         .expect("initial");
     fs::remove_file(vault.join("notes/task-markers.md")).expect("delete");
 
     let report = service(&mut store, project_id, &vault, false)
         .reconcile()
+        .await
         .expect("reconcile");
     assert_eq!(report.removed, 1);
-    assert_eq!(store.counts(project_id).expect("counts").entities, 14);
+    assert_eq!(store.counts(project_id).await.expect("counts").entities, 14);
 }
 
-#[test]
-fn malformed_file_does_not_corrupt_the_index() {
+#[tokio::test(flavor = "multi_thread")]
+async fn malformed_file_does_not_corrupt_the_index() {
     let (_dir, vault, mut store, project_id) = setup("malformed");
     service(&mut store, project_id, &vault, false)
         .reconcile()
+        .await
         .expect("initial");
     fs::write(
         vault.join("notes/broken.md"),
@@ -274,26 +295,29 @@ fn malformed_file_does_not_corrupt_the_index() {
 
     let report = service(&mut store, project_id, &vault, false)
         .reconcile()
+        .await
         .expect("reconcile");
     // The fixture vault already contains one malformed file; the new one adds a second.
     assert_eq!(report.skipped, 2);
     assert_eq!(report.added, 0);
-    let counts = store.counts(project_id).expect("counts");
+    let counts = store.counts(project_id).await.expect("counts");
     assert_eq!(counts.entities, 15, "broken file is not indexed");
     assert!(
         store
             .entity_by_file_path(project_id, "notes/simple.md")
+            .await
             .expect("query")
             .is_some(),
         "healthy notes stay indexed"
     );
 }
 
-#[test]
-fn incremental_and_full_rebuild_converge() {
+#[tokio::test(flavor = "multi_thread")]
+async fn incremental_and_full_rebuild_converge() {
     let (_dir, vault, mut store, project_id) = setup("converge");
     service(&mut store, project_id, &vault, false)
         .reconcile()
+        .await
         .expect("initial");
 
     // Mutate the vault: edit one note, delete another, add a third.
@@ -310,12 +334,14 @@ fn incremental_and_full_rebuild_converge() {
 
     service(&mut store, project_id, &vault, false)
         .reconcile()
+        .await
         .expect("incremental");
     let incremental = snapshot(&store, project_id);
 
-    let mut fresh = Store::open_in_memory().expect("store");
+    let mut fresh = Store::open_in_memory().await.expect("store");
     let fresh_project = fresh
         .upsert_project("oracle", "oracle", &vault.to_string_lossy())
+        .await
         .expect("project");
     rebuild_vault(
         &mut fresh,
@@ -323,6 +349,7 @@ fn incremental_and_full_rebuild_converge() {
         &vault,
         &RebuildOptions::new("oracle"),
     )
+    .await
     .expect("full rebuild");
     let full = snapshot(&fresh, fresh_project);
 
@@ -332,11 +359,12 @@ fn incremental_and_full_rebuild_converge() {
     );
 }
 
-#[test]
-fn debounced_events_drive_reconcile() {
+#[tokio::test(flavor = "multi_thread")]
+async fn debounced_events_drive_reconcile() {
     let (_dir, vault, mut store, project_id) = setup("debounce");
     service(&mut store, project_id, &vault, false)
         .reconcile()
+        .await
         .expect("initial");
 
     let start = Instant::now();
@@ -369,7 +397,11 @@ fn debounced_events_drive_reconcile() {
 
     let report = service(&mut store, project_id, &vault, false)
         .reconcile()
+        .await
         .expect("reconcile");
     assert_eq!(report.updated, 1);
-    assert_eq!(store.counts(project_id).expect("counts").observations, 17);
+    assert_eq!(
+        store.counts(project_id).await.expect("counts").observations,
+        17
+    );
 }

@@ -31,7 +31,7 @@ const QUERY_PAGE_SIZE: u32 = 5;
 ///
 /// `configured` distinguishes "first run, no settings found" from "settings
 /// exist but the graph is unreachable", which changes only the nudge text.
-pub fn build_session_brief(
+pub async fn build_session_brief(
     store: &Store,
     project_id: i64,
     profile: &HarnessProfile,
@@ -61,9 +61,10 @@ pub fn build_session_brief(
         None
     };
 
-    let tasks = query(store, project_id, &["task"], Some("active"), None, None);
-    let decisions = query(store, project_id, &["decision"], Some("open"), None, None);
-    let sessions = query_sessions(store, project_id, profile, settings, repository.as_deref());
+    let tasks = query(store, project_id, &["task"], Some("active"), None, None).await;
+    let decisions = query(store, project_id, &["decision"], Some("open"), None, None).await;
+    let sessions =
+        query_sessions(store, project_id, profile, settings, repository.as_deref()).await;
 
     // Every primary query failed: a broken route must never look like "nothing
     // tracked", but it must also not error the session.
@@ -186,7 +187,7 @@ pub fn build_session_brief(
 
 /// Recall recent checkpoints: coding sessions (repository-filtered) first, then
 /// the harness's general session types.
-fn query_sessions(
+async fn query_sessions(
     store: &Store,
     project_id: i64,
     profile: &HarnessProfile,
@@ -195,28 +196,34 @@ fn query_sessions(
 ) -> Option<Vec<SearchResult>> {
     let mut results: Vec<Option<Vec<SearchResult>>> = Vec::new();
     if let Some(repository) = repository {
-        results.push(query(
+        results.push(
+            query(
+                store,
+                project_id,
+                &[profile.coding_session_note_type],
+                None,
+                None,
+                Some(repository),
+            )
+            .await,
+        );
+    }
+    results.push(
+        query(
             store,
             project_id,
-            &[profile.coding_session_note_type],
+            profile.recall_session_types,
             None,
+            Some(&settings.recall_timeframe),
             None,
-            Some(repository),
-        ));
-    }
-    results.push(query(
-        store,
-        project_id,
-        profile.recall_session_types,
-        None,
-        Some(&settings.recall_timeframe),
-        None,
-    ));
+        )
+        .await,
+    );
     merge_sessions(&results)
 }
 
 /// Run one filtered recall query; any failure degrades to `None` ("no results").
-fn query(
+async fn query(
     store: &Store,
     project_id: i64,
     note_types: &[&str],
@@ -236,6 +243,7 @@ fn query(
     };
     store
         .search_text(project_id, &options)
+        .await
         .ok()
         .map(|page| page.results)
 }

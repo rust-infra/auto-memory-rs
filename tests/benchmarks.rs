@@ -75,10 +75,14 @@ fn setup(tag: &str) -> (Scratch, PathBuf, Store, i64) {
     fs::create_dir_all(&vault).expect("vault");
     generate_vault(&vault, VAULT_SIZE);
     let index = dir.join("memory.db");
-    let store = Store::open(&index).expect("store");
-    let project_id = store
-        .upsert_project("oracle", "oracle", &vault.to_string_lossy())
-        .expect("project");
+    let (store, project_id) = common::block_on(async {
+        let store = Store::open(&index).await.expect("store");
+        let project_id = store
+            .upsert_project("oracle", "oracle", &vault.to_string_lossy())
+            .await
+            .expect("project");
+        (store, project_id)
+    });
     (dir, vault, store, project_id)
 }
 
@@ -90,15 +94,15 @@ fn report(name: &str, documents: usize, elapsed: Duration) {
     );
 }
 
-#[test]
+#[tokio::test(flavor = "multi_thread")]
 #[ignore = "opt-in benchmark: cargo test --test benchmarks -- --ignored --nocapture"]
-fn benchmark_full_and_incremental_indexing() {
+async fn benchmark_full_and_incremental_indexing() {
     let (_dir, vault, mut store, project_id) = setup("index");
     let mut service =
         IndexService::new(&mut store, project_id, &vault, IndexOptions::new("oracle"));
 
     let started = Instant::now();
-    let report_full = service.full_rebuild().expect("full rebuild");
+    let report_full = service.full_rebuild().await.expect("full rebuild");
     let elapsed = started.elapsed();
     report("full rebuild", report_full.documents_indexed, elapsed);
     assert_eq!(report_full.documents_indexed, VAULT_SIZE);
@@ -109,7 +113,7 @@ fn benchmark_full_and_incremental_indexing() {
 
     // A second pass sees every checksum unchanged, which is the incremental fast path.
     let started = Instant::now();
-    let report_unchanged = service.reconcile().expect("reconcile");
+    let report_unchanged = service.reconcile().await.expect("reconcile");
     let elapsed = started.elapsed();
     assert_eq!(report_unchanged.unchanged, VAULT_SIZE);
     println!(
@@ -129,7 +133,7 @@ fn benchmark_full_and_incremental_indexing() {
         fs::write(&path, content).expect("write");
     }
     let started = Instant::now();
-    let report_incremental = service.reconcile().expect("reconcile");
+    let report_incremental = service.reconcile().await.expect("reconcile");
     let elapsed = started.elapsed();
     report(
         "incremental (10% touched)",
@@ -140,14 +144,14 @@ fn benchmark_full_and_incremental_indexing() {
     assert_eq!(report_incremental.added, 0);
 }
 
-#[test]
+#[tokio::test(flavor = "multi_thread")]
 #[ignore = "opt-in benchmark: cargo test --test benchmarks -- --ignored --nocapture"]
-fn benchmark_text_search_latency() {
+async fn benchmark_text_search_latency() {
     let (_dir, vault, mut store, project_id) = setup("search");
     {
         let mut service =
             IndexService::new(&mut store, project_id, &vault, IndexOptions::new("oracle"));
-        service.full_rebuild().expect("full rebuild");
+        service.full_rebuild().await.expect("full rebuild");
     }
 
     let queries = [
@@ -170,6 +174,7 @@ fn benchmark_text_search_latency() {
                     ..TextSearchOptions::default()
                 },
             )
+            .await
             .expect("search");
         samples.push(started.elapsed());
         hits += page.results.len();
@@ -191,16 +196,19 @@ fn benchmark_text_search_latency() {
     );
 }
 
-#[test]
+#[tokio::test(flavor = "multi_thread")]
 #[ignore = "opt-in benchmark: cargo test --test benchmarks -- --ignored --nocapture"]
-fn benchmark_semantic_chunking() {
+async fn benchmark_semantic_chunking() {
     let (_dir, vault, mut store, project_id) = setup("chunk");
     {
         let mut service =
             IndexService::new(&mut store, project_id, &vault, IndexOptions::new("oracle"));
-        service.full_rebuild().expect("full rebuild");
+        service.full_rebuild().await.expect("full rebuild");
     }
-    let rows = store.semantic_rows(project_id).expect("semantic rows");
+    let rows = store
+        .semantic_rows(project_id)
+        .await
+        .expect("semantic rows");
     let started = Instant::now();
     let mut chunks = 0usize;
     for _ in 0..10 {

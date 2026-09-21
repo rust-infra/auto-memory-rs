@@ -30,11 +30,12 @@ fn codex_settings() -> Settings {
     }
 }
 
-#[test]
-fn brief_reports_project_and_stays_bounded() {
+#[tokio::test(flavor = "multi_thread")]
+async fn brief_reports_project_and_stays_bounded() {
     let (_dir, store, project_id) = common::indexed_store("hook-brief");
     let profile = Harness::Codex.profile();
-    let brief = build_session_brief(&store, project_id, profile, &codex_settings(), true, None);
+    let brief =
+        build_session_brief(&store, project_id, profile, &codex_settings(), true, None).await;
 
     assert!(brief.contains("**Project:** oracle"), "{brief}");
     assert!(brief.contains("`````text"), "{brief}");
@@ -47,8 +48,8 @@ fn brief_reports_project_and_stays_bounded() {
     assert!(brief.chars().count() <= auto_memory::hooks::profiles::MAX_BRIEF_CHARS);
 }
 
-#[test]
-fn checkpoint_prompt_prefixes_the_brief() {
+#[tokio::test(flavor = "multi_thread")]
+async fn checkpoint_prompt_prefixes_the_brief() {
     let (_dir, store, project_id) = common::indexed_store("hook-checkpoint");
     let brief = build_session_brief(
         &store,
@@ -57,12 +58,13 @@ fn checkpoint_prompt_prefixes_the_brief() {
         &codex_settings(),
         true,
         Some("CHECKPOINT NOW"),
-    );
+    )
+    .await;
     assert!(brief.starts_with("CHECKPOINT NOW\n\n---\n\n# Auto Memory — session context"));
 }
 
-#[test]
-fn coding_profile_without_repository_is_an_error_brief() {
+#[tokio::test(flavor = "multi_thread")]
+async fn coding_profile_without_repository_is_an_error_brief() {
     let (_dir, store, project_id) = common::indexed_store("hook-coding");
     let mut settings = codex_settings();
     settings.session_profile = Some("coding".to_owned());
@@ -73,7 +75,8 @@ fn coding_profile_without_repository_is_an_error_brief() {
         &settings,
         true,
         None,
-    );
+    )
+    .await;
     assert!(
         brief.contains("`basicMemory.repository` is missing"),
         "{brief}"
@@ -86,17 +89,21 @@ fn file_index(tag: &str) -> (common::Scratch, PathBuf) {
     let vault = scratch.join("vault");
     common::copy_dir(&common::fixtures_vault(), &vault);
     let index = scratch.join("memory.db");
-    let mut store = Store::open(&index).expect("open index");
-    let project_id = store
-        .upsert_project("oracle", "oracle", &vault.to_string_lossy())
-        .expect("project");
-    rebuild_vault(
-        &mut store,
-        project_id,
-        &vault,
-        &RebuildOptions::new("oracle"),
-    )
-    .expect("rebuild");
+    common::block_on(async {
+        let mut store = Store::open(&index).await.expect("open index");
+        let project_id = store
+            .upsert_project("oracle", "oracle", &vault.to_string_lossy())
+            .await
+            .expect("project");
+        rebuild_vault(
+            &mut store,
+            project_id,
+            &vault,
+            &RebuildOptions::new("oracle"),
+        )
+        .await
+        .expect("rebuild");
+    });
     (scratch, index)
 }
 

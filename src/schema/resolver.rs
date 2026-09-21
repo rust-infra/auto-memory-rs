@@ -47,7 +47,7 @@ pub fn resolve_schema(
 }
 
 /// Build a definition from an inline schema mapping, deriving metadata from the note.
-fn schema_from_inline(
+pub(crate) fn schema_from_inline(
     schema_dict: &serde_json::Map<String, Value>,
     note_frontmatter: &Value,
 ) -> Result<SchemaDefinition, crate::schema::parser::SchemaParseError> {

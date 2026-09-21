@@ -11,17 +11,16 @@ use std::time::{Duration, Instant};
 use auto_memory::indexing::{
     ChangeKind, IndexOptions, IndexService, VaultWatcher, WatchReport, shutdown_when, watch_vault,
 };
-use auto_memory::runtime::block_on;
 use auto_memory::storage::Store;
 mod common;
-use common::{Scratch, fixture};
+use common::{Scratch, block_on, fixture};
 
-#[test]
-fn created_modified_and_deleted_files_follow_the_watch_window() {
+#[tokio::test(flavor = "multi_thread")]
+async fn created_modified_and_deleted_files_follow_the_watch_window() {
     let (_dir, vault, mut store, project_id) = fixture("basic");
     let mut service =
         IndexService::new(&mut store, project_id, &vault, IndexOptions::new("oracle"));
-    assert!(service.reconcile().expect("initial reconcile").added > 0);
+    assert!(service.reconcile().await.expect("initial reconcile").added > 0);
     let mut watcher = VaultWatcher::new(service, &vault).with_window(Duration::from_millis(50));
 
     fs::write(
@@ -32,9 +31,13 @@ fn created_modified_and_deleted_files_follow_the_watch_window() {
     let start = Instant::now();
     watcher.record_at("notes/watched.md", ChangeKind::Created, start);
     assert_eq!(watcher.pending(), 1);
-    assert!(watcher.poll(start).expect("poll").is_empty(), "window open");
+    assert!(
+        watcher.poll(start).await.expect("poll").is_empty(),
+        "window open"
+    );
     let report = watcher
         .poll(start + Duration::from_millis(60))
+        .await
         .expect("poll");
     assert_eq!(report.indexed, 1, "{report:?}");
     assert_eq!(watcher.pending(), 0);
@@ -47,6 +50,7 @@ fn created_modified_and_deleted_files_follow_the_watch_window() {
     watcher.record_at("notes/watched.md", ChangeKind::Modified, start);
     let report = watcher
         .poll(start + Duration::from_millis(60))
+        .await
         .expect("poll");
     assert_eq!(report.indexed, 1);
 
@@ -54,19 +58,21 @@ fn created_modified_and_deleted_files_follow_the_watch_window() {
     watcher.record_at("notes/watched.md", ChangeKind::Removed, start);
     let report = watcher
         .poll(start + Duration::from_millis(60))
+        .await
         .expect("poll");
     assert_eq!(report.removed, 1, "{report:?}");
     drop(watcher);
 }
 
-#[test]
-fn rename_is_paired_into_a_move() {
+#[tokio::test(flavor = "multi_thread")]
+async fn rename_is_paired_into_a_move() {
     let (_dir, vault, mut store, project_id) = fixture("move");
     let mut service =
         IndexService::new(&mut store, project_id, &vault, IndexOptions::new("oracle"));
-    service.reconcile().expect("initial reconcile");
+    service.reconcile().await.expect("initial reconcile");
     let before = service
         .entity_checksum("notes/simple.md")
+        .await
         .expect("checksum")
         .expect("indexed");
     let mut watcher = VaultWatcher::new(service, &vault).with_window(Duration::from_millis(50));
@@ -81,6 +87,7 @@ fn rename_is_paired_into_a_move() {
     watcher.record_at("notes/simple-moved.md", ChangeKind::Created, start);
     let report = watcher
         .poll(start + Duration::from_millis(60))
+        .await
         .expect("poll");
     assert_eq!(report.moved, 1, "{report:?}");
     assert_eq!(report.indexed, 0);
@@ -88,6 +95,7 @@ fn rename_is_paired_into_a_move() {
 
     let moved = store
         .entity_by_file_path(project_id, "notes/simple-moved.md")
+        .await
         .expect("lookup")
         .expect("moved entity");
     // The move rewrites the destination with the entity's identity (the reference's own
@@ -102,14 +110,15 @@ fn rename_is_paired_into_a_move() {
     assert!(
         store
             .entity_by_file_path(project_id, "notes/simple.md")
+            .await
             .expect("lookup")
             .is_none(),
         "the old path must not keep a ghost row"
     );
 }
 
-#[test]
-fn ignored_paths_and_non_markdown_never_enter_the_queue() {
+#[tokio::test(flavor = "multi_thread")]
+async fn ignored_paths_and_non_markdown_never_enter_the_queue() {
     let (_dir, vault, mut store, project_id) = fixture("ignore");
     let service = IndexService::new(&mut store, project_id, &vault, IndexOptions::new("oracle"));
     let mut watcher = VaultWatcher::new(service, &vault).with_window(Duration::from_millis(10));
@@ -124,15 +133,18 @@ fn ignored_paths_and_non_markdown_never_enter_the_queue() {
         watcher.record(path, ChangeKind::Created);
     }
     assert_eq!(watcher.pending(), 0, "no ignored path may be queued");
-    assert_eq!(watcher.flush().expect("flush"), WatchReport::default());
+    assert_eq!(
+        watcher.flush().await.expect("flush"),
+        WatchReport::default()
+    );
 }
 
-#[test]
-fn repeated_events_for_one_path_coalesce() {
+#[tokio::test(flavor = "multi_thread")]
+async fn repeated_events_for_one_path_coalesce() {
     let (_dir, vault, mut store, project_id) = fixture("coalesce");
     let mut service =
         IndexService::new(&mut store, project_id, &vault, IndexOptions::new("oracle"));
-    service.reconcile().expect("initial reconcile");
+    service.reconcile().await.expect("initial reconcile");
     let mut watcher = VaultWatcher::new(service, &vault).with_window(Duration::from_millis(50));
 
     fs::write(
@@ -155,13 +167,14 @@ fn repeated_events_for_one_path_coalesce() {
     assert_eq!(watcher.pending(), 1, "one path, one pending entry");
     let report = watcher
         .poll(start + Duration::from_millis(70))
+        .await
         .expect("poll");
     assert_eq!(report.indexed, 1, "coalesced into a single write");
 }
 
 /// The real `notify` loop: a file written while watching reaches the index.
-#[test]
-fn notify_loop_indexes_a_new_file() {
+#[tokio::test(flavor = "multi_thread")]
+async fn notify_loop_indexes_a_new_file() {
     let dir = Scratch::new("loop");
     let vault = dir.join("vault");
     let index_path = dir.join("memory.db");
@@ -172,25 +185,27 @@ fn notify_loop_indexes_a_new_file() {
     let stop_for_thread = stop.clone();
     let index_for_thread = index_path.clone();
     let handle = std::thread::spawn(move || {
-        let mut store = Store::open(&index_for_thread).expect("store");
-        let project_id = store
-            .upsert_project("oracle", "oracle", &vault_for_watcher.to_string_lossy())
-            .expect("project");
-        let service = IndexService::new(
-            &mut store,
-            project_id,
-            &vault_for_watcher,
-            IndexOptions::new("oracle"),
-        );
-        let watcher =
-            VaultWatcher::new(service, &vault_for_watcher).with_window(Duration::from_millis(50));
-        // The loop is async now; this thread owns the store, so it drives the runtime.
-        block_on(watch_vault(
-            watcher,
-            shutdown_when(|| stop_for_thread.load(Ordering::Relaxed)),
-        ))
-        .expect("runtime")
-        .expect("watch loop")
+        block_on(async move {
+            let mut store = Store::open(&index_for_thread).await.expect("store");
+            let project_id = store
+                .upsert_project("oracle", "oracle", &vault_for_watcher.to_string_lossy())
+                .await
+                .expect("project");
+            let service = IndexService::new(
+                &mut store,
+                project_id,
+                &vault_for_watcher,
+                IndexOptions::new("oracle"),
+            );
+            let watcher = VaultWatcher::new(service, &vault_for_watcher)
+                .with_window(Duration::from_millis(50));
+            watch_vault(
+                watcher,
+                shutdown_when(|| stop_for_thread.load(Ordering::Relaxed)),
+            )
+            .await
+            .expect("watch loop")
+        })
     });
 
     std::thread::sleep(Duration::from_millis(300));
@@ -203,8 +218,8 @@ fn notify_loop_indexes_a_new_file() {
     let deadline = Instant::now() + Duration::from_secs(10);
     let mut indexed = false;
     while Instant::now() < deadline {
-        if let Ok(store) = Store::open(&index_path) {
-            if let Ok(Some(entity)) = store.entity_by_file_path(1, "note.md") {
+        if let Ok(store) = Store::open(&index_path).await {
+            if let Ok(Some(entity)) = store.entity_by_file_path(1, "note.md").await {
                 indexed = entity.checksum.is_some();
                 if indexed {
                     break;

@@ -12,7 +12,7 @@ use std::process::Command;
 
 use auto_memory::indexing::{RebuildOptions, rebuild_vault};
 use auto_memory::storage::Store;
-use common::{Scratch, canonicalize_text, copy_dir, fixtures_vault, repo_root};
+use common::{Scratch, block_on, canonicalize_text, copy_dir, fixtures_vault, repo_root};
 use serde_json::Value;
 
 /// Build a throwaway vault + index the CLI can point at.
@@ -21,17 +21,21 @@ fn fixture_index() -> (Scratch, Scratch, PathBuf) {
     copy_dir(&fixtures_vault(), vault.path());
     let index_dir = Scratch::new("cli-index");
     let index = index_dir.join("memory.db");
-    let mut store = Store::open(&index).expect("store");
-    let project_id = store
-        .upsert_project("oracle", "oracle", &vault.path().to_string_lossy())
-        .expect("project");
-    rebuild_vault(
-        &mut store,
-        project_id,
-        vault.path(),
-        &RebuildOptions::new("oracle"),
-    )
-    .expect("rebuild");
+    block_on(async {
+        let mut store = Store::open(&index).await.expect("store");
+        let project_id = store
+            .upsert_project("oracle", "oracle", &vault.path().to_string_lossy())
+            .await
+            .expect("project");
+        rebuild_vault(
+            &mut store,
+            project_id,
+            vault.path(),
+            &RebuildOptions::new("oracle"),
+        )
+        .await
+        .expect("rebuild");
+    });
     (vault, index_dir, index)
 }
 

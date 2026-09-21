@@ -63,7 +63,7 @@ pub struct RebuildReport {
 /// Existing rows for the same `file_path` are updated in place; rows whose file
 /// disappeared from disk are pruned, so a full rebuild always converges on the
 /// current vault contents.
-pub fn rebuild_vault(
+pub async fn rebuild_vault(
     store: &mut Store,
     project_id: i64,
     root: &Path,
@@ -88,14 +88,16 @@ pub fn rebuild_vault(
             LoadOutcome::Loaded(indexed) => {
                 report.observations += indexed.document.observations.len();
                 report.relations += indexed.document.relations.len();
-                store.replace_document(
-                    project_id,
-                    &options.project_permalink,
-                    Some(&indexed.permalink),
-                    &indexed.checksum,
-                    &indexed.document,
-                    &indexed.timestamps,
-                )?;
+                store
+                    .replace_document(
+                        project_id,
+                        &options.project_permalink,
+                        Some(&indexed.permalink),
+                        &indexed.checksum,
+                        &indexed.document,
+                        &indexed.timestamps,
+                    )
+                    .await?;
                 report.documents_indexed += 1;
             }
             // Reference behavior: malformed YAML files are dropped by the indexer.
@@ -105,15 +107,17 @@ pub fn rebuild_vault(
         }
     }
 
-    for stale in store.file_paths(project_id)? {
+    for stale in store.file_paths(project_id).await? {
         if !seen_paths.contains(&stale) {
-            store.remove_document(project_id, &stale)?;
+            store.remove_document(project_id, &stale).await?;
             report.documents_removed += 1;
         }
     }
 
-    report.relations_resolved = store.resolve_relations(project_id)?;
-    store.set_metadata("parser_version", env!("CARGO_PKG_VERSION"))?;
+    report.relations_resolved = store.resolve_relations(project_id).await?;
+    store
+        .set_metadata("parser_version", env!("CARGO_PKG_VERSION"))
+        .await?;
     Ok(report)
 }
 

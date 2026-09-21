@@ -18,7 +18,7 @@ use auto_memory::graph::resolve_entity_path;
 use auto_memory::indexing::{RebuildOptions, rebuild_vault};
 use auto_memory::storage::Store;
 use common::{
-    Scratch, canonicalize_text, canonicalize_timestamps, canonicalize_uuids, copy_dir,
+    Scratch, block_on, canonicalize_text, canonicalize_timestamps, canonicalize_uuids, copy_dir,
     fixtures_vault, repo_root,
 };
 use serde_json::{Map, Value};
@@ -47,18 +47,22 @@ fn temp_vault() -> Scratch {
 }
 
 fn store_for(vault: &Path) -> (Store, i64) {
-    let mut store = Store::open_in_memory().expect("store");
-    let project_id = store
-        .upsert_project("oracle", "oracle", &vault.to_string_lossy())
-        .expect("project");
-    rebuild_vault(
-        &mut store,
-        project_id,
-        vault,
-        &RebuildOptions::new("oracle"),
-    )
-    .expect("rebuild");
-    (store, project_id)
+    block_on(async {
+        let mut store = Store::open_in_memory().await.expect("store");
+        let project_id = store
+            .upsert_project("oracle", "oracle", &vault.to_string_lossy())
+            .await
+            .expect("project");
+        rebuild_vault(
+            &mut store,
+            project_id,
+            vault,
+            &RebuildOptions::new("oracle"),
+        )
+        .await
+        .expect("rebuild");
+        (store, project_id)
+    })
 }
 
 /// The oracle CLI defaults to the `7d` timeframe for `tool build-context`.
@@ -119,8 +123,8 @@ fn related_key(item: &Value) -> String {
     .join("|")
 }
 
-#[test]
-fn context_matches_reference_for_golden_cases() {
+#[tokio::test(flavor = "multi_thread")]
+async fn context_matches_reference_for_golden_cases() {
     let vault = temp_vault();
     let (store, project_id) = store_for(vault.path());
 
@@ -142,7 +146,9 @@ fn context_matches_reference_for_golden_cases() {
         ),
         ("cjk-depth1", "memory://notes/cjk", 1),
     ] {
-        let context = build_context(&store, project_id, url, &options(depth)).expect("context");
+        let context = build_context(&store, project_id, url, &options(depth))
+            .await
+            .expect("context");
         let actual = canonicalize(&serde_json::to_value(&context).expect("serialize"));
         let expected = golden_json(name);
         assert_eq!(actual["page"], expected["page"], "{name}: page");
@@ -205,6 +211,7 @@ fn context_matches_reference_for_golden_cases() {
                     ..options(depth)
                 },
             )
+            .await
             .expect("unbounded context");
             let available: Vec<String> = unbounded.results[0]
                 .related_results
@@ -239,10 +246,12 @@ fn context_matches_reference_for_golden_cases() {
                     continue;
                 }
                 let entity = resolve_entity_path(&store, project_id, permalink)
+                    .await
                     .expect("resolve")
                     .expect("related entity");
                 observations += store
                     .observations_for_entity(entity.id)
+                    .await
                     .expect("observations")
                     .len();
             }
@@ -266,8 +275,8 @@ fn context_matches_reference_for_golden_cases() {
     }
 }
 
-#[test]
-fn find_related_replays_the_reference_traversal() {
+#[tokio::test(flavor = "multi_thread")]
+async fn find_related_replays_the_reference_traversal() {
     // `graph-rows.json` carries the reference id assignment and
     // `find-related.json` the rows its traversal returns for the same graph, so
     // this test checks the ported SQL row-for-row (including order and the
@@ -288,7 +297,7 @@ fn find_related_replays_the_reference_traversal() {
         .expect("project");
     let graph_dir = Scratch::new("graph");
     let db_path = graph_dir.join("memory.db");
-    let store = Store::open(&db_path).expect("store");
+    let store = block_on(Store::open(&db_path)).expect("store");
 
     {
         // Explicit ids: the store's own writer would assign its own sequence.
@@ -365,6 +374,7 @@ fn find_related_replays_the_reference_traversal() {
         let max_related = case["max_related"].as_u64().expect("max related") as u32;
         let rows = store
             .find_related(project_id, &[seed], depth, max_related, Some(&since))
+            .await
             .expect("traversal");
         let expected = case["rows"].as_array().expect("rows");
         assert_eq!(
@@ -408,8 +418,8 @@ fn find_related_replays_the_reference_traversal() {
     let _ = fs::remove_file(&db_path);
 }
 
-#[test]
-fn plain_text_matches_reference_golden() {
+#[tokio::test(flavor = "multi_thread")]
+async fn plain_text_matches_reference_golden() {
     // The reference CLI renders the JSON payload client-side, so feeding our
     // renderer the same payload must reproduce the captured outline byte for byte.
     for (name, payload) in [
@@ -421,8 +431,8 @@ fn plain_text_matches_reference_golden() {
     }
 }
 
-#[test]
-fn markdown_text_matches_reference_golden() {
+#[tokio::test(flavor = "multi_thread")]
+async fn markdown_text_matches_reference_golden() {
     // Captured by replaying the reference `_format_context_markdown` over the raw
     // `build_context` payload (`tools/dump_reference_context_text.py`), because the
     // CLI always requests JSON and renders its own plain outline.
@@ -446,13 +456,15 @@ fn markdown_text_matches_reference_golden() {
     }
 }
 
-#[test]
-fn depth_expands_the_related_set() {
+#[tokio::test(flavor = "multi_thread")]
+async fn depth_expands_the_related_set() {
     let vault = temp_vault();
     let (store, project_id) = store_for(vault.path());
     let shallow = build_context(&store, project_id, "memory://notes/relations", &options(1))
+        .await
         .expect("depth 1");
     let deep = build_context(&store, project_id, "memory://notes/relations", &options(2))
+        .await
         .expect("depth 2");
     assert!(
         deep.metadata.total_relations >= shallow.metadata.total_relations,
@@ -464,8 +476,8 @@ fn depth_expands_the_related_set() {
     );
 }
 
-#[test]
-fn max_related_caps_the_result_set() {
+#[tokio::test(flavor = "multi_thread")]
+async fn max_related_caps_the_result_set() {
     let vault = temp_vault();
     let (store, project_id) = store_for(vault.path());
     let context = build_context(
@@ -477,14 +489,15 @@ fn max_related_caps_the_result_set() {
             ..options(2)
         },
     )
+    .await
     .expect("context");
     assert_eq!(context.results[0].related_results.len(), 1);
     assert_eq!(context.metadata.total_relations, 1, "relations are capped");
     assert_eq!(context.metadata.related_count, 1);
 }
 
-#[test]
-fn unresolved_memory_urls_return_an_empty_graph() {
+#[tokio::test(flavor = "multi_thread")]
+async fn unresolved_memory_urls_return_an_empty_graph() {
     let vault = temp_vault();
     let (store, project_id) = store_for(vault.path());
     let context = build_context(
@@ -493,6 +506,7 @@ fn unresolved_memory_urls_return_an_empty_graph() {
         "memory://notes/does-not-exist",
         &options(1),
     )
+    .await
     .expect("context");
     assert!(context.results.is_empty());
     assert_eq!(
@@ -503,8 +517,8 @@ fn unresolved_memory_urls_return_an_empty_graph() {
     assert_eq!(context.metadata.related_count, 0);
 }
 
-#[test]
-fn memory_urls_are_validated_and_resolved() {
+#[tokio::test(flavor = "multi_thread")]
+async fn memory_urls_are_validated_and_resolved() {
     let vault = temp_vault();
     let (store, project_id) = store_for(vault.path());
     assert!(auto_memory::graph::normalize_memory_url("notes/relations").is_ok());
@@ -512,11 +526,13 @@ fn memory_urls_are_validated_and_resolved() {
     assert!(auto_memory::graph::normalize_memory_url("bad?query").is_err());
 
     let entity = resolve_entity_path(&store, project_id, "notes/relations")
+        .await
         .expect("resolve")
         .expect("entity");
     assert_eq!(entity.title, "Relations Demo");
     assert!(
         resolve_entity_path(&store, project_id, "notes/missing")
+            .await
             .expect("resolve")
             .is_none()
     );
