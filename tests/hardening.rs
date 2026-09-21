@@ -9,6 +9,9 @@ use std::path::Path;
 use std::process::Command;
 
 use serde_json::{Value, json};
+
+use auto_memory::application::note::NoteMetadata;
+
 mod common;
 use common::{Scratch, Session, copy_dir, repo_root};
 
@@ -297,7 +300,12 @@ fn writing_and_reparsing_notes_is_a_fixed_point() {
                 &vault,
                 auto_memory::indexing::IndexOptions::new("oracle"),
             );
-            let written = service.write_note("notes/generated.md", &note.content, &[], true);
+            let written = service.write_note(
+                "notes/generated.md",
+                &note.content,
+                &NoteMetadata::default(),
+                true,
+            );
             assert!(written.is_ok(), "round {round}: {written:?}");
         }
 
@@ -312,7 +320,12 @@ fn writing_and_reparsing_notes_is_a_fixed_point() {
                 auto_memory::indexing::IndexOptions::new("oracle"),
             );
             let rewritten = service
-                .write_note("notes/generated.md", &reparsed.content, &[], true)
+                .write_note(
+                    "notes/generated.md",
+                    &reparsed.content,
+                    &NoteMetadata::default(),
+                    true,
+                )
                 .expect("rewrite");
             assert_eq!(rewritten.file_path, "notes/generated.md");
         }

@@ -43,6 +43,38 @@ pub struct NoteDocument {
     pub relation_count: usize,
 }
 
+/// Ordered frontmatter metadata supplied to note mutations.
+#[derive(Debug, Clone, Default)]
+pub struct NoteMetadata {
+    entries: Vec<(String, Value)>,
+}
+
+impl NoteMetadata {
+    /// Wrap ordered frontmatter entries.
+    pub fn from_pairs(entries: Vec<(String, Value)>) -> Self {
+        Self { entries }
+    }
+
+    /// Append explicit tags after the base metadata.
+    ///
+    /// Entries retain insertion order, so an explicit `tags` value wins over the same
+    /// key supplied through general metadata.
+    pub fn with_tags(mut self, tags: &[String]) -> Self {
+        if !tags.is_empty() {
+            self.entries.push((
+                "tags".to_owned(),
+                Value::Sequence(tags.iter().cloned().map(Value::String).collect()),
+            ));
+        }
+        self
+    }
+
+    /// Borrow the entries in insertion order.
+    pub fn as_pairs(&self) -> &[(String, Value)] {
+        &self.entries
+    }
+}
+
 /// Note mutation service bound to one project and vault.
 pub struct NoteService<'a> {
     store: &'a mut Store,
@@ -87,7 +119,7 @@ impl<'a> NoteService<'a> {
         &mut self,
         relative_path: &str,
         content: &str,
-        metadata: &[(String, Value)],
+        metadata: &NoteMetadata,
         overwrite: bool,
     ) -> Result<NoteDocument> {
         self.write_note_with_type(relative_path, content, metadata, None, overwrite)
@@ -102,7 +134,7 @@ impl<'a> NoteService<'a> {
         &mut self,
         relative_path: &str,
         content: &str,
-        metadata: &[(String, Value)],
+        metadata: &NoteMetadata,
         note_type: Option<&str>,
         overwrite: bool,
     ) -> Result<NoteDocument> {
@@ -137,7 +169,7 @@ impl<'a> NoteService<'a> {
             Value::String("permalink".to_owned()),
             Value::String(permalink),
         );
-        for (key, _) in metadata {
+        for (key, _) in metadata.as_pairs() {
             if matches!(key.as_str(), "title" | "type" | "permalink") {
                 return Err(Error::InvalidArgument {
                     message: format!("metadata cannot set {key}; it is derived from the note"),
@@ -145,7 +177,7 @@ impl<'a> NoteService<'a> {
             }
         }
         let mut text = String::new();
-        for (key, value) in metadata {
+        for (key, value) in metadata.as_pairs() {
             frontmatter.insert(Value::String(key.clone()), value.clone());
         }
         // The reference's create path writes a plain body verbatim, but content that
@@ -183,7 +215,7 @@ impl<'a> NoteService<'a> {
         operation: EditOperation,
         content: &str,
         options: &EditOptions,
-        metadata: &[(String, Value)],
+        metadata: &NoteMetadata,
     ) -> Result<NoteDocument> {
         self.edit_note_with_status(identifier, operation, content, options, metadata)
             .map(|(document, _)| document)
@@ -200,7 +232,7 @@ impl<'a> NoteService<'a> {
         operation: EditOperation,
         content: &str,
         options: &EditOptions,
-        metadata: &[(String, Value)],
+        metadata: &NoteMetadata,
     ) -> Result<(NoteDocument, bool)> {
         let existing = self.resolve(identifier);
         let relative_path = match existing {
@@ -219,7 +251,7 @@ impl<'a> NoteService<'a> {
         let absolute = self.root.join(&relative_path);
         let current = std::fs::read_to_string(&absolute)?;
         let edited = apply_edit_operation(&current, operation, content, options)?;
-        let merged = merge_metadata_into_markdown(&edited, metadata)?;
+        let merged = merge_metadata_into_markdown(&edited, metadata.as_pairs())?;
         write_atomic(&absolute, &merged)?;
         self.reindex(&relative_path)?;
         Ok((self.read_path(&relative_path)?, false))

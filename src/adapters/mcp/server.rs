@@ -32,7 +32,7 @@ use crate::application::context::{ContextOptions, build_context};
 use crate::application::directory::{
     DirectoryOptions, DirectorySortOrder, list_directory, render_directory_text,
 };
-use crate::application::note::{NoteDocument, NoteService};
+use crate::application::note::{NoteDocument, NoteMetadata, NoteService};
 use crate::application::schema::SchemaService;
 use crate::application::schema_tools;
 use crate::application::search_text::{
@@ -679,19 +679,22 @@ impl<'a> McpServer<'a> {
             .collect())
     }
 
+    /// note: write a markdown note and return the JSON or text result.
     fn write_note(&mut self, params: &WriteNoteParams) -> Result<Value> {
+        // note: required arguments fail; optional arguments use reference defaults.
         let title = required_str(params.title.as_deref(), "title")?.to_owned();
+        // note: missing content creates an empty note.
         let content = params.content.clone().unwrap_or_default();
         let mut directory = params.directory.clone().unwrap_or_default();
-        // `"/"` means the project root, and it is normalized before the guard runs.
+        // note: normalize the explicit project root before validation.
         if directory == "/" {
             directory.clear();
         }
+        // note: reject conflicts by default.
         let overwrite = params.overwrite.unwrap_or(false);
         let output_format = params.output_format();
 
-        // The reference refuses a directory that could leave the project, and answers with
-        // a structured payload rather than an error.
+        // note: reject paths that escape the project; return a payload, not a transport error.
         if !directory.is_empty() && !is_valid_project_directory(&directory) {
             if output_format.is_json() {
                 return json_result(json!({
@@ -719,22 +722,12 @@ impl<'a> McpServer<'a> {
             .unwrap_or("note")
             .to_owned();
         let note_type = (!content_declares_type(&content)).then_some(note_type);
-        let mut metadata = metadata_pairs(params.metadata())?;
         let tags = crate::markdown::frontmatter::parse_tags(params.tags());
-        if !tags.is_empty() {
-            metadata.push((
-                "tags".to_owned(),
-                serde_yaml_ng::Value::Sequence(
-                    tags.iter()
-                        .cloned()
-                        .map(serde_yaml_ng::Value::String)
-                        .collect(),
-                ),
-            ));
-        }
+        // note: merge general metadata first, then explicit tags.
+        let metadata =
+            NoteMetadata::from_pairs(metadata_pairs(params.metadata())?).with_tags(&tags);
 
-        // Notes are markdown files; the reference appends the extension when the
-        // caller gives a bare title.
+        // note: append `.md` when the caller gives a bare title.
         let file_name = if title.to_ascii_lowercase().ends_with(".md") {
             title.clone()
         } else {
@@ -746,9 +739,7 @@ impl<'a> McpServer<'a> {
             format!("{}/{file_name}", directory.trim_matches('/'))
         };
 
-        // The reference writes optimistically and blocks a conflict unless `overwrite`
-        // (or the configured default) allows it; the refusal is a structured payload,
-        // not a transport error.
+        // note: check both vault and index because external changes may leave them out of sync.
         let existed = self.vault.join(&file_path).is_file()
             || self
                 .store
@@ -756,6 +747,7 @@ impl<'a> McpServer<'a> {
                 .is_some();
         let generated_permalink = generate_permalink(&title);
         if existed && !overwrite {
+            // note: keep a deterministic permalink in the conflict response.
             if output_format.is_json() {
                 return json_result(json!({
                     "title": title,
@@ -773,6 +765,7 @@ impl<'a> McpServer<'a> {
             )));
         }
 
+        // note: persist only after all validation has passed.
         let written = {
             let mut notes = self.notes();
             notes.write_note_with_type(
@@ -789,6 +782,7 @@ impl<'a> McpServer<'a> {
             .entity_by_file_path(self.project_id, &written.file_path)?;
 
         if output_format.is_json() {
+            // note: the MCP write path intentionally returns a null checksum.
             return json_result(json!({
                 "title": written.title,
                 "permalink": written.permalink,
@@ -799,6 +793,7 @@ impl<'a> McpServer<'a> {
             }));
         }
 
+        // note: text output also includes index-derived observations and relations.
         let mut summary = vec![
             format!("# {} note", capitalize(action)),
             format!("project: {}", self.project_name),
@@ -810,6 +805,7 @@ impl<'a> McpServer<'a> {
             "checksum: unknown".to_owned(),
         ];
         if let Some(entity) = &entity {
+            // note: group observations by category for a compact summary.
             let observations = self.store.observations_for_entity(entity.id)?;
             if !observations.is_empty() {
                 let mut counts: BTreeMap<&str, usize> = BTreeMap::new();
@@ -822,6 +818,7 @@ impl<'a> McpServer<'a> {
                     summary.push(format!("- {category}: {count}"));
                 }
             }
+            // note: include only outgoing relations from the written entity.
             let relations: Vec<crate::storage::RelationRow> = self
                 .store
                 .relations(self.project_id)?
@@ -838,6 +835,7 @@ impl<'a> McpServer<'a> {
                 summary.push("## Relations".to_owned());
                 summary.push(format!("- Resolved: {resolved}"));
                 if unresolved > 0 {
+                    // note: unresolved targets may be linked by a later sync.
                     summary.push(format!("- Unresolved: {unresolved}"));
                     summary.push(String::new());
                     summary.push(
@@ -853,6 +851,7 @@ impl<'a> McpServer<'a> {
             }
         }
         if !tags.is_empty() {
+            // note: reuse parsed tags so text output matches frontmatter.
             summary.push(String::new());
             summary.push("## Tags".to_owned());
             summary.push(format!("- {}", tags.join(", ")));
@@ -878,7 +877,7 @@ impl<'a> McpServer<'a> {
         if let Some(replace) = params.replace_subsections {
             options.replace_subsections = replace;
         }
-        let metadata = metadata_pairs(params.metadata())?;
+        let metadata = NoteMetadata::from_pairs(metadata_pairs(params.metadata())?);
         let output_format = params.output_format();
         let (document, file_created) = {
             let mut notes = self.notes();

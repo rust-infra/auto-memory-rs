@@ -6,7 +6,7 @@
 use std::fs;
 use std::path::PathBuf;
 
-use auto_memory::application::note::NoteService;
+use auto_memory::application::note::{NoteMetadata, NoteService};
 use auto_memory::indexing::{IndexOptions, IndexService};
 use auto_memory::markdown::{EditOperation, EditOptions};
 use auto_memory::storage::Store;
@@ -42,6 +42,7 @@ fn write_then_read_round_trips_through_the_index() {
             ("status".to_owned(), Value::String("active".to_owned())),
             ("priority".to_owned(), Value::Number(3.into())),
         ];
+        let metadata = NoteMetadata::from_pairs(metadata);
         let written = notes
             .write_note("notes/fresh.md", "Body text\n", &metadata, false)
             .expect("write");
@@ -87,12 +88,12 @@ fn write_then_read_round_trips_through_the_index() {
         // Overwrite protection is on by default.
         assert!(
             notes
-                .write_note("notes/fresh.md", "Other\n", &[], false)
+                .write_note("notes/fresh.md", "Other\n", &NoteMetadata::default(), false)
                 .is_err(),
             "existing files are not clobbered"
         );
         let overwritten = notes
-            .write_note("notes/fresh.md", "Other\n", &[], true)
+            .write_note("notes/fresh.md", "Other\n", &NoteMetadata::default(), true)
             .expect("overwrite");
         assert_eq!(overwritten.content, "Other");
     }
@@ -111,7 +112,7 @@ fn edits_update_file_and_index_together() {
                 EditOperation::Append,
                 "\n## Extra\n\nAppended body.",
                 &options,
-                &[],
+                &NoteMetadata::default(),
             )
             .expect("append");
         let text = fs::read_to_string(vault.join("notes/simple.md")).expect("file");
@@ -125,7 +126,7 @@ fn edits_update_file_and_index_together() {
                 EditOperation::ReplaceSection,
                 "Replaced body.",
                 &section,
-                &[],
+                &NoteMetadata::default(),
             )
             .expect("replace section");
         let text = fs::read_to_string(vault.join("notes/simple.md")).expect("file");
@@ -133,13 +134,17 @@ fn edits_update_file_and_index_together() {
         assert!(!text.contains("Appended body."));
 
         // Metadata merge keeps the body and the identity fields intact.
+        let metadata = NoteMetadata::from_pairs(vec![(
+            "status".to_owned(),
+            Value::String("active".to_owned()),
+        )]);
         notes
             .edit_note(
                 "notes/simple",
                 EditOperation::Append,
                 "",
                 &options,
-                &[("status".to_owned(), Value::String("active".to_owned()))],
+                &metadata,
             )
             .expect("metadata merge");
         let text = fs::read_to_string(vault.join("notes/simple.md")).expect("file");
@@ -166,7 +171,7 @@ fn edits_update_file_and_index_together() {
                     EditOperation::InsertAfterSection,
                     "x",
                     &missing,
-                    &[],
+                    &NoteMetadata::default(),
                 )
                 .is_err()
         );
