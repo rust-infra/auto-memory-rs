@@ -2,6 +2,7 @@
 
 pub(crate) mod helpers;
 pub mod http;
+pub(crate) mod params;
 pub mod server;
 pub mod tools;
 

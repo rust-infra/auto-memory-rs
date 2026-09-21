@@ -15,12 +15,15 @@ use crate::search::vector::VectorSearchOptions;
 
 use super::server::OutputFormat;
 
-pub(crate) fn required_str<'a>(arguments: &'a Value, key: &str) -> Result<&'a str> {
-    arguments[key]
-        .as_str()
-        .ok_or_else(|| Error::InvalidArgument {
-            message: format!("{key} is required"),
-        })
+/// A required string argument, or the reference's refusal.
+///
+/// Every field of the argument structs in [`super::params`] is an `Option`, so the
+/// tools that need one to be present say so where they use it, with the reference's
+/// own wording (`identifier is required`).
+pub(crate) fn required_str<'a>(value: Option<&'a str>, key: &str) -> Result<&'a str> {
+    value.ok_or_else(|| Error::InvalidArgument {
+        message: format!("{key} is required"),
+    })
 }
 
 pub(crate) fn strings(value: &Value) -> Vec<String> {
@@ -283,11 +286,6 @@ pub(crate) fn is_valid_project_directory(directory: &str) -> bool {
     !directory
         .chars()
         .any(|character| (character as u32) < 32 && character != ' ' && character != '\t')
-}
-
-/// First present string argument, honouring the reference's alias choices.
-pub(crate) fn string_argument<'a>(arguments: &'a Value, keys: &[&str]) -> Option<&'a str> {
-    keys.iter().find_map(|key| arguments[*key].as_str())
 }
 
 /// Parse `recent_activity`'s `type` argument.

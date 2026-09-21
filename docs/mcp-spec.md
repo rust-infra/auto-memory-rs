@@ -261,6 +261,10 @@ frontmatter keeps the author's spelling: `schema_validate(note_type="Person")` r
 - `edit_note`/`delete_note`/`move_note` require exact identifier resolution.
 - All note mutations update index; moves update permalinks/links per `update_permalinks_on_move`.
 - `output_format=json` returns pydantic model dumps; `text` returns markdown. Defaults vary by tool.
+- Arguments are read leniently: a missing key, a key of the wrong JSON type, and an unrecognized
+  `output_format` all fall back to the tool's own default instead of failing the call, unknown
+  keys are ignored, and the older spellings of `page`/`page_size`/`dir_name`/`timeframe` are
+  accepted in a fixed precedence order (`src/adapters/mcp/params.rs`).
 
 ## 7. Rust rules
 

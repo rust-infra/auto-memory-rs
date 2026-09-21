@@ -15,6 +15,13 @@ use serde_json::{Value, json};
 use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncWrite, AsyncWriteExt};
 
 use super::helpers::*;
+use super::params::{
+    BuildContextParams, ChatgptFetchParams, ChatgptSearchParams, CreateMemoryProjectParams,
+    DeleteNoteParams, DeleteProjectParams, EditNoteParams, ListDirectoryParams,
+    ListMemoryProjectsParams, MoveNoteParams, ReadContentParams, ReadNoteParams,
+    RecentActivityParams, SchemaDiffParams, SchemaInferParams, SchemaValidateParams,
+    SearchNotesParams, ToolArguments, ViewNoteParams, WriteNoteParams,
+};
 
 use strum::{Display, EnumIter, EnumString, IntoEnumIterator, IntoStaticStr};
 
@@ -23,8 +30,7 @@ use crate::application::activity::{
 };
 use crate::application::context::{ContextOptions, build_context};
 use crate::application::directory::{
-    DEFAULT_DIRECTORY_PAGE_SIZE, DirectoryOptions, DirectorySortOrder, list_directory,
-    render_directory_text,
+    DirectoryOptions, DirectorySortOrder, list_directory, render_directory_text,
 };
 use crate::application::note::{NoteDocument, NoteService};
 use crate::application::schema::SchemaService;
@@ -110,7 +116,7 @@ pub enum ToolName {
 ///
 /// The reference never rejects the value: an unknown one falls back to the tool's own
 /// default (text everywhere, except `build_context`), so
-/// [`OutputFormat::from_arguments`] parses leniently.
+/// [`OutputFormat::from_argument`] parses leniently.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, EnumString, IntoStaticStr)]
 #[strum(serialize_all = "lowercase")]
 pub enum OutputFormat {
@@ -123,13 +129,15 @@ pub enum OutputFormat {
 
 impl OutputFormat {
     /// The `output_format` argument of one tool call, falling back to `default` when the
-    /// caller omits it or names a value the tool does not recognize.
+    /// caller omits it, names a value the tool does not recognize, or spells it as
+    /// something other than a string.
     ///
     /// The default is per tool: every tool renders text unless asked for JSON, except
-    /// `build_context`, whose payload is JSON unless asked for text.
-    pub fn from_arguments(arguments: &Value, default: Self) -> Self {
-        arguments["output_format"]
-            .as_str()
+    /// `build_context`, whose payload is JSON unless asked for text. The argument
+    /// structs in `adapters::mcp::params` hand the raw argument over as an optional
+    /// string.
+    pub fn from_argument(value: Option<&str>, default: Self) -> Self {
+        value
             .and_then(|value| value.parse().ok())
             .unwrap_or(default)
     }
@@ -468,45 +476,66 @@ impl<'a> McpServer<'a> {
         // example `build_context(output_format="text")`) must not be re-encoded as
         // JSON, so wrapping happens once, here and in the helpers below. The match is
         // exhaustive over `ToolName`, so a new variant cannot reach `tools/list`
-        // without a dispatch arm.
+        // without a dispatch arm — and each arm names the tool's argument type here, so
+        // the object a handler reads is the one this call built.
         Ok(match tool {
-            ToolName::ReadNote => self.read_note(&arguments)?,
-            ToolName::WriteNote => self.write_note(&arguments)?,
-            ToolName::EditNote => self.edit_note(&arguments)?,
-            ToolName::MoveNote => self.move_note(&arguments)?,
-            ToolName::DeleteNote => self.delete_note(&arguments)?,
-            ToolName::SearchNotes => self.search_notes(&arguments)?,
-            ToolName::Search => self.chatgpt_search(&arguments)?,
-            ToolName::Fetch => self.chatgpt_fetch(&arguments)?,
-            ToolName::BuildContext => self.build_context(&arguments)?,
-            ToolName::ListDirectory => self.list_directory(&arguments)?,
-            ToolName::ReadContent => self.read_content(&arguments)?,
-            ToolName::ViewNote => self.view_note(&arguments)?,
-            ToolName::RecentActivity => self.recent_activity(&arguments)?,
-            ToolName::ListMemoryProjects => self.list_memory_projects(&arguments)?,
-            ToolName::CreateMemoryProject => self.create_memory_project(&arguments)?,
-            ToolName::DeleteProject => self.delete_project(&arguments)?,
-            ToolName::SchemaValidate => self.schema_validate(&arguments)?,
-            ToolName::SchemaInfer => self.schema_infer(&arguments)?,
-            ToolName::SchemaDiff => self.schema_diff(&arguments)?,
+            ToolName::ReadNote => self.read_note(&ReadNoteParams::from_arguments(&arguments))?,
+            ToolName::WriteNote => self.write_note(&WriteNoteParams::from_arguments(&arguments))?,
+            ToolName::EditNote => self.edit_note(&EditNoteParams::from_arguments(&arguments))?,
+            ToolName::MoveNote => self.move_note(&MoveNoteParams::from_arguments(&arguments))?,
+            ToolName::DeleteNote => {
+                self.delete_note(&DeleteNoteParams::from_arguments(&arguments))?
+            }
+            ToolName::SearchNotes => {
+                self.search_notes(&SearchNotesParams::from_arguments(&arguments))?
+            }
+            ToolName::Search => {
+                self.chatgpt_search(&ChatgptSearchParams::from_arguments(&arguments))?
+            }
+            ToolName::Fetch => {
+                self.chatgpt_fetch(&ChatgptFetchParams::from_arguments(&arguments))?
+            }
+            ToolName::BuildContext => {
+                self.build_context(&BuildContextParams::from_arguments(&arguments))?
+            }
+            ToolName::ListDirectory => {
+                self.list_directory(&ListDirectoryParams::from_arguments(&arguments))?
+            }
+            ToolName::ReadContent => {
+                self.read_content(&ReadContentParams::from_arguments(&arguments))?
+            }
+            ToolName::ViewNote => self.view_note(&ViewNoteParams::from_arguments(&arguments))?,
+            ToolName::RecentActivity => {
+                self.recent_activity(&RecentActivityParams::from_arguments(&arguments))?
+            }
+            ToolName::ListMemoryProjects => {
+                self.list_memory_projects(&ListMemoryProjectsParams::from_arguments(&arguments))?
+            }
+            ToolName::CreateMemoryProject => {
+                self.create_memory_project(&CreateMemoryProjectParams::from_arguments(&arguments))?
+            }
+            ToolName::DeleteProject => {
+                self.delete_project(&DeleteProjectParams::from_arguments(&arguments))?
+            }
+            ToolName::SchemaValidate => {
+                self.schema_validate(&SchemaValidateParams::from_arguments(&arguments))?
+            }
+            ToolName::SchemaInfer => {
+                self.schema_infer(&SchemaInferParams::from_arguments(&arguments))?
+            }
+            ToolName::SchemaDiff => {
+                self.schema_diff(&SchemaDiffParams::from_arguments(&arguments))?
+            }
             ToolName::AutoMemoryDiagnostics => self.diagnostics()?,
         })
     }
 
-    fn read_note(&mut self, arguments: &Value) -> Result<Value> {
-        let identifier = required_str(arguments, "identifier")?;
-        let identifier = identifier.to_owned();
-        let output_format = OutputFormat::from_arguments(arguments, OutputFormat::Text);
-        let include_frontmatter = arguments["include_frontmatter"].as_bool().unwrap_or(false);
-        let page = arguments["page"]
-            .as_u64()
-            .or_else(|| arguments["page_number"].as_u64())
-            .unwrap_or(1) as u32;
-        let page_size = arguments["page_size"]
-            .as_u64()
-            .or_else(|| arguments["limit"].as_u64())
-            .or_else(|| arguments["per_page"].as_u64())
-            .unwrap_or(10) as u32;
+    fn read_note(&mut self, params: &ReadNoteParams) -> Result<Value> {
+        let identifier = required_str(params.identifier.as_deref(), "identifier")?.to_owned();
+        let output_format = params.output_format();
+        let include_frontmatter = params.include_frontmatter.unwrap_or(false);
+        let page = params.page();
+        let page_size = params.page_size();
 
         if !output_format.is_json() {
             return Ok(text_result(self.note_text(&identifier, page, page_size)?));
@@ -650,19 +679,16 @@ impl<'a> McpServer<'a> {
             .collect())
     }
 
-    fn write_note(&mut self, arguments: &Value) -> Result<Value> {
-        let title = required_str(arguments, "title")?.to_owned();
-        let content = arguments["content"].as_str().unwrap_or_default().to_owned();
-        let mut directory = arguments["directory"]
-            .as_str()
-            .unwrap_or_default()
-            .to_owned();
+    fn write_note(&mut self, params: &WriteNoteParams) -> Result<Value> {
+        let title = required_str(params.title.as_deref(), "title")?.to_owned();
+        let content = params.content.clone().unwrap_or_default();
+        let mut directory = params.directory.clone().unwrap_or_default();
         // `"/"` means the project root, and it is normalized before the guard runs.
         if directory == "/" {
             directory.clear();
         }
-        let overwrite = arguments["overwrite"].as_bool().unwrap_or(false);
-        let output_format = OutputFormat::from_arguments(arguments, OutputFormat::Text);
+        let overwrite = params.overwrite.unwrap_or(false);
+        let output_format = params.output_format();
 
         // The reference refuses a directory that could leave the project, and answers with
         // a structured payload rather than an error.
@@ -686,14 +712,15 @@ impl<'a> McpServer<'a> {
         // `note_type` supplies the frontmatter `type` unless the content already
         // declares one; explicit `tags` win over `metadata["tags"]` — both mirroring the
         // reference's merge order.
-        let note_type = arguments["note_type"]
-            .as_str()
+        let note_type = params
+            .note_type
+            .as_deref()
             .filter(|value| !value.trim().is_empty())
             .unwrap_or("note")
             .to_owned();
         let note_type = (!content_declares_type(&content)).then_some(note_type);
-        let mut metadata = metadata_pairs(&arguments["metadata"])?;
-        let tags = crate::markdown::frontmatter::parse_tags(arguments.get("tags"));
+        let mut metadata = metadata_pairs(params.metadata())?;
+        let tags = crate::markdown::frontmatter::parse_tags(params.tags());
         if !tags.is_empty() {
             metadata.push((
                 "tags".to_owned(),
@@ -837,21 +864,22 @@ impl<'a> McpServer<'a> {
         )))
     }
 
-    fn edit_note(&mut self, arguments: &Value) -> Result<Value> {
-        let identifier = required_str(arguments, "identifier")?.to_owned();
-        let operation = EditOperation::parse(required_str(arguments, "operation")?)?;
-        let content = arguments["content"].as_str().unwrap_or_default().to_owned();
+    fn edit_note(&mut self, params: &EditNoteParams) -> Result<Value> {
+        let identifier = required_str(params.identifier.as_deref(), "identifier")?.to_owned();
+        let operation =
+            EditOperation::parse(required_str(params.operation.as_deref(), "operation")?)?;
+        let content = params.content.clone().unwrap_or_default();
         let mut options = EditOptions::new();
-        options.section = arguments["section"].as_str().map(str::to_owned);
-        options.find_text = arguments["find_text"].as_str().map(str::to_owned);
-        if let Some(expected) = arguments["expected_replacements"].as_u64() {
+        options.section = params.section.clone();
+        options.find_text = params.find_text.clone();
+        if let Some(expected) = params.expected_replacements {
             options.expected_replacements = expected as usize;
         }
-        if let Some(replace) = arguments["replace_subsections"].as_bool() {
+        if let Some(replace) = params.replace_subsections {
             options.replace_subsections = replace;
         }
-        let metadata = metadata_pairs(&arguments["metadata"])?;
-        let output_format = OutputFormat::from_arguments(arguments, OutputFormat::Text);
+        let metadata = metadata_pairs(params.metadata())?;
+        let output_format = params.output_format();
         let (document, file_created) = {
             let mut notes = self.notes();
             notes.edit_note_with_status(&identifier, operation, &content, &options, &metadata)?
@@ -933,12 +961,12 @@ impl<'a> McpServer<'a> {
         )))
     }
 
-    fn move_note(&mut self, arguments: &Value) -> Result<Value> {
-        let identifier = required_str(arguments, "identifier")?.to_owned();
-        let is_directory = arguments["is_directory"].as_bool().unwrap_or(false);
-        let destination_path = arguments["destination_path"].as_str();
-        let destination_folder = arguments["destination_folder"].as_str();
-        let output_format = OutputFormat::from_arguments(arguments, OutputFormat::Text);
+    fn move_note(&mut self, params: &MoveNoteParams) -> Result<Value> {
+        let identifier = required_str(params.identifier.as_deref(), "identifier")?.to_owned();
+        let is_directory = params.is_directory.unwrap_or(false);
+        let destination_path = params.destination_path.as_deref();
+        let destination_folder = params.destination_folder.as_deref();
+        let output_format = params.output_format();
 
         if is_directory {
             // A directory move needs a full destination path: a folder name has no
@@ -1126,10 +1154,10 @@ impl<'a> McpServer<'a> {
         Ok(text_result(lines.join("\n")))
     }
 
-    fn delete_note(&mut self, arguments: &Value) -> Result<Value> {
-        let identifier = required_str(arguments, "identifier")?.to_owned();
-        let is_directory = arguments["is_directory"].as_bool().unwrap_or(false);
-        let output_format = OutputFormat::from_arguments(arguments, OutputFormat::Text);
+    fn delete_note(&mut self, params: &DeleteNoteParams) -> Result<Value> {
+        let identifier = required_str(params.identifier.as_deref(), "identifier")?.to_owned();
+        let is_directory = params.is_directory.unwrap_or(false);
+        let output_format = params.output_format();
         if is_directory {
             return self.delete_directory(&identifier, output_format);
         }
@@ -1250,13 +1278,13 @@ impl<'a> McpServer<'a> {
         Ok(text_result(lines.join("\n")))
     }
 
-    fn search_notes(&mut self, arguments: &Value) -> Result<Value> {
-        let query = arguments["query"].as_str().map(str::to_owned);
-        let output_format = OutputFormat::from_arguments(arguments, OutputFormat::Text);
-        if arguments["search_all_projects"].as_bool().unwrap_or(false) {
-            return self.search_all_projects(arguments, output_format);
+    fn search_notes(&mut self, params: &SearchNotesParams) -> Result<Value> {
+        let query = params.query.clone();
+        let output_format = params.output_format();
+        if params.search_all_projects.unwrap_or(false) {
+            return self.search_all_projects(params, output_format);
         }
-        match self.search_outcome(arguments)? {
+        match self.search_outcome(params)? {
             SearchOutcome::Payload(payload) => {
                 if output_format.is_json() {
                     return json_result(payload);
@@ -1281,8 +1309,8 @@ impl<'a> McpServer<'a> {
     /// unknown type and a request with no criteria both produce guidance rather than a
     /// payload; and the semantic modes need an embedding runtime, so without one they
     /// say so instead of quietly running a text search.
-    fn search_outcome(&mut self, arguments: &Value) -> Result<SearchOutcome> {
-        self.search_outcome_for(self.project_id, arguments)
+    fn search_outcome(&mut self, params: &SearchNotesParams) -> Result<SearchOutcome> {
+        self.search_outcome_for(self.project_id, params)
     }
 
     /// Search every registered project and merge the pages.
@@ -1294,11 +1322,11 @@ impl<'a> McpServer<'a> {
     /// page `all projects`.
     fn search_all_projects(
         &mut self,
-        arguments: &Value,
+        params: &SearchNotesParams,
         output_format: OutputFormat,
     ) -> Result<Value> {
-        let page = arguments["page"].as_u64().unwrap_or(1).max(1) as u32;
-        let page_size = arguments["page_size"].as_u64().unwrap_or(10).max(1) as u32;
+        let page = params.page.unwrap_or(1).max(1) as u32;
+        let page_size = params.page_size.unwrap_or(10).max(1) as u32;
         let per_project_page_size = page * page_size;
         let projects = self.store.projects()?;
 
@@ -1307,18 +1335,16 @@ impl<'a> McpServer<'a> {
         let mut total_is_exact = true;
         let mut any_project_has_more = false;
         for project in &projects {
-            let mut request = arguments.clone();
-            if let Some(map) = request.as_object_mut() {
-                map.insert("search_all_projects".to_owned(), json!(false));
-                map.insert("page".to_owned(), json!(1));
-                map.insert("page_size".to_owned(), json!(per_project_page_size));
-                // Each project answers with its JSON payload; the merged page is the
-                // one that gets rendered in the caller's format.
-                map.insert(
-                    "output_format".to_owned(),
-                    json!(<&str>::from(OutputFormat::Json)),
-                );
-            }
+            // Each project answers with its own JSON payload, one page wide enough to
+            // hold the merged window; the merged page is the one that gets rendered in
+            // the caller's format.
+            let request = SearchNotesParams {
+                search_all_projects: Some(false),
+                page: Some(1),
+                page_size: Some(u64::from(per_project_page_size)),
+                output_format: Some(<&str>::from(OutputFormat::Json).to_owned()),
+                ..params.clone()
+            };
             let payload = match self.search_outcome_for(project.id, &request)? {
                 SearchOutcome::Payload(payload) => payload,
                 // A project that answered with guidance contributes nothing, and the
@@ -1369,7 +1395,7 @@ impl<'a> McpServer<'a> {
         Ok(text_result(render_search_markdown(
             &payload,
             "all projects",
-            arguments["query"].as_str(),
+            params.query.as_deref(),
             None,
         )))
     }
@@ -1377,20 +1403,21 @@ impl<'a> McpServer<'a> {
     /// Classify one `search_notes` request against a specific project.
     ///
     /// Split out so `search_all_projects` can run the same logic per project.
-    fn search_outcome_for(&mut self, project_id: i64, arguments: &Value) -> Result<SearchOutcome> {
-        let query = arguments["query"].as_str().map(str::to_owned);
+    fn search_outcome_for(
+        &mut self,
+        project_id: i64,
+        params: &SearchNotesParams,
+    ) -> Result<SearchOutcome> {
+        let query = params.query.clone();
         let effective_query = query
             .as_deref()
             .map(str::trim)
             .unwrap_or_default()
             .to_owned();
-        let raw_search_type = arguments["search_type"]
-            .as_str()
-            .unwrap_or("text")
-            .to_owned();
+        let raw_search_type = params.search_type.as_deref().unwrap_or("text").to_owned();
 
-        let supplied_entity_types = strings(&arguments["entity_types"]);
-        let mut options = self.search_options(arguments)?;
+        let supplied_entity_types = params.entity_types();
+        let mut options = self.search_options(params)?;
         let mut mode = SearchMode::Text;
 
         // The mode only applies when there is an actual query string; a filter-only
@@ -1440,7 +1467,7 @@ impl<'a> McpServer<'a> {
             }
         }
 
-        if !has_search_criteria(&options, &supplied_entity_types) {
+        if !has_search_criteria(&options, supplied_entity_types) {
             return Ok(SearchOutcome::Guidance(no_criteria_guidance().to_owned()));
         }
 
@@ -1463,7 +1490,7 @@ impl<'a> McpServer<'a> {
                 });
                 let mut vector_options = vector_options(&options);
                 // A per-query `min_similarity` overrides the configured default.
-                if let Some(min_similarity) = arguments["min_similarity"].as_f64() {
+                if let Some(min_similarity) = params.min_similarity {
                     vector_options.min_similarity = min_similarity as f32;
                 }
                 let page = if matches!(mode, SearchMode::Hybrid) {
@@ -1493,8 +1520,8 @@ impl<'a> McpServer<'a> {
     }
 
     /// The `search_notes` JSON payload, shared with the ChatGPT `search` adapter.
-    fn search_payload(&mut self, arguments: &Value) -> Result<Value> {
-        match self.search_outcome(arguments)? {
+    fn search_payload(&mut self, params: &SearchNotesParams) -> Result<Value> {
+        match self.search_outcome(params)? {
             SearchOutcome::Payload(payload) => Ok(payload),
             SearchOutcome::Guidance(_) => Ok(json!({
                 "results": [],
@@ -1504,33 +1531,33 @@ impl<'a> McpServer<'a> {
     }
 
     /// Build the filter options one request asks for.
-    fn search_options(&self, arguments: &Value) -> Result<TextSearchOptions> {
-        let categories = strings(&arguments["categories"]);
+    fn search_options(&self, params: &SearchNotesParams) -> Result<TextSearchOptions> {
+        let categories = params.categories().to_vec();
         let mut options = TextSearchOptions {
-            query: arguments["query"].as_str().map(str::to_owned),
-            page: arguments["page"].as_u64().unwrap_or(1) as u32,
-            page_size: arguments["page_size"].as_u64().unwrap_or(10) as u32,
+            query: params.query.clone(),
+            page: params.page.unwrap_or(1) as u32,
+            page_size: params.page_size.unwrap_or(10) as u32,
             categories: categories.clone(),
             ..TextSearchOptions::default()
         };
-        if let Some(title) = arguments["title"].as_str() {
+        if let Some(title) = params.title.as_deref() {
             options.title = Some(title.to_owned());
         }
-        if let Some(permalink) = arguments["permalink"].as_str() {
+        if let Some(permalink) = params.permalink.as_deref() {
             options.permalink = Some(permalink.to_owned());
         }
-        if let Some(permalink_match) = arguments["permalink_match"].as_str() {
+        if let Some(permalink_match) = params.permalink_match.as_deref() {
             options.permalink_match = Some(permalink_match.to_owned());
         }
-        for value in strings(&arguments["note_types"]) {
-            options.note_types.push(value);
+        for value in params.note_types() {
+            options.note_types.push(value.clone());
         }
-        for value in strings(&arguments["tags"]) {
-            options.tags.push(value);
+        for value in params.tags() {
+            options.tags.push(value.clone());
         }
         // The reference's implicit default: a category filter scopes the search to
         // observation rows, because categories only exist there.
-        let entity_types = strings(&arguments["entity_types"]);
+        let entity_types = params.entity_types();
         options.entity_types = if entity_types.is_empty() {
             crate::search::default_entity_types(&options.categories)
         } else {
@@ -1539,16 +1566,14 @@ impl<'a> McpServer<'a> {
                 .filter_map(|value| value.parse::<SearchItemType>().ok())
                 .collect()
         };
-        if let Some(status) = arguments["status"].as_str() {
+        if let Some(status) = params.status.as_deref() {
             options.status = Some(status.to_owned());
         }
-        if let Some(after) =
-            string_argument(arguments, &["after_date", "since", "after", "from_date"])
-        {
+        if let Some(after) = params.after_date() {
             // An unparsable bound means "no date filter", as in the reference.
             options.after_date = crate::domain::dateparser::parse_after_date(after);
         }
-        if let Some(filters) = arguments["metadata_filters"].as_object() {
+        if let Some(filters) = params.metadata_filters() {
             for (key, value) in filters {
                 let key = if key == "note_type" { "type" } else { key };
                 let value = value
@@ -1560,17 +1585,17 @@ impl<'a> McpServer<'a> {
         Ok(options)
     }
 
-    fn build_context(&mut self, arguments: &Value) -> Result<Value> {
-        let url = required_str(arguments, "url")?.to_owned();
-        let timeframe = arguments["timeframe"].as_str().unwrap_or("7d");
+    fn build_context(&mut self, params: &BuildContextParams) -> Result<Value> {
+        let url = required_str(params.url.as_deref(), "url")?.to_owned();
+        let timeframe = params.timeframe.as_deref().unwrap_or("7d");
         // `build_context` is the one tool that answers with its JSON payload by
         // default; `output_format="text"` opts into the markdown artifact.
-        let output_format = OutputFormat::from_arguments(arguments, OutputFormat::Json);
+        let output_format = params.output_format();
         let options = ContextOptions {
-            depth: arguments["depth"].as_u64().unwrap_or(1) as u32,
-            max_related: arguments["max_related"].as_u64().unwrap_or(10) as u32,
-            page: arguments["page"].as_u64().unwrap_or(1) as u32,
-            page_size: arguments["page_size"].as_u64().unwrap_or(10) as u32,
+            depth: params.depth.unwrap_or(1) as u32,
+            max_related: params.max_related.unwrap_or(10) as u32,
+            page: params.page.unwrap_or(1) as u32,
+            page_size: params.page_size.unwrap_or(10) as u32,
             since: Some(timeframe::parse_timeframe(timeframe)?),
         };
         let graph = build_context(self.store, self.project_id, &url, &options)?;
@@ -1584,35 +1609,24 @@ impl<'a> McpServer<'a> {
         json_result(serde_json::to_value(graph)?)
     }
 
-    fn list_directory(&mut self, arguments: &Value) -> Result<Value> {
-        let dir_name = string_argument(
-            arguments,
-            &["dir_name", "directory", "folder", "path", "dir"],
-        )
-        .unwrap_or("/")
-        .to_owned();
-        let page_size = arguments["page_size"]
-            .as_u64()
-            .or_else(|| arguments["limit"].as_u64())
-            .or_else(|| arguments["per_page"].as_u64())
-            .unwrap_or(DEFAULT_DIRECTORY_PAGE_SIZE as u64) as u32;
-        let sort = string_argument(arguments, &["sort"])
+    fn list_directory(&mut self, params: &ListDirectoryParams) -> Result<Value> {
+        let dir_name = params.dir_name().to_owned();
+        let page_size = params.page_size();
+        let sort = params
+            .sort
+            .as_deref()
             .map(DirectorySortOrder::parse)
             .transpose()?;
         let options = DirectoryOptions {
             dir_name: dir_name.clone(),
-            depth: arguments["depth"].as_u64().unwrap_or(1) as u32,
-            file_name_glob: string_argument(
-                arguments,
-                &["file_name_glob", "glob", "pattern", "filter"],
-            )
-            .map(str::to_owned),
+            depth: params.depth.unwrap_or(1) as u32,
+            file_name_glob: params.file_name_glob().map(str::to_owned),
             sort,
-            page: arguments["page"].as_u64().unwrap_or(1) as u32,
+            page: params.page.unwrap_or(1) as u32,
             page_size,
         };
         let listing = list_directory(self.store, self.project_id, &options)?;
-        if OutputFormat::from_arguments(arguments, OutputFormat::Text).is_json() {
+        if params.output_format().is_json() {
             return json_result(serde_json::to_value(&listing)?);
         }
         Ok(text_result(render_directory_text(
@@ -1620,8 +1634,9 @@ impl<'a> McpServer<'a> {
         )))
     }
 
-    fn read_content(&mut self, arguments: &Value) -> Result<Value> {
-        let raw_path = string_argument(arguments, &["path", "file_path", "filepath", "file"])
+    fn read_content(&mut self, params: &ReadContentParams) -> Result<Value> {
+        let raw_path = params
+            .path()
             .ok_or_else(|| Error::InvalidArgument {
                 message: "path is required".to_owned(),
             })?
@@ -1687,41 +1702,31 @@ impl<'a> McpServer<'a> {
         }))
     }
 
-    fn recent_activity(&mut self, arguments: &Value) -> Result<Value> {
-        let page_size = arguments["page_size"]
-            .as_u64()
-            .or_else(|| arguments["limit"].as_u64())
-            .or_else(|| arguments["per_page"].as_u64())
-            .unwrap_or(10);
+    fn recent_activity(&mut self, params: &RecentActivityParams) -> Result<Value> {
+        let page_size = params.page_size();
         if page_size > 100 {
             return Err(Error::InvalidArgument {
                 message: format!("page_size must be <= 100, got {page_size}"),
             });
         }
-        let types = parse_activity_types(&arguments["type"])?;
+        let types = parse_activity_types(params.activity_types())?;
         let type_filter_applied = !types.is_empty();
-        let timeframe =
-            string_argument(arguments, &["timeframe", "since", "time_range", "lookback"])
-                .unwrap_or("7d")
-                .to_owned();
+        let timeframe = params.timeframe().to_owned();
         let options = ActivityOptions {
             types: if type_filter_applied {
                 types
             } else {
                 vec![SearchItemType::Entity]
             },
-            depth: arguments["depth"].as_u64().unwrap_or(1) as u32,
-            page: arguments["page"]
-                .as_u64()
-                .or_else(|| arguments["page_number"].as_u64())
-                .unwrap_or(1) as u32,
+            depth: params.depth.unwrap_or(1) as u32,
+            page: params.page(),
             page_size: page_size as u32,
             max_related: 10,
             since: Some(timeframe::parse_timeframe(&timeframe)?),
             type_filter_applied,
         };
         let activity = recent_context(self.store, self.project_id, &options)?;
-        if OutputFormat::from_arguments(arguments, OutputFormat::Text).is_json() {
+        if params.output_format().is_json() {
             return json_result(serde_json::to_value(recent_rows(&activity))?);
         }
         Ok(text_result(render_activity_text(
@@ -1733,7 +1738,7 @@ impl<'a> McpServer<'a> {
         )))
     }
 
-    fn list_memory_projects(&mut self, arguments: &Value) -> Result<Value> {
+    fn list_memory_projects(&mut self, params: &ListMemoryProjectsParams) -> Result<Value> {
         let projects = self.store.projects()?;
         let merged = projects
             .iter()
@@ -1766,7 +1771,7 @@ impl<'a> McpServer<'a> {
             .iter()
             .find(|project| project.id == self.project_id)
             .map(|project| project.name.clone());
-        if OutputFormat::from_arguments(arguments, OutputFormat::Text).is_json() {
+        if params.output_format().is_json() {
             return json_result(json!({
                 "projects": merged,
                 "default_project": default_project,
@@ -1784,12 +1789,12 @@ impl<'a> McpServer<'a> {
     /// The reference short-circuits on `BASIC_MEMORY_MCP_PROJECT` before opening any
     /// routed client; `auto-memory mcp` is always constrained to one project, so this is
     /// the whole surface rather than an error path. Project lifecycle belongs to the CLI.
-    fn create_memory_project(&mut self, arguments: &Value) -> Result<Value> {
-        let project_name = required_str(arguments, "project_name")?;
-        if OutputFormat::from_arguments(arguments, OutputFormat::Text).is_json() {
+    fn create_memory_project(&mut self, params: &CreateMemoryProjectParams) -> Result<Value> {
+        let project_name = required_str(params.project_name.as_deref(), "project_name")?;
+        if params.output_format().is_json() {
             return json_result(json!({
                 "name": project_name,
-                "path": arguments["project_path"].as_str().unwrap_or_default(),
+                "path": params.project_path.as_deref().unwrap_or_default(),
                 "is_default": false,
                 "created": false,
                 "already_exists": false,
@@ -1803,22 +1808,22 @@ impl<'a> McpServer<'a> {
         Ok(text_result(format!(
             "# Error\n\nProject creation disabled - MCP server is constrained to project '{}'.\nUse the CLI to create projects: `auto-memory project add \"{project_name}\" \"{}\"`",
             self.project_name,
-            arguments["project_path"].as_str().unwrap_or_default()
+            params.project_path.as_deref().unwrap_or_default()
         )))
     }
 
     /// Project deletion through a `--project`-constrained server is refused.
-    fn delete_project(&mut self, arguments: &Value) -> Result<Value> {
+    fn delete_project(&mut self, params: &DeleteProjectParams) -> Result<Value> {
         // The reference requires the argument and echoes it in the hint.
-        let project_name = required_str(arguments, "project_name")?;
+        let project_name = required_str(params.project_name.as_deref(), "project_name")?;
         Ok(text_result(format!(
             "# Error\n\nProject deletion disabled - MCP server is constrained to project '{}'.\nUse the CLI to delete projects: `auto-memory project remove \"{project_name}\"`",
             self.project_name
         )))
     }
 
-    fn view_note(&mut self, arguments: &Value) -> Result<Value> {
-        let identifier = required_str(arguments, "identifier")?.to_owned();
+    fn view_note(&mut self, params: &ViewNoteParams) -> Result<Value> {
+        let identifier = required_str(params.identifier.as_deref(), "identifier")?.to_owned();
         // `view_note` is a thin wrapper over `read_note`'s text surface: the raw
         // markdown is embedded in an artifact instruction block, and a miss returns
         // the "Note Not Found" guidance verbatim rather than wrapping it.
@@ -1899,8 +1904,8 @@ impl<'a> McpServer<'a> {
     /// payload telling the caller to use `search_notes`, and an OpenAI client gets the
     /// same ten results as `search_notes(page=1, page_size=10)` reshaped into
     /// `{id, title, url}` rows.
-    fn chatgpt_search(&mut self, arguments: &Value) -> Result<Value> {
-        let query = required_str(arguments, "query")?.to_owned();
+    fn chatgpt_search(&mut self, params: &ChatgptSearchParams) -> Result<Value> {
+        let query = required_str(params.query.as_deref(), "query")?.to_owned();
         if !self.is_openai_mcp_client() {
             return content_items_result(vec![text_item(json!({
                 "results": [],
@@ -1910,12 +1915,13 @@ impl<'a> McpServer<'a> {
             }))]);
         }
 
-        let payload = self.search_payload(&json!({
-            "query": query,
-            "page": 1,
-            "page_size": 10,
-            "output_format": "json",
-        }))?;
+        let payload = self.search_payload(&SearchNotesParams {
+            query: Some(query.clone()),
+            page: Some(1),
+            page_size: Some(10),
+            output_format: Some(<&str>::from(OutputFormat::Json).to_owned()),
+            ..SearchNotesParams::default()
+        })?;
         let raw = payload["results"].as_array().cloned().unwrap_or_default();
         let formatted = raw
             .iter()
@@ -1950,8 +1956,8 @@ impl<'a> McpServer<'a> {
     ///
     /// An OpenAI client gets the raw markdown of the note plus a derived title; a miss
     /// still returns a document, flagged through `metadata.error`.
-    fn chatgpt_fetch(&mut self, arguments: &Value) -> Result<Value> {
-        let id = required_str(arguments, "id")?.to_owned();
+    fn chatgpt_fetch(&mut self, params: &ChatgptFetchParams) -> Result<Value> {
+        let id = required_str(params.id.as_deref(), "id")?.to_owned();
         if !self.is_openai_mcp_client() {
             return content_items_result(vec![text_item(json!({
                 "id": id,
@@ -1986,10 +1992,10 @@ impl<'a> McpServer<'a> {
     }
 
     /// `schema_validate`: one note, one type, or every schema-covered type.
-    fn schema_validate(&mut self, arguments: &Value) -> Result<Value> {
-        let note_type = arguments["note_type"].as_str().map(str::to_owned);
-        let identifier = arguments["identifier"].as_str().map(str::to_owned);
-        let output_format = OutputFormat::from_arguments(arguments, OutputFormat::Text);
+    fn schema_validate(&mut self, params: &SchemaValidateParams) -> Result<Value> {
+        let note_type = params.note_type.clone();
+        let identifier = params.identifier.clone();
+        let output_format = params.output_format();
 
         let service = SchemaService::new(self.store, self.project_id, &self.vault);
         let outcome = schema_tools::validate(&service, note_type.as_deref(), identifier.as_deref());
@@ -2000,10 +2006,10 @@ impl<'a> McpServer<'a> {
     }
 
     /// `schema_infer`: frequency analysis plus a suggested Picoschema block.
-    fn schema_infer(&mut self, arguments: &Value) -> Result<Value> {
-        let note_type = required_str(arguments, "note_type")?.to_owned();
-        let threshold = arguments["threshold"].as_f64().unwrap_or(0.25);
-        let output_format = OutputFormat::from_arguments(arguments, OutputFormat::Text);
+    fn schema_infer(&mut self, params: &SchemaInferParams) -> Result<Value> {
+        let note_type = required_str(params.note_type.as_deref(), "note_type")?.to_owned();
+        let threshold = params.threshold.unwrap_or(0.25);
+        let output_format = params.output_format();
 
         let service = SchemaService::new(self.store, self.project_id, &self.vault);
         let outcome = schema_tools::infer(&service, &note_type, threshold);
@@ -2014,9 +2020,9 @@ impl<'a> McpServer<'a> {
     }
 
     /// `schema_diff`: declared fields versus observed usage.
-    fn schema_diff(&mut self, arguments: &Value) -> Result<Value> {
-        let note_type = required_str(arguments, "note_type")?.to_owned();
-        let output_format = OutputFormat::from_arguments(arguments, OutputFormat::Text);
+    fn schema_diff(&mut self, params: &SchemaDiffParams) -> Result<Value> {
+        let note_type = required_str(params.note_type.as_deref(), "note_type")?.to_owned();
+        let output_format = params.output_format();
 
         let service = SchemaService::new(self.store, self.project_id, &self.vault);
         let outcome = schema_tools::diff(&service, &note_type);

@@ -11,6 +11,7 @@ reasons, and the trigger that would make a rejected pattern worth revisiting.
 | Strategy (trait object) | `search::embedding::EmbeddingProvider`, `runtime::rerank::RerankProvider` | Two real implementations each: the ONNX runtime and the fixture provider used by tests. Callers take `&dyn …`, so adding a provider is a new type, not a new branch. |
 | Sum-type dispatch (closed vocabulary) | `ToolName`, `SearchType`, `OutputFormat`, `EditOperation`, `DirectorySortOrder`, `SearchItemType`, `ValidationMode` | The reference's vocabularies are closed sets. An enum + exhaustive `match` makes "every surface handles every case" a compile-time property, and `strum` keeps the wire spelling in one place. Adding a case is a compile error until `tools/list`, dispatch and the golden coverage test agree. |
 | Options struct | `TextSearchOptions`, `VectorSearchOptions`, `ContextOptions`, `ActivityOptions`, `DirectoryOptions`, `EditOptions`, `IndexOptions`, `RebuildOptions` | `Default` + `..Default::default()` means a new optional setting does not touch existing call sites — the Rust way to avoid a telescoping constructor or a mutable builder. |
+| Typed tool arguments | `adapters::mcp::params` | A `tools/call` object maps onto one struct per tool whose every field is an `Option`, so absence is data and no handler indexes a `Value`. The reads are deliberately lax — an argument of the wrong JSON type counts as absent — because that is what the reference's per-key `dict` reads did, and the historical spellings stay separate fields with a documented precedence (`#[serde(alias)]` would reject a call that sends two of them). |
 | Newtype | `Permalink`, `RelationType`, `ProjectId`, `EntityId`, `DocumentId`, `Scratch` | Validation at construction and no accidental mix-ups between ids that are all strings on the wire. |
 | RAII guard | `Store` (connection + prepared statements), `Scratch` (test temp dirs), `Debouncer` (its own window state) | Resource lifetime is tied to scope; no manual cleanup to forget. |
 | Adapter + layered modules | `adapters/{cli,mcp,filesystem}` → `application/` → `domain/` (+ `storage/`, `search/`, `indexing/` as infrastructure) | The domain is unaware of MCP, SQLite and the CLI; a new front end is a new adapter. `src/lib.rs` states the dependency rule. |
@@ -32,8 +33,8 @@ reasons, and the trigger that would make a rejected pattern worth revisiting.
 ## Extension points that already exist
 
 - **New tool**: add a `ToolName` variant (its wire name comes from `strum`), a `definition()`
-  arm, and a `call_tool` arm — the coverage test in `adapters::mcp::server` fails until all
-  three agree.
+  arm, a `…Params` struct in `adapters::mcp::params`, and a `call_tool` arm — the coverage
+  test in `adapters::mcp::server` fails until every surface agrees.
 - **New search type / output format / edit operation**: add the enum variant; every `match`
   that has to care stops compiling.
 - **New embedding or reranking backend**: implement the provider trait and pass it to
