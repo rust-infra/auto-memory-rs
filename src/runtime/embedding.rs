@@ -237,9 +237,10 @@ fn onnx_library_in(directory: &Path) -> Option<PathBuf> {
             path.file_name().is_some_and(|name| {
                 let name = name.to_string_lossy();
                 // Windows ships `onnxruntime.dll` — no `lib` prefix, `.dll` extension —
-                // while Unix builds are `libonnxruntime.{so,dylib}`.
-                name.starts_with("libonnxruntime.so")
-                    || name.starts_with("libonnxruntime.dylib")
+                // while Unix builds are `libonnxruntime.{so,dylib}` or versioned
+                // `libonnxruntime.<version>.dylib` / `libonnxruntime.so.<version>`.
+                (name.starts_with("libonnxruntime.")
+                    && (name.ends_with(".so") || name.contains(".so.") || name.ends_with(".dylib")))
                     || name.starts_with("onnxruntime.dll")
             })
         })
@@ -249,26 +250,59 @@ fn onnx_library_in(directory: &Path) -> Option<PathBuf> {
     libraries.pop()
 }
 
-/// Locate an ONNX Runtime shared library to load dynamically.
+/// Resolve an explicitly requested runtime path before falling back to discovery.
 ///
-/// `ORT_DYLIB_PATH` wins outright when it names a file. Otherwise
-/// [`onnx_runtime_search_paths`] is walked in order and the first directory holding a
-/// library wins. `None` means "not found", which callers report as an actionable
-/// runtime error rather than a crash — semantic search is optional.
-pub fn find_onnx_runtime() -> Option<PathBuf> {
-    if let Ok(path) = std::env::var(ONNX_RUNTIME_ENV) {
-        let path = PathBuf::from(path);
-        if path.is_file() {
-            return Some(path);
+/// `requested` may name either the shared library itself or a directory containing it.
+/// This is the value behind `--onnx-runtime`; `ORT_DYLIB_PATH` keeps the same
+/// file-or-directory semantics so CLI flags and the environment agree.
+pub fn resolve_onnx_runtime(requested: Option<&Path>) -> Option<PathBuf> {
+    if let Some(path) = requested {
+        if let Some(runtime) = runtime_in_path(path) {
+            return Some(runtime);
         }
         tracing::warn!(
             path = %path.display(),
-            "{ONNX_RUNTIME_ENV} does not name a file; falling back to the search path"
+            "explicit ONNX Runtime path does not name a library or a directory containing one; \
+             falling back to discovery"
         );
     }
+
+    if let Ok(path) = std::env::var(ONNX_RUNTIME_ENV) {
+        let path = PathBuf::from(path);
+        if let Some(runtime) = runtime_in_path(&path) {
+            return Some(runtime);
+        }
+        tracing::warn!(
+            path = %path.display(),
+            "{ONNX_RUNTIME_ENV} does not name a library or a directory containing one; \
+             falling back to the search path"
+        );
+    }
+
     onnx_runtime_search_paths()
         .iter()
         .find_map(|directory| onnx_library_in(directory))
+}
+
+/// Locate an ONNX Runtime shared library to load dynamically.
+///
+/// This is [`resolve_onnx_runtime`] without an explicit path: `ORT_DYLIB_PATH` first,
+/// then [`onnx_runtime_search_paths`] in order. `None` means "not found", which callers
+/// report as an actionable runtime error rather than a crash — semantic search is
+/// optional.
+pub fn find_onnx_runtime() -> Option<PathBuf> {
+    resolve_onnx_runtime(None)
+}
+
+/// Resolve one explicit path as either a shared-library file or a directory.
+fn runtime_in_path(path: &Path) -> Option<PathBuf> {
+    if path.is_file() {
+        return Some(path.to_path_buf());
+    }
+    if path.is_dir() {
+        return onnx_library_in(path);
+    }
+    None
 }
 
 /// ONNX embedding provider backed by the reference model files.
@@ -590,6 +624,36 @@ mod runtime_discovery_tests {
 
         let found = onnx_library_in(scratch.path()).expect("a library");
         assert_eq!(found.file_name().unwrap(), "onnxruntime.dll");
+    }
+
+    /// macOS wheels ship `libonnxruntime.<version>.dylib`, not a stable unversioned
+    /// name; the directory scan must still find it.
+    #[test]
+    fn onnx_library_in_finds_a_versioned_macos_dylib() {
+        let scratch = tempfile::tempdir().expect("scratch");
+        std::fs::write(scratch.path().join("libonnxruntime.1.30.0.dylib"), "").expect("dylib");
+        std::fs::write(
+            scratch.path().join("libonnxruntime_providers_shared.dylib"),
+            "",
+        )
+        .expect("provider");
+
+        let found = onnx_library_in(scratch.path()).expect("a library");
+        assert_eq!(found.file_name().unwrap(), "libonnxruntime.1.30.0.dylib");
+    }
+
+    #[test]
+    fn explicit_runtime_accepts_a_file_or_a_directory() {
+        let scratch = tempfile::tempdir().expect("scratch");
+        let file = scratch.path().join("libonnxruntime.dylib");
+        std::fs::write(&file, "").expect("file");
+        assert_eq!(runtime_in_path(&file), Some(file.clone()));
+
+        let directory = scratch.path().join("bundle");
+        std::fs::create_dir(&directory).expect("directory");
+        let library = directory.join("libonnxruntime.dylib");
+        std::fs::write(&library, "").expect("library");
+        assert_eq!(runtime_in_path(&directory), Some(library));
     }
 
     /// The Windows Python candidates must follow `%APPDATA%` rather than the Unix

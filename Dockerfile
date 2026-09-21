@@ -9,8 +9,10 @@
 # image bundles both halves the archives leave out: the ONNX Runtime shared library and
 # the quantized embedding model cache. Nothing is downloaded at run time.
 #
-# Versions are the ones the port was validated against (`docs/reference.md` §6f):
-# onnxruntime 1.29.0 and the `qdrant/bge-small-en-v1.5-onnx-q` snapshot.
+# The reference golden vectors were produced with onnxruntime 1.29.0
+# (`docs/reference.md` §6f). The image now bundles the official 1.30.0 wheel because
+# its embedding and reranker compatibility tests pass on both versions; the container
+# entrypoint still warns about the version drift.
 #
 # Each architecture is built on a runner of that architecture (see
 # `.github/workflows/container.yml`), so `TARGETPLATFORM` needs no handling here: the
@@ -32,7 +34,7 @@ FROM python:3.13-slim AS runtime-assets
 # `--no-deps` because this stage exists to extract one file: the wheel's own
 # dependencies (numpy and friends) would be dead weight. The only version that matters
 # is the one in the filename.
-RUN pip install --no-cache-dir --no-deps onnxruntime==1.29.0 \
+RUN pip install --no-cache-dir --no-deps onnxruntime==1.30.0 \
  && mkdir -p /opt/onnxruntime \
  && cp -a /usr/local/lib/python3*/site-packages/onnxruntime/capi/libonnxruntime.so* /opt/onnxruntime/ \
  && cd /opt/onnxruntime \
@@ -82,6 +84,16 @@ RUN ldconfig
 ENV ORT_DYLIB_PATH=/usr/local/lib/libonnxruntime.so
 ENV AUTO_MEMORY_MODEL_CACHE=/opt/auto-memory/models
 
+# The reference captures were generated with 1.29.0. The 1.30.0 wheel passes the
+# current compatibility tests, but semantic scores can drift slightly across releases;
+# make that visible to every `docker run` without polluting the application's own logs.
+RUN cat > /usr/local/bin/auto-memory-entrypoint <<'EOF'
+#!/bin/sh
+echo "warning: this image bundles ONNX Runtime 1.30.0; reference compatibility was validated with 1.29.0, so semantic scores may differ slightly" >&2
+exec auto-memory "$@"
+EOF
+RUN chmod +x /usr/local/bin/auto-memory-entrypoint
+
 # `/vault` holds the markdown notes and `/index` the derived SQLite index; both are meant
 # to be bind-mounted. Declaring them keeps `docker run` without `-v` from quietly writing
 # into the container's writable layer.
@@ -89,7 +101,7 @@ VOLUME ["/vault", "/index"]
 
 # `/index` is a directory, so a bind mount may arrive without the database in it yet:
 # `Store::open` creates it, and the project is registered on the first run.
-ENTRYPOINT ["auto-memory"]
+ENTRYPOINT ["auto-memory-entrypoint"]
 # The HTTP transport rather than stdio, because a container is a long-running server;
 # stdio would need `docker run -i` and one client attached to that process. Add
 # `--read-only` to serve without writing back to the vault.

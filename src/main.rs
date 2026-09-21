@@ -39,8 +39,8 @@ use auto_memory::indexing::{
 use auto_memory::runtime::{
     DEFAULT_RERANKER_CANDIDATES, DEFAULT_RERANKER_MAX_DOCUMENT_CHARS, MODEL_CACHE_ENV,
     OnnxEmbeddingProvider, OnnxRerankProvider, REFERENCE_MODEL_REPO, RerankProvider, RerankRequest,
-    default_model_cache, find_onnx_runtime, model_cache_search_paths, onnx_runtime_search_paths,
-    reference_model_dir,
+    default_model_cache, model_cache_search_paths, onnx_runtime_search_paths, reference_model_dir,
+    resolve_onnx_runtime,
 };
 use auto_memory::search::embedding::{EmbeddingProvider, FixtureEmbeddingProvider};
 use auto_memory::search::rerank::FixtureRerankProvider;
@@ -104,7 +104,7 @@ struct EmbeddingArgs {
     /// Directory holding the fastembed model cache.
     #[arg(long, value_name = "DIR")]
     model_cache: Option<PathBuf>,
-    /// Path to the ONNX Runtime shared library.
+    /// Path to the ONNX Runtime shared library or its containing directory.
     #[arg(long, value_name = "PATH")]
     onnx_runtime: Option<PathBuf>,
 }
@@ -231,6 +231,9 @@ struct DoctorArgs {
     /// Model cache directory to report on.
     #[arg(long, value_name = "DIR")]
     model_cache: Option<PathBuf>,
+    /// ONNX Runtime shared library or containing directory to report on.
+    #[arg(long, value_name = "PATH")]
+    onnx_runtime: Option<PathBuf>,
     /// Emit the report as JSON.
     #[arg(long)]
     json: bool,
@@ -1045,6 +1048,7 @@ async fn doctor_command(args: DoctorArgs) -> ExitCode {
         vault,
         project,
         model_cache: cache_dir,
+        onnx_runtime,
         json,
     } = args;
     let mut checks = Vec::new();
@@ -1166,7 +1170,7 @@ async fn doctor_command(args: DoctorArgs) -> ExitCode {
     }
 
     // --- semantic search --------------------------------------------------------
-    match find_onnx_runtime() {
+    match resolve_onnx_runtime(onnx_runtime.as_deref()) {
         Some(path) => checks.push(Check::ok("onnx_runtime", format!("{}", path.display()))),
         None => {
             let searched: Vec<String> = onnx_runtime_search_paths()
@@ -2056,7 +2060,7 @@ fn embedding_provider(
         return Ok(Box::new(provider));
     }
     let cache = model_cache(args.model_cache.as_deref());
-    let runtime = args.onnx_runtime.clone().or_else(find_onnx_runtime);
+    let runtime = resolve_onnx_runtime(args.onnx_runtime.as_deref());
     let provider = OnnxEmbeddingProvider::load_from_cache(&cache, runtime.as_deref())
         .map_err(|error| format!("failed to load the embedding model: {error}"))?;
     Ok(Box::new(provider))
@@ -2079,7 +2083,7 @@ fn rerank_provider(
         return Ok(Box::new(provider));
     }
     let cache = model_cache(embed.model_cache.as_deref());
-    let runtime = embed.onnx_runtime.clone().or_else(find_onnx_runtime);
+    let runtime = resolve_onnx_runtime(embed.onnx_runtime.as_deref());
     let provider = OnnxRerankProvider::load_from_cache(&cache, runtime.as_deref())
         .map_err(|error| format!("failed to load the reranker: {error}"))?;
     Ok(Box::new(provider))

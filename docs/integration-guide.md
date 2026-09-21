@@ -408,7 +408,7 @@ $BIN mcp --vault "$VAULT" --index "$INDEX" --project "$PROJECT" --model-cache ~/
 ```
 
 `--embedding-fixture FILE` 用捕获好的确定性向量（离线测试用），
-`--onnx-runtime PATH` 指定 ONNX Runtime 动态库；跨编码器重排默认关闭，
+`--onnx-runtime PATH` 指定 ONNX Runtime 动态库，或包含该库的目录；跨编码器重排默认关闭，
 要开就加 `--reranker`（`--reranker-candidates N` 默认 20）。
 
 ### 7.6 写入即索引

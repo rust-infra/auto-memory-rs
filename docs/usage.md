@@ -96,7 +96,9 @@ auto-memory doctor --index ~/.local/share/auto-memory/memory.db --vault ~/vault 
 It reports the index, its schema version, the registered projects, the vault, the project's
 counts, and the two pieces of semantic search that are deliberately *not* in the box — the ONNX
 Runtime shared library and the fastembed model cache. Both are discovered at run time; `doctor`
-prints the exact path it chose, or the list of locations it searched. `--json` gives the same
+prints the exact path it chose, or the list of locations it searched. Pass `--onnx-runtime PATH`
+to test a specific shared library or a directory containing one, and `--model-cache DIR` to test
+an explicit model cache. `--json` gives the same
 report as `{ok, checks[{name, status, detail}]}`, and the exit code is non-zero when a check
 *failed* — an index or vault that was named and is unusable, or a named project that is not
 registered. Missing semantic search is a warning: text search, context, schema, and the MCP
@@ -213,6 +215,8 @@ same flags work on `auto-memory mcp`.
 Semantic search types (`search_type="vector"` / `"semantic"` / `"hybrid"`) need the embedding
 runtime: start the server with `--embedding-fixture FILE` (deterministic test vectors) or
 `--model-cache DIR` (the fastembed model, `~/.config/basic-memory/fastembed_cache` by default).
+`--onnx-runtime PATH` overrides runtime discovery and accepts either the shared-library file or
+the directory that contains it.
 Without either, those requests answer with the reference's "Semantic Search Disabled" guidance
 instead of falling back to text. The vector index itself is built by
 `auto-memory reindex --embeddings`.

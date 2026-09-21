@@ -84,6 +84,27 @@ jobs:
           jq -e '[.checks[] | select(.name == "onnx_runtime" or .name == "model_cache")]
                  | length == 2 and all(.status == "ok")' doctor.json > /dev/null
 
+      # `doctor` proves the runtime and model files exist; this proves the bundled
+      # onnxruntime wheel can actually initialise the embedding session. The image
+      # currently bundles 1.30.0 while the reference captures use 1.29.0, so the
+      # container startup warning names that drift explicitly.
+      - name: Embedding smoke test
+        env:
+          REF: ${{ env.IMAGE }}@${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          docker run --rm --entrypoint sh "$REF" -c '
+            set -eu
+            mkdir -p /tmp/vault
+            printf "# Smoke\n\n- [fact] semantic smoke\n" > /tmp/vault/note.md
+            auto-memory reindex \
+              --vault /tmp/vault \
+              --index /tmp/memory.db \
+              --project smoke \
+              --model-cache /opt/auto-memory/models \
+              --embeddings | grep -q "\"chunks\""
+          '
+
       - name: Record digest
         run: |
           set -euo pipefail
