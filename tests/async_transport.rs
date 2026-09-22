@@ -238,12 +238,11 @@ async fn async_watch_loop_indexes_then_flushes_on_shutdown() {
 
     let batches = handle.join().expect("watcher thread");
     assert!(batches >= 2, "one batch per write, got {batches}");
-    let store = block_on(Store::open(&index_path))
-        .expect("runtime")
-        .expect("store");
+    let store = Store::open(&index_path).await.expect("store");
     assert!(
-        block_on(store.entity_by_file_path(1, "late.md"))
-            .expect("runtime")
+        store
+            .entity_by_file_path(1, "late.md")
+            .await
             .expect("read")
             .is_some(),
         "the shutdown flush applied the pending window"
