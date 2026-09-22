@@ -494,6 +494,7 @@ impl<'a> IndexService<'a> {
         permalink: Option<&str>,
         resolve: bool,
     ) -> Result<()> {
+        // This writes to the index database, not to the Markdown file on disk.
         self.store
             .replace_document(
                 self.project_id,
