@@ -82,6 +82,10 @@ pub struct EmbeddingReport {
 }
 
 /// Incremental indexer bound to one project and vault root.
+///
+/// A thin, short-lived handle: it owns nothing but a `&mut Store` borrow and a snapshot of
+/// the vault root, so callers construct one per operation. Holding `&mut Store` is also what
+/// serializes index operations: there is no way to have two services writing the same store.
 pub struct IndexService<'a> {
     store: &'a mut Store,
     project_id: i64,
@@ -106,11 +110,18 @@ impl<'a> IndexService<'a> {
     }
 
     /// Index one file, skipping the write when its checksum is unchanged.
+    ///
+    /// The comparison is against the *stored* `entity.checksum` (a content hash), not file
+    /// mtime, so touch-only edits report `Unchanged`. Use [`Self::force_index_file`] when the
+    /// write must happen regardless.
     pub async fn index_file(&mut self, relative_path: &str) -> Result<IndexOutcome> {
         self.index_file_inner(relative_path, true).await
     }
 
-    /// Checksum currently stored for one indexed path.
+    /// Checksum currently stored for one indexed path, or `None` when it is not indexed.
+    ///
+    /// Paired with [`Self::file_checksum`]: the watcher compares the two sets to tell a
+    /// rename (a delete plus a create with equal content) from an edit.
     pub async fn entity_checksum(&self, relative_path: &str) -> Result<Option<String>> {
         Ok(self
             .store
@@ -120,6 +131,9 @@ impl<'a> IndexService<'a> {
     }
 
     /// Checksum of one file on disk, or `None` when it does not exist.
+    ///
+    /// Works on paths that are not indexed yet, which is the point: a freshly renamed file
+    /// has no entity row under its new path. See [`Self::entity_checksum`].
     pub fn file_checksum(&self, relative_path: &str) -> Result<Option<String>> {
         match std::fs::read(self.root.join(relative_path)) {
             Ok(bytes) => Ok(Some(checksum_bytes(&bytes))),
@@ -170,6 +184,12 @@ impl<'a> IndexService<'a> {
     }
 
     /// Remove one document from the index. Returns whether a row was removed.
+    ///
+    /// The delete cascades: the entity's observations go with it, and so does every relation
+    /// that pointed *at* it (the schema's `to_id ... ON DELETE CASCADE`), so incoming links
+    /// disappear from the index rather than turning unresolved. A later full rebuild
+    /// re-parses the surviving source notes and brings those links back as unresolved
+    /// (`to_id IS NULL`).
     pub async fn remove_file(&mut self, relative_path: &str) -> Result<bool> {
         let existed = self
             .store
@@ -184,7 +204,11 @@ impl<'a> IndexService<'a> {
         Ok(existed)
     }
 
-    /// Move an indexed document and re-index its new contents.
+    /// Re-key an indexed document from `from` to `to` and re-index its contents.
+    ///
+    /// Assumes the file has already been renamed on disk; this only fixes up the index (and
+    /// rewrites the destination's frontmatter). Callers do the `std::fs::rename` first — see
+    /// `NoteService::move_note` and `VaultWatcher`'s rename pairing.
     ///
     /// With `update_permalinks_on_move = false` (reference default) the existing
     /// permalink is preserved; otherwise it is recomputed from the new path.
@@ -248,6 +272,16 @@ impl<'a> IndexService<'a> {
     }
 
     /// Scan the vault and apply the difference to the index.
+    ///
+    /// Three passes, in this order: index every markdown file found on disk (checksum-gated,
+    /// relations *deferred*), drop index rows whose file no longer exists, then resolve
+    /// relation targets once for the whole project — deferring is what makes the pass O(files)
+    /// instead of O(files x unresolved links).
+    ///
+    /// Malformed frontmatter, an unreadable file, and non-UTF-8 bytes all come back as
+    /// `skipped` rather than as an error, so one bad note cannot abort the pass. Such a path
+    /// still counts as *seen*, so an existing row for it survives instead of being pruned.
+    /// Vector rows are not touched here; that is [`Self::reindex_embeddings`].
     pub async fn reconcile(&mut self) -> Result<ReconcileReport> {
         let files = markdown_files(&self.root);
         let mut report = ReconcileReport::default();
@@ -268,6 +302,8 @@ impl<'a> IndexService<'a> {
             }
         }
 
+        // Second pass: anything the index still knows about that the scan did not see was
+        // deleted (or renamed away) on disk.
         for path in self.store.file_paths(self.project_id).await? {
             if !seen.contains(&path) {
                 self.store.remove_document(self.project_id, &path).await?;
@@ -275,11 +311,21 @@ impl<'a> IndexService<'a> {
             }
         }
 
+        // Third pass: one project-wide link resolution covering every file written above. A
+        // note indexed early in the loop may target one indexed later, so this cannot run
+        // per file without redoing the same scan.
         report.relations_resolved = self.store.resolve_relations(self.project_id).await?;
         Ok(report)
     }
 
     /// Full rebuild through the shared rebuild pipeline.
+    ///
+    /// Unlike [`Self::reconcile`] this ignores the checksum gate: `rebuild_vault` re-parses
+    /// and rewrites every markdown file it finds, prunes rows whose file disappeared, resolves
+    /// relation targets once, and stamps `parser_version`. Re-parsing unconditionally is what
+    /// makes it the recovery path when the *index* (not the vault) is suspect, and it is also
+    /// what re-derives anything the incremental paths deliberately leave alone. Only the two
+    /// permalink-policy fields are carried over from `IndexOptions`.
     pub async fn full_rebuild(&mut self) -> Result<RebuildReport> {
         let options = RebuildOptions {
             project_permalink: self.options.permalink.project_permalink.clone(),
@@ -366,6 +412,9 @@ impl<'a> IndexService<'a> {
             fresh.insert(record.chunk_key.as_str(), vector);
         }
 
+        // A chunk key is `type:id:index`, so the owning search row is the `type:id` prefix.
+        // `None` — an unparseable key, or a row missing from `rows` — skips the chunk rather
+        // than writing a vector with no owner.
         let owner_of = |chunk_key: &str| -> Option<i64> {
             let (item_type, id) = chunk_key.split_once(':')?;
             let id = id.split(':').next()?.parse::<i64>().ok()?;
@@ -414,11 +463,31 @@ impl<'a> IndexService<'a> {
         Ok(report)
     }
 
+    /// Write with the permalink the loader generated; see [`Self::write_with_permalink`] for
+    /// the permalink and `resolve` contracts.
     async fn write(&mut self, indexed: &IndexedDocument, resolve: bool) -> Result<()> {
         self.write_with_permalink(indexed, Some(&indexed.permalink), resolve)
             .await
     }
 
+    /// Write one parsed document to the index, optionally resolving relation targets.
+    ///
+    /// The single mutation path behind `index_file` / `force_index_file` and `move_file`:
+    /// `replace_document` updates an existing entity row in place (keeping its id and
+    /// `created_at`, and leaving `file_path` alone — moves go through `move_document`) or
+    /// inserts a new one, then swaps out that entity's observations, relations, and search
+    /// rows in one transaction.
+    ///
+    /// `permalink` is stored verbatim, so `None` writes SQL `NULL` (used by `move_file` to
+    /// keep a source entity that had no permalink from gaining one); `write` always passes
+    /// the document's generated permalink.
+    ///
+    /// `resolve` decides whether to run `Store::resolve_relations` immediately after the
+    /// write. That call is project-wide — it fills in `to_id` for every still-unresolved
+    /// link in the project, because the document just written may be the target another
+    /// note has been waiting for. Single-file callers pass `true`; batch callers
+    /// (`reconcile`) pass `false` and resolve once at the end of the pass instead of paying
+    /// a full scan per file (see `index_file_inner`).
     async fn write_with_permalink(
         &mut self,
         indexed: &IndexedDocument,

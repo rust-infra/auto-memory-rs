@@ -19,6 +19,7 @@ reference implementation, idiomatic Rust internally, Obsidian as the manual mana
 | [hooks.md](hooks.md) | 中文 hook 接入：四层触发点（watch / git hook / Codex·Tact 插件 hook / Tact 进程内）、命令 hook 契约、`tools/auto-memory-hook.py` 用法与实测 |
 | [architecture-guide.md](architecture-guide.md) | 中文架构与数据流：分层图、磁盘布局、SQLite 表关系（ER）、索引/写入流程、检索各路径流程（文本/向量/混合/重排/图遍历）、常量出处 |
 | [knowledge-graph.md](knowledge-graph.md) | 中文入门：实体/观察/关系三个概念、关系从 Markdown 怎么产生、数据库字段、目标解析、图遍历，以及新手常见误解 |
+| [glossary.md](glossary.md) | 术语表：entity / observation / relation / permalink / note_type / `memory://` 等正式名与中文对照，含易混对照表和"不是本项目术语"清单 |
 | [visuals/data-flow.html](visuals/data-flow.html) | 动态数据流图：写入 / 检索 / 图遍历三条路径的动画版，浏览器打开 |
 | [release-checklist.md](release-checklist.md) | Quality gates, compatibility evidence, offline/perf smoke, parked work |
 | [compatibility-spec.md](compatibility-spec.md) | Golden-test strategy, canonicalization, oracle harness, open decisions |

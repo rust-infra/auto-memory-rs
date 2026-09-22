@@ -113,7 +113,7 @@ Spec §4 的 `.basic-memory/` 是建议而非决定。需要决定并 pin：
 
 - **无 README / 文档导航**：`docs/` 下没有索引页，README 也没有指向 spec/plan；
 - **无 open questions log / ADR 索引**：多个开放决策（向量方案、配置位置、ID 策略）没有追踪处；
-- **无术语表**：permalink vs path vs title、entity vs note、`memory://` 语法、observation category、relation type 需要统一 glossary；
+- **无术语表**：permalink vs path vs title、entity vs note、`memory://` 语法、observation category、relation type 需要统一 glossary；**已解决（2026-09-21）**：`docs/glossary.md` 已入库，并在 `docs/README.md` 的文档索引中登记。
 - **日期不一致**：文档头部写 2026-09-08，review 时为 2026-09-09（UTC 2026-09-08T17:21）；应统一为决定日期并记录修订历史；
 - **License / 商标**：之前讨论过 AGPL 与命名边界，但没有进 repo（README/LICENSE 未建）；
   **已解决（2026-09-19）**：`LICENSE`（AGPL-3.0-or-later 正文）与 `docs/licensing.md`
