@@ -66,12 +66,13 @@ docker run --rm -p 8765:8765 \
 ```
 
 - `Dockerfile` — `rust:bookworm` builds the binary; a `python:3.13-slim` stage extracts
-  `libonnxruntime.so` (1.30.0) and downloads the
+  `libonnxruntime.so` (1.29.0) and downloads the
   `qdrant/bge-small-en-v1.5-onnx-q` snapshot in the huggingface-hub cache layout;
   `debian:bookworm-slim` carries all three. Nothing is fetched at run time.
-- The container entrypoint prints a warning that the reference captures were produced with
-  ONNX Runtime 1.29.0. Both 1.29.0 and the bundled 1.30.0 wheel pass the current embedding,
-  reranker, and MCP semantic compatibility tests, but cross-version scores can drift slightly.
+- The bundled ONNX Runtime is the same 1.29.0 the reference captures were produced with, so
+  container scores and golden scores share one runtime version. (1.30.0 was also measured to
+  pass the embedding, reranker, and MCP semantic compatibility tests, but scores drift slightly
+  across releases — the image deliberately pins the capture version instead.)
 - Defaults: streamable HTTP on `0.0.0.0:8765` (`/mcp`), vault `/vault`, index
   `/index/memory.db`. Override the command for stdio (`docker run -i --rm … mcp --vault …`) or
   add `--read-only` to serve without writing back.
@@ -80,7 +81,7 @@ docker run --rm -p 8765:8765 \
   so `AUTO_MEMORY_MODEL_CACHE` alone would leave semantic search reporting itself unavailable.
 - The workflow's smoke test asserts `doctor --json` reports `onnx_runtime` and `model_cache` as
   `ok`, then runs `reindex --embeddings` against a one-note vault — per architecture, against the
-  pushed digest, before the tags exist. That second step proves the bundled 1.30.0 runtime can
+  pushed digest, before the tags exist. That second step proves the bundled 1.29.0 runtime can
   initialise the embedding session, not just that the files are present. The reranker model is not
   bundled (only needed for `--reranker`).
 - Both halves are fetched at build time over the network (PyPI and huggingface.co), so a local

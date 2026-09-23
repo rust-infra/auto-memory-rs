@@ -10,9 +10,8 @@
 # the quantized embedding model cache. Nothing is downloaded at run time.
 #
 # The reference golden vectors were produced with onnxruntime 1.29.0
-# (`docs/reference.md` §6f). The image now bundles the official 1.30.0 wheel because
-# its embedding and reranker compatibility tests pass on both versions; the container
-# entrypoint still warns about the version drift.
+# (`docs/reference.md` §6f), and the image bundles that same wheel, so the container
+# matches the version the captures came from and needs no cross-version drift warning.
 #
 # Each architecture is built on a runner of that architecture (see
 # `.github/workflows/container.yml`), so `TARGETPLATFORM` needs no handling here: the
@@ -34,7 +33,7 @@ FROM python:3.13-slim AS runtime-assets
 # `--no-deps` because this stage exists to extract one file: the wheel's own
 # dependencies (numpy and friends) would be dead weight. The only version that matters
 # is the one in the filename.
-RUN pip install --no-cache-dir --no-deps onnxruntime==1.30.0 \
+RUN pip install --no-cache-dir --no-deps onnxruntime==1.29.0 \
  && mkdir -p /opt/onnxruntime \
  && cp -a /usr/local/lib/python3*/site-packages/onnxruntime/capi/libonnxruntime.so* /opt/onnxruntime/ \
  && cd /opt/onnxruntime \
@@ -84,12 +83,11 @@ RUN ldconfig
 ENV ORT_DYLIB_PATH=/usr/local/lib/libonnxruntime.so
 ENV AUTO_MEMORY_MODEL_CACHE=/opt/auto-memory/models
 
-# The reference captures were generated with 1.29.0. The 1.30.0 wheel passes the
-# current compatibility tests, but semantic scores can drift slightly across releases;
-# make that visible to every `docker run` without polluting the application's own logs.
+# The image bundles the same ONNX Runtime the reference captures were produced with
+# (1.29.0), so there is no version drift to warn about; the entrypoint stays as the
+# single place a future warning would go.
 RUN cat > /usr/local/bin/auto-memory-entrypoint <<'EOF'
 #!/bin/sh
-echo "warning: this image bundles ONNX Runtime 1.30.0; reference compatibility was validated with 1.29.0, so semantic scores may differ slightly" >&2
 exec auto-memory "$@"
 EOF
 RUN chmod +x /usr/local/bin/auto-memory-entrypoint

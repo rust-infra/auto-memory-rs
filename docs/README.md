@@ -20,7 +20,21 @@ reference implementation, idiomatic Rust internally, Obsidian as the manual mana
 | [architecture-guide.md](architecture-guide.md) | 中文架构与数据流：分层图、磁盘布局、SQLite 表关系（ER）、索引/写入流程、检索各路径流程（文本/向量/混合/重排/图遍历）、常量出处 |
 | [knowledge-graph.md](knowledge-graph.md) | 中文入门：实体/观察/关系三个概念、关系从 Markdown 怎么产生、数据库字段、目标解析、图遍历，以及新手常见误解 |
 | [glossary.md](glossary.md) | 术语表：entity / observation / relation / permalink / note_type / `memory://` 等正式名与中文对照，含易混对照表和"不是本项目术语"清单 |
+| [vector-pipeline-tutorial.md](vector-pipeline-tutorial.md) | 教学：向量化全流程逐步拆解（拆行 → 拼文本 → 切块 → 384 维 → BLOB 落库），全部用 golden 里的真实数据，附 fixture vault 的场景全集 |
+| [search-pipeline-tutorial.md](search-pipeline-tutorial.md) | 教学：检索三条通道（关键词 / 语义 / 混合 / 重排）逐步拆解，含同一查询的三路真实分数与融合算术、32 个 golden 用例场景 |
+| [incremental-indexing-tutorial.md](incremental-indexing-tutorial.md) | 教学：增量索引——watch 与 reindex 两条路径、checksum 门控、重命名配对、时间戳语义、向量复用范围（全部附真跑报告） |
+| [graph-traversal-tutorial.md](graph-traversal-tutorial.md) | 教学：图遍历——memory:// 解析、一跳两层的递归 CTE、环检测、max_related 截断，含参考实现的三组真实遍历行 |
+| [schema-tutorial.md](schema-tutorial.md) | 教学：Picoschema——语法、validate / infer / diff 三个工具（真实 CLI 输出）、38 个捕获用例覆盖的场景全集 |
 | [visuals/data-flow.html](visuals/data-flow.html) | 动态数据流图：写入 / 检索 / 图遍历三条路径的动画版，浏览器打开 |
+| [visuals/vector-pipeline.html](visuals/vector-pipeline.html) | 动画版向量化全流程：把一篇笔记拆成 4 个向量、7 步自动播放（可单步/暂停），用的就是 simple.md 的真实数据 |
+| [visuals/vector-pipeline.gif](visuals/vector-pipeline.gif) | 上面那页动画的 GIF 版（1120×1200，8.7 s，850 KB）：7 个步骤 + 交叉淡入，可直接贴进文档、PPT 或聊天 |
+| [visuals/vector-pipeline.mp4](visuals/vector-pipeline.mp4) | 同上的 MP4 版（H.264，1120×1200，30 fps，8.5 s，528 KB）——体积是 GIF 的六成，适合投屏 / 视频平台 |
+| [visuals/search-pipeline.html](visuals/search-pipeline.html) | 动画版检索全流程：查询 note 如何经关键词通道 / 语义通道召回、融合、排序，最终落到 simple——7 步自动播放，用真模型（ORT 1.29.0）数据 |
+| [visuals/search-pipeline.gif](visuals/search-pipeline.gif) | 上面那页动画的 GIF 版（1180×1420，8.7 s，705 KB） |
+| [visuals/search-pipeline.mp4](visuals/search-pipeline.mp4) | 同上的 MP4 版（H.264，1180×1420，30 fps，8.5 s，462 KB） |
+| [visuals/pipeline-tutorial.mp4](visuals/pipeline-tutorial.mp4) | **合并版**：封面 + 向量化 7 步 + 章节卡 + 检索 7 步，共 14 步连续播放（H.264，1180×1420，30 fps，21.3 s，1.07 MB，内嵌 16 个章节标记） |
+| [visuals/pipeline-tutorial-music.mp4](visuals/pipeline-tutorial-music.mp4) | 同上，但带一段极简和弦背景音（ffmpeg 合成，无版权素材；视频流与上面完全一致，AAC 128k，1.31 MB） |
+| [visuals/pipeline-tutorial-narrated.mp4](visuals/pipeline-tutorial-narrated.mp4) | **中文旁白版**：同样 14 步，但每步停留按讲解长度重排（2 分 35 秒），旁白用 edge-tts 神经语音 `zh-CN-XiaoxiaoNeural` 生成（2 分 29 秒），仍带 16 个章节标记；旁白稿与换音色方法见 [visuals/pipeline-tutorial-narration.md](visuals/pipeline-tutorial-narration.md) |
 | [release-checklist.md](release-checklist.md) | Quality gates, compatibility evidence, offline/perf smoke, parked work |
 | [compatibility-spec.md](compatibility-spec.md) | Golden-test strategy, canonicalization, oracle harness, open decisions |
 | [licensing.md](licensing.md) | AGPL-3.0-or-later status, the derivative relationship to the upstream project, and which commercial models it permits |

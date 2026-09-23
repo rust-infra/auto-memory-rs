@@ -631,7 +631,7 @@ mod runtime_discovery_tests {
     #[test]
     fn onnx_library_in_finds_a_versioned_macos_dylib() {
         let scratch = tempfile::tempdir().expect("scratch");
-        std::fs::write(scratch.path().join("libonnxruntime.1.30.0.dylib"), "").expect("dylib");
+        std::fs::write(scratch.path().join("libonnxruntime.1.29.0.dylib"), "").expect("dylib");
         std::fs::write(
             scratch.path().join("libonnxruntime_providers_shared.dylib"),
             "",
@@ -639,7 +639,7 @@ mod runtime_discovery_tests {
         .expect("provider");
 
         let found = onnx_library_in(scratch.path()).expect("a library");
-        assert_eq!(found.file_name().unwrap(), "libonnxruntime.1.30.0.dylib");
+        assert_eq!(found.file_name().unwrap(), "libonnxruntime.1.29.0.dylib");
     }
 
     #[test]

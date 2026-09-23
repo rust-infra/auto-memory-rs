@@ -84,7 +84,7 @@ flowchart TB
 
 几个容易看错的依赖，图中略去了但真实存在：
 
-- `search::vector` 复用 `search::text`：混合检索的 FTS 腿、以及向量腿的行过滤，
+- `search::vector` 复用 `search::text`：混合检索的 FTS 通道、以及向量通道的行过滤，
   都是直接调 `search_text`（`src/search/vector.rs`）。
 - `application::note` 写完文件后回调 `indexing::service`，所以 MCP 的写工具
   不需要外部再跑一次 `reindex`。
@@ -369,7 +369,7 @@ flowchart TB
     A["query + 过滤条件"] --> B["prepare_fts_query<br/>分词 / 引号 / 布尔 / 前缀 *"]
     B --> C["build_filters：收集 MATCH 谓词 + 列过滤"]
     C --> C1{"MATCH 谓词几条?"}
-    C1 -->|"1 条"| C2["保持历史形态<br/>文本腿用 (title OR content_stems OR content_snippet)"]
+    C1 -->|"1 条"| C2["保持历史形态<br/>文本通道用 (title OR content_stems OR content_snippet)"]
     C1 -->|"≥2 条"| C3["折叠为一条表级 MATCH<br/>{title} : (…) AND {permalink} : (…)"]
     C2 --> D["COUNT + SELECT（bm25 打分）"]
     C3 --> D
@@ -387,7 +387,7 @@ flowchart TB
 ```
 
 两个实测坑写在流程里：`--type`（entity 行）与 `--category`（默认收敛到 observation 行）
-相交必为空；`title` 腿与文本腿原来会撞出 FTS5 的 "unable to use function MATCH…"，
+相交必为空；`title` 通道与文本通道原来会撞出 FTS5 的 "unable to use function MATCH…"，
 现在由上面那条"≥2 条就折叠"分支处理。
 
 ### 4.2 向量检索
@@ -417,22 +417,22 @@ flowchart TB
 
 ```mermaid
 flowchart TB
-    A["query"] --> V["向量腿：见 §4.2 的候选与打分"]
-    A --> T["FTS 腿：search_text(query + 同一套过滤)"]
+    A["query"] --> V["向量通道：见 §4.2 的候选与打分"]
+    A --> T["FTS 通道：search_text(query + 同一套过滤)"]
     T --> T1["归一化 FTS 分数<br/>取绝对值 / 最大值，过 gate（< 0 记 0）"]
     V --> U["行键统一为 (type, id)<br/>—— 裸 id 在三种行类型之间会撞"]
     T1 --> U
-    U --> F["fuse_hybrid：<br/>score = max(v, f) + 0.3 × min(v, f)<br/>只有一条腿的行保留该腿分数"]
+    U --> F["fuse_hybrid：<br/>score = max(v, f) + 0.3 × min(v, f)<br/>只有一条通道的行保留该通道分数"]
     F --> O["排序：分数降序；并列时 FTS 序在前，再是向量独有序"]
     O --> P{"有重排?"}
     P -->|否| Q["按 page_size + 1 切页"]
     P -->|是| R["交给 §4.4"]
-    Q --> S["hydration（向量腿命中时带上 matched_chunk）"]
+    Q --> S["hydration（向量通道命中时带上 matched_chunk）"]
     R --> S
 ```
 
 融合公式与常量照抄参考实现：`max + 0.3 × min`，版本标记 `max+0.3*min/v1`。
-向量腿在融合窗口外还多取 10 倍 chunk（无重排时）以便融合有足够候选。
+向量通道在融合窗口外还多取 10 倍 chunk（无重排时）以便融合有足够候选。
 
 ### 4.4 重排（可选支路，默认关闭）
 
@@ -483,7 +483,7 @@ flowchart TB
 | 向量候选基准 / 硬上限 | `100` / `4096` | `DEFAULT_VECTOR_K` / `MAX_VECTOR_K` |
 | 混合融合 | `max + 0.3 × min`（`max+0.3*min/v1`） | `search::vector::FUSION_BONUS` |
 | FTS gate | `0.0` | `FTS_GATE_THRESHOLD` |
-| 向量腿过滤扫描上限 | `50000` 行 | `VECTOR_FILTER_SCAN_LIMIT` |
+| 向量通道过滤扫描上限 | `50000` 行 | `VECTOR_FILTER_SCAN_LIMIT` |
 | chunk 长度 / 重叠 | `900` / `120` 字符 | `search::chunking` |
 | 小笔记全文阈值 / 命中 chunk 数 | `2000` / `5` | `SMALL_NOTE_CONTENT_LIMIT`、`TOP_CHUNKS_PER_RESULT` |
 | 重排窗口 / 池放大 / 文档截断 | `20` / `×4` / `2000` | `runtime::rerank` |
