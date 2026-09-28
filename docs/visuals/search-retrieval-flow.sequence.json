@@ -1,0 +1,102 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "Auto Memory 检索请求生命周期",
+    "subtitle": "策略分派、FTS5、向量召回、Hybrid 融合、可选 Rerank 与分页响应",
+    "output": "docs/visuals/search-retrieval-flow.html",
+    "quality_profile": "showcase",
+    "column_fit": "spread",
+    "viewBox": [1180, 1120],
+    "views": [
+      {
+        "id": "request-and-text",
+        "label": "请求与文本召回",
+        "focus": ["caller", "api", "index"],
+        "note": "请求先标准化过滤器和 search_type；text 模式直接进入 FTS5，零结果时按形状条件重试 OR 查询。"
+      },
+      {
+        "id": "semantic-and-filter",
+        "label": "向量召回与过滤",
+        "focus": ["api", "embed", "index", "ranker"],
+        "note": "vector / hybrid / semantic 先嵌入 query，再读取 ready chunks、计算 cosine、聚合到行并做过滤交集。"
+      },
+      {
+        "id": "fusion-rerank-response",
+        "label": "融合、精排与响应",
+        "focus": ["api", "ranker", "reranker", "caller"],
+        "note": "Hybrid 执行固定融合公式；Rerank 启用时只重排固定头部候选；最终按页切片并输出 text、JSON 或 Markdown。"
+      }
+    ]
+  },
+  "participants": [
+    { "id": "caller", "type": "external", "label": "调用方", "sublabel": "MCP · CLI · ChatGPT" },
+    { "id": "api", "type": "backend", "label": "检索服务", "sublabel": "分派 · 过滤 · 分页" },
+    { "id": "ranker", "type": "backend", "label": "排序与融合", "sublabel": "cosine · top-k · fuse" },
+    { "id": "embed", "type": "cloud", "label": "Embedding", "sublabel": "BGE small · 384d" },
+    { "id": "index", "type": "database", "label": "SQLite 索引", "sublabel": "FTS5 · chunks · vectors" },
+    { "id": "reranker", "type": "cloud", "label": "Cross-encoder", "sublabel": "optional · top candidates" }
+  ],
+  "segments": [
+    { "from": 150, "to": 270, "label": "请求标准化" },
+    { "from": 286, "to": 386, "label": "文本召回" },
+    { "from": 404, "to": 660, "label": "语义召回与过滤" },
+    { "from": 678, "to": 1010, "label": "融合、精排、分页" }
+  ],
+  "messages": [
+    { "id": "search-request", "from": "caller", "to": "api", "y": 178, "label": "search_notes / search(args)", "variant": "emphasis" },
+    { "id": "fts-strict", "from": "api", "to": "index", "y": 220, "label": "FTS5 MATCH: prefix · phrase · boolean", "variant": "emphasis", "note": "筛选 project_id、type、metadata、permalink、after_date 等条件。" },
+    { "id": "fts-rows", "from": "index", "to": "api", "y": 260, "label": "bm25 rows + exact total", "variant": "return" },
+    { "id": "relaxed-retry", "from": "api", "to": "index", "y": 306, "label": "zero strict matches: relaxed OR retry", "variant": "dashed", "note": "仅在 query 形状满足时执行：非布尔、非引号、token 数达标、无数字 token。" },
+    { "id": "relaxed-rows", "from": "index", "to": "api", "y": 346, "label": "OR-retry rows", "variant": "return" },
+    { "id": "embed-query", "from": "api", "to": "embed", "y": 430, "label": "embed query vector", "variant": "emphasis", "note": "vector、semantic、hybrid 路径才执行；没有 provider 时返回 semantic-disabled guidance。" },
+    { "id": "query-vector", "from": "embed", "to": "api", "y": 474, "label": "384d normalized vector", "variant": "return" },
+    { "id": "load-chunks", "from": "api", "to": "index", "y": 526, "label": "load ready chunks by project + model", "variant": "emphasis" },
+    { "id": "chunk-vectors", "from": "index", "to": "api", "y": 566, "label": "chunk text + embeddings", "variant": "return" },
+    { "id": "rank-vectors", "from": "api", "to": "ranker", "y": 618, "label": "cosine similarity -> top-k chunks", "variant": "emphasis", "note": "随后按 type:id 聚合，保留每行最佳 chunk；默认 min similarity 0.55。" },
+    { "id": "row-matches", "from": "ranker", "to": "api", "y": 648, "label": "row matches + matched chunks", "variant": "return" },
+    { "id": "filter-scan", "from": "api", "to": "index", "y": 708, "label": "filter-only FTS scan (if filters)", "variant": "dashed", "note": "用 (type,id) 交集过滤向量候选；扫描上限 50000 行。" },
+    { "id": "allowed-keys", "from": "index", "to": "api", "y": 748, "label": "allowed (type,id) set", "variant": "return" },
+    { "id": "fuse-or-prepare", "from": "api", "to": "ranker", "y": 800, "label": "hybrid fuse or prepare rerank pool", "variant": "emphasis", "note": "Hybrid: max(v,f) + 0.3 * min(v,f)；纯 vector 保持 cosine 排序。" },
+    { "id": "rerank-call", "from": "ranker", "to": "reranker", "y": 854, "label": "rerank fixed top candidates", "variant": "dashed", "note": "默认关闭；启用时通常取前 20 行，body + title 截断到 2000 字符。" },
+    { "id": "rerank-scores", "from": "reranker", "to": "ranker", "y": 894, "label": "[0,1] relevance scores", "variant": "return" },
+    { "id": "ordered-page", "from": "ranker", "to": "api", "y": 944, "label": "stable ordered candidates / page", "variant": "return", "note": "Rerank 只重排固定前缀；尾部按 floor / (index + 2) 降分，分页粒度稳定。" },
+    { "id": "page-response", "from": "api", "to": "caller", "y": 996, "label": "results + total flags + page metadata", "variant": "return", "note": "MCP 默认 text/Markdown，可请求 JSON；CLI 输出 JSON。vector/hybrid 的 total 不精确，has_more 用 page_size + 1 探测。" }
+  ],
+  "activations": [
+    { "participant": "api", "from": 170, "to": 1010, "type": "backend" },
+    { "participant": "index", "from": 212, "to": 760, "type": "database" },
+    { "participant": "embed", "from": 422, "to": 482, "type": "cloud" },
+    { "participant": "ranker", "from": 610, "to": 954, "type": "backend" },
+    { "participant": "reranker", "from": 846, "to": 902, "type": "cloud" }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "三条检索路径",
+      "items": [
+        "text / title / permalink：只使用 FTS5，total 精确",
+        "vector / semantic：embedding + cosine top-k，total 不精确",
+        "hybrid：FTS 与向量两腿同时召回后按固定公式融合"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "过滤与候选边界",
+      "items": [
+        "文本过滤直接进入 FTS5 WHERE/MATCH；向量过滤在排序后做交集",
+        "向量候选窗口随分页扩大，Hybrid 无 Rerank 时进一步扩展 chunk 池",
+        "向量先截 top-k chunk 再聚合到行，热点笔记可能挤占其他候选"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "响应语义与新鲜度",
+      "items": [
+        "Rerank 默认关闭，只重排固定头部候选并替换这些行分数",
+        "向量与 Hybrid 使用 page_size + 1 探测 has_more",
+        "向量索引需单独 reindex --embeddings，模型名也必须匹配"
+      ]
+    }
+  ]
+}
