@@ -33,7 +33,7 @@ whether the index, the embedding runtime, and the model cache are usable.
 
 The embedding runtime (`search --vector` / `--hybrid`, `reindex --embeddings`) needs the fastembed
 cache and the ONNX Runtime shared library; text search, context, schema, and the MCP server work
-without either. See `docs/auto-memory-rs-execution-plan.md` Phase 8b for the model details.
+without either. See `plans/auto-memory-rs-execution-plan.md` Phase 8b for the model details.
 
 ## 2. The vault
 

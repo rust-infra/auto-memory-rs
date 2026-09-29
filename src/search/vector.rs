@@ -325,6 +325,7 @@ pub fn aggregate_matches(
         .iter()
         .map(|chunk| {
             (
+                // 相识度
                 cosine_similarity(query_vector, &chunk.embedding),
                 chunk.entity_id,
                 chunk.chunk_key.as_str(),
@@ -347,6 +348,9 @@ pub fn aggregate_matches(
         let Some(key) = row_key_from_chunk_key(chunk_key) else {
             continue;
         };
+        // entity:7:0 ─┐
+        // entity:7:1 ─┼─> key: entity:7
+        // entity:7:2 ─┘
         if !rows.contains_key(&key) {
             order.push(key.clone());
             rows.insert(
@@ -387,7 +391,10 @@ async fn ranked_matches(
     k: usize,
     min_similarity: f32,
 ) -> Result<Vec<RowMatch>> {
+    // Get the vector chunks for the project and model.（向量数据）
     let chunks = store.vector_chunks(project_id, model).await?;
+    // Aggregate the chunks into candidate matches.
+    // 聚合 chunk 到结果行
     let mut matches = aggregate_matches(&chunks, query_vector, k.min(MAX_VECTOR_K));
     if min_similarity > 0.0 {
         matches.retain(|row| row.score >= min_similarity);
@@ -499,15 +506,21 @@ pub async fn search_vector(
         ),
         None => candidate_limit(limit, offset) as usize,
     };
+    // the vector search matches are ranked by similarity, so we need to hydrate
+    // the candidate pool before reranking to get the full set of results.
+    // 向量数据
     let matches = ranked_matches(
         store,
-        project_id,
+        project_id, // filter
         query_vector,
         model,
         candidate_chunks,
         options.min_similarity,
     )
     .await?;
+    // matches: the vector search matches are ranked by similarity, so we need to
+    // apply row filters to the candidate pool before reranking to get the full set of results.
+    // 向量数据经过相似度排序后，应用行过滤器获取完整结果集（全文检索）
     let matches = apply_row_filters(store, project_id, matches, options).await?;
     let matches: Vec<RowMatch> = matches
         .into_iter()
@@ -603,6 +616,7 @@ pub async fn search_hybrid(
     fts_options.query = Some(text.to_owned());
     fts_options.page = 1;
     fts_options.page_size = candidate_window;
+    // 全文检索
     let fts_page = store.search_text(project_id, &fts_options).await?;
     let fts_raw: Vec<f32> = fts_page.results.iter().map(|result| result.score).collect();
     let normalized = normalize_fts_scores(&fts_raw);
@@ -625,6 +639,7 @@ pub async fn search_hybrid(
         })
         .collect();
 
+    // 融合全文检索和向量搜索的结果
     let fused = fuse_hybrid(&fts_scores, &vector_scores);
     let entries: Vec<HydrationEntry> = fused
         .into_iter()
@@ -686,6 +701,8 @@ async fn apply_row_filters(
     if !options.filter_requested() {
         return Ok(matches);
     }
+    // 向量数据经过相似度排序后，应用行过滤器获取完整结果集（全文检索）
+    // 即向量数据要在全文检索里（前缀检索，bm25排序）
     let page = store
         .search_text(project_id, &options.filter_options())
         .await?;

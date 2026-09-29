@@ -6,7 +6,7 @@ resulting knowledge graph to agents.
 
 Behavior is pinned to the reference implementation (0.23.2) and proved by a golden
 corpus captured from it (`tests/golden/`) — see [`docs/reference.md`](docs/reference.md) and
-[`docs/compatibility-spec.md`](docs/compatibility-spec.md).
+[`specs/compatibility-spec.md`](specs/compatibility-spec.md).
 
 ## Quick start
 
@@ -40,6 +40,8 @@ It serves streamable HTTP MCP on `/mcp`; see [`docs/release-checklist.md`](docs/
 |---|---|
 | `src/` | the library (`auto_memory`) and the `auto-memory` CLI |
 | `tests/golden/` | golden corpus captured from the reference implementation |
+| `specs/` | behavior and compatibility contracts |
+| `plans/` | execution plans and delivery records |
 | `tools/` | the oracle harness that captures it (needs the reference CLI) |
 | `plugins/agents/` | the Codex plugin package (hooks, skills, schemas) |
 
@@ -64,8 +66,9 @@ git config core.hooksPath .githooks
 
 ## Documentation
 
-[`docs/README.md`](docs/README.md) is the index: spec, execution plan, data format, search,
-context, MCP, usage, hooks, architecture, and the 中文 integration guide.
+[`docs/README.md`](docs/README.md) indexes the user docs and links to the `specs/` and
+`plans/` trees: data format, search, context, MCP, usage, hooks, architecture, and the 中文
+integration guide.
 
 ## License
 

@@ -118,7 +118,7 @@ docker run --rm -p 8765:8765 \
   FTS ordering and scores (1e-6), chunking (78-chunk corpus), vector/hybrid ranking (1e-4),
   `build_context` + traversal, note mutation, MCP surfaces, schema reports, and the ChatGPT
   adapters.
-- Every deliberate divergence is listed in `docs/mcp-spec.md` §1c or `docs/usage.md` §8, and each
+- Every deliberate divergence is listed in `specs/mcp-spec.md` §1c or `docs/usage.md` §8, and each
   one is pinned by a test rather than left implicit.
 - Robustness suites are in place: `tests/hardening.rs` (path containment, malformed UTF-8,
   write/parse round trip), `tests/properties.rs` (parser, permalink, and traversal invariants over

@@ -11,7 +11,7 @@ use crate::domain::document::{DocumentTimestamps, ParsedDocument};
 use crate::domain::timeframe;
 use crate::error::{Error, Result};
 use crate::search::chunking::SemanticRow;
-use crate::search::index_rows::{SearchIndexRowData, entity_row, observation_row, relation_row};
+use crate::search::index_rows::{SearchIndexWriteRow, entity_row, observation_row, relation_row};
 use crate::search::text::{SearchPage, TextSearchOptions, search_text};
 use crate::storage::records::{
     Counts, DirectoryEntityRow, EntityRow, ObservationRow, ProjectRow, RelatedRow, RelationRow,
@@ -651,6 +651,7 @@ impl Store {
                     relation.relation_type.as_str(),
                 ));
             }
+            // insert search rows into FTS5 table
             insert_search_rows(&tx, project_id, &search_rows)?;
 
             tx.execute(
@@ -1567,7 +1568,7 @@ pub fn checksum_bytes(bytes: &[u8]) -> String {
 fn insert_search_rows(
     conn: &Connection,
     project_id: i64,
-    rows: &[SearchIndexRowData],
+    rows: &[SearchIndexWriteRow],
 ) -> Result<()> {
     let mut timestamps: HashMap<i64, (String, String)> = HashMap::new();
     {

@@ -19,7 +19,7 @@ pub const MAX_CONTENT_STEMS_SIZE: usize = 6000;
 
 /// One row to insert into the FTS5 `search_index` table.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SearchIndexRowData {
+pub struct SearchIndexWriteRow {
     /// Row id (entity, observation, or relation id).
     pub id: i64,
     /// Item type: `entity`, `observation`, or `relation`.
@@ -92,7 +92,7 @@ pub fn entity_row(
     file_path: &str,
     content: &str,
     tags: &[String],
-) -> SearchIndexRowData {
+) -> SearchIndexWriteRow {
     let mut parts: Vec<String> = text_variants(title);
     if !content.is_empty() {
         parts.push(content.to_owned());
@@ -103,7 +103,7 @@ pub fn entity_row(
     parts.extend(text_variants(file_path));
     parts.extend(tags.iter().cloned());
 
-    SearchIndexRowData {
+    SearchIndexWriteRow {
         id: entity_id,
         item_type: "entity".to_owned(),
         title: title.to_owned(),
@@ -127,7 +127,7 @@ pub fn observation_row(
     entity_permalink: Option<&str>,
     file_path: &str,
     observation: &Observation,
-) -> SearchIndexRowData {
+) -> SearchIndexWriteRow {
     let category = observation
         .category
         .clone()
@@ -142,7 +142,7 @@ pub fn observation_row(
             observation_permalink_suffix(&observation.content)
         ))
     });
-    SearchIndexRowData {
+    SearchIndexWriteRow {
         id: observation_id,
         item_type: "observation".to_owned(),
         title,
@@ -171,12 +171,12 @@ pub fn relation_row(
     from_id: i64,
     to_id: Option<i64>,
     relation_type: &str,
-) -> SearchIndexRowData {
+) -> SearchIndexWriteRow {
     let title = match to_title {
         Some(to_title) => format!("{from_title} -> {to_title}"),
         None => from_title.to_owned(),
     };
-    SearchIndexRowData {
+    SearchIndexWriteRow {
         id: relation_id,
         item_type: "relation".to_owned(),
         title: title.clone(),

@@ -134,7 +134,7 @@ Captured by `tools/export_reference.py` into `tests/golden/` (16 markdown fixtur
 - `external_id` in `auto-memory-rs` is a deterministic UUID-v4-shaped value derived from
   `project_permalink + file_path`. The reference uses random UUIDs persisted in the DB; numeric
   and external ids are explicitly outside the compatibility contract (see
-  `docs/compatibility-spec.md`).
+  `specs/compatibility-spec.md`).
 
 ## 6c. Incremental-indexing findings (Phase 6)
 
@@ -215,7 +215,7 @@ Captured by `tools/export_reference.py` into `tests/golden/` (16 markdown fixtur
   entity/relation ids differ between runs (two runs of the same vault produced different
   orders), and with them the `LIMIT` cut, the tail of `related_results`, and
   `total_relations`/`total_observations` for truncated cases. Only the rules — not the tail —
-  are reproducible; see `context-spec.md` §3.3.
+  are reproducible; see `specs/context-spec.md` §3.3.
 - **Related entities carry no content.** API hydration only fills `content` for the primary
   search row; related `EntitySummary` rows serialize `content: null`. Observation summaries
   take `title` from the owning entity and their synthetic
@@ -592,7 +592,7 @@ notes but no schema notes, and a vault whose `settings.validation` is malformed)
 - Exact `search_notes` `search_type` alias mapping (`text|title|permalink|vector|semantic|hybrid` →
   retrieval modes), incl. `semantic` vs `vector` (CLI flags `--vector`/`--hybrid` captured).
 - Exact FTS term-preparation edge cases (boolean syntax, quoting, prefix wildcarding, path terms)
-  — summarized in `search-spec.md`, exact strings to be captured as fixtures.
+  — summarized in `specs/search-spec.md`, exact strings to be captured as fixtures.
 - Exact relaxed-query word lists and stopword list (`repository/search_query.py`).
 - ~~Exact text (markdown) output of each MCP tool~~ — captured for `list_directory`,
   `read_content`, `view_note`, `read_note`, `recent_activity`, the project tools, and the three

@@ -1,8 +1,8 @@
 //! Runtime layer: the concrete embedding backend behind the search API, plus the
 //! tokio executor the event-loop adapters run on.
 //!
-//! See `docs/auto-memory-rs-spec.md` §6 and
-//! `docs/auto-memory-rs-execution-plan.md` for the planned responsibilities.
+//! See `specs/auto-memory-rs-spec.md` §6 and
+//! `plans/auto-memory-rs-execution-plan.md` for the planned responsibilities.
 
 pub mod embedding;
 pub mod executor;

@@ -1,6 +1,6 @@
 //! Minimal MCP stdio server exposing the local core tools.
 //!
-//! Transport contract (`docs/mcp-spec.md` §1): newline-delimited JSON-RPC 2.0 on
+//! Transport contract (`specs/mcp-spec.md` §1): newline-delimited JSON-RPC 2.0 on
 //! **stdout**, logs and diagnostics on stderr. Implemented methods: `initialize`,
 //! `notifications/initialized`, `ping`, `tools/list`, and `tools/call` for the note,
 //! search, graph, and diagnostics tools this port supports.
@@ -60,7 +60,7 @@ pub const SERVER_NAME: &str = "auto-memory-rs";
 
 /// The tools `tools/list` advertises and `tools/call` accepts.
 ///
-/// The wire names are the compatibility contract (`docs/mcp-spec.md` §3–5); the
+/// The wire names are the compatibility contract (`specs/mcp-spec.md` §3–5); the
 /// `strum` derives generate them from the variant names (`WriteNote` → `write_note`,
 /// `AutoMemoryDiagnostics` → `auto_memory_diagnostics`), so the enum is the only
 /// place a tool name is written down. `EnumIter` supplies the advertised order for
@@ -2130,7 +2130,7 @@ mod tests {
     /// `call_tool` matches on `ToolName` exhaustively, so this covers the remaining
     /// surface: every variant is advertised exactly once with a description and an
     /// object input schema, and the wire names still spell the compatibility contract
-    /// (`docs/mcp-spec.md` §3–5) that clients and the reference golden depend on. The
+    /// (`specs/mcp-spec.md` §3–5) that clients and the reference golden depend on. The
     /// list below is the contract, deliberately not derived from the enum, so a
     /// renamed variant cannot quietly rename a tool on the wire.
     #[test]

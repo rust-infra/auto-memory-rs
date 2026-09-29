@@ -264,6 +264,6 @@ auto-memory context memory://notes/relations --index $DB --project oracle --dept
 | 想知道 | 看这里 |
 |---|---|
 | 三个概念入门（entity/observation/relation） | [knowledge-graph.md](knowledge-graph.md) |
-| `build_context` 契约（参数、分页、timeframe） | [context-spec.md](context-spec.md) |
+| `build_context` 契约（参数、分页、timeframe） | [context-spec.md](../specs/context-spec.md) |
 | 关系怎么从 Markdown 产生 | [data-format.md](data-format.md) §7 |
 | 术语 | [glossary.md](glossary.md) |

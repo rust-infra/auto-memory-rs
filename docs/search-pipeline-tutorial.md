@@ -289,5 +289,5 @@ auto-memory search note --index $DB --project oracle --vector \
 | 想知道 | 看这里 |
 |---|---|
 | 向量怎么算出来、怎么落库 | [vector-pipeline-tutorial.md](vector-pipeline-tutorial.md) |
-| 检索行为契约（参数、分页、过滤器） | [search-spec.md](search-spec.md) |
+| 检索行为契约（参数、分页、过滤器） | [search-spec.md](../specs/search-spec.md) |
 | 术语（bm25 / matched_chunk / entity_types …） | [glossary.md](glossary.md) |

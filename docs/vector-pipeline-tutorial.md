@@ -91,7 +91,27 @@ A plain note without frontmatter. It links to [[projects/alpha]] and mentions ru
 
 ### 2.2 第 2 步：每行拼一段"送给模型看的话"
 
-三种行的拼法不同：
+这一步并不是直接拿 Markdown 原文拼接。真实链路是：
+
+```text
+simple.md
+  -> 解析成 ParsedDocument
+       |- frontmatter.title = "simple"
+       |- content = 去掉 frontmatter 后的正文
+       |- observations = [{ category, content, tags, context }, ...]
+       `- relations = [{ relation_type, target, context }, ...]
+  -> Store::replace_document()
+       |- entity_row(...)
+       |- observation_row(...)
+       `- relation_row(...)
+  -> search_index（SQLite FTS5 表）
+  -> Store::semantic_rows()
+  -> SemanticRow
+  -> compose_row_source_text()
+  -> 送给 embedding 模型的文本
+```
+
+三种 row 读取的字段不同：
 
 | 类型 | 公式 |
 |---|---|
@@ -99,7 +119,63 @@ A plain note without frontmatter. It links to [[projects/alpha]] and mentions ru
 | `observation` | 标题 + 空行 + permalink + 空行 + 类别 + 空行 + 内容 |
 | `relation` | 标题 + 空行 + permalink + 空行 + 关系类型 |
 
-真实拼出来的三段（`\n` 表示换行）：
+#### 2.2.1 每个拼接项的数据从哪里来
+
+| 拼接项 | 来源 | 具体说明 |
+|---|---|---|
+| entity 标题 | `ParsedDocument.frontmatter.title` | frontmatter 的 `title`；没有 frontmatter 或没有该字段时，解析阶段回退到文件名，例如 `simple.md -> simple` |
+| entity permalink | `replace_document()` 传入的 entity permalink | frontmatter 显式指定或索引阶段生成的完整 permalink |
+| entity 正文 | `ParsedDocument.content` | 原始 Markdown 去掉 frontmatter 后的 body；仍包含 H1、段落、`- [note] ...` 原始行和 wikilink |
+| observation 标题 | `observation_row()` 合成 | `"{category}: {content 前100字符}..."`；不是 `observation` 表里已有的字段 |
+| observation permalink | `observation_row()` 合成 | 由 entity permalink、`observations`、category 和内容生成的 slug 组成 |
+| observation 类别 | `Observation.category` | 行首 `[类别]`；没有类别时使用默认值 `note` |
+| observation 内容 | `Observation.content` | 去掉 `- [类别]`、内联标签和尾部 `(context)` 后的实际内容 |
+| relation 标题 | `relation_row()` 合成 | 目标已解析时是 `来源标题 -> 目标标题`；目标尚未解析时暂时只有来源标题 |
+| relation permalink | `relation_row()` 合成 | 目标解析后，由来源 permalink、关系类型和目标 permalink/名称生成 |
+| relation 类型 | `Relation.relation_type` | 例如显式关系的 `depends_on`，或正文 wikilink 产生的 `links_to` |
+| relation 内容 | 不存在 | relation row 的 `content_snippet` 当前始终为 `NULL` |
+
+这些字段先写入 `search_index`。之后 `Store::semantic_rows()` 只读取以下列：
+
+```sql
+SELECT id, type, title, permalink, content_snippet,
+       category, relation_type, entity_id
+FROM search_index
+WHERE project_id = ?1
+ORDER BY type, id
+```
+
+所以 `SemanticRow` 里的数据不是重新解析 Markdown 得到的，而是从已经构建好的 `search_index` row 映射出来的。
+
+> **这里的“正文”和“内容”不是一个层级：**
+>
+> - `entity` 的正文是整篇笔记的 body，包含 observation 原始行和 wikilink。
+> - `observation` 的内容只是单条 observation 提取后的 text，不含类别、标签和 context。
+> - `relation` 没有独立的正文或内容字段，语义主要由 title、permalink 和 `relation_type` 表达。
+
+例如原始行：
+
+```markdown
+- [note] Created as a baseline fixture
+```
+
+会得到：
+
+```text
+category        = note
+content         = Created as a baseline fixture
+observation title = note: Created as a baseline fixture...
+```
+
+而 entity 的正文仍然保留原始 Markdown 行：
+
+```markdown
+- [note] Created as a baseline fixture
+```
+
+#### 2.2.2 最终拼出来的三段
+
+真实结果如下，`\n` 表示换行：
 
 ```
 [entity:9]
@@ -130,14 +206,22 @@ oracle/notes/simple/links-to/oracle/projects/alpha
 links_to
 ```
 
-> **为什么 observation 的标题带 `...`？** 那是行标题本身的构造方式（"类别: 内容"过长时截断），
-> 不是数据丢了——完整内容在最后一行的 `content` 里。
+拼接规则只有两条：
+
+1. 按顺序保留非空字段。
+2. 字段之间统一插入一个空行，即 `\n\n`。
+
+> **为什么 observation 的标题总带 `...`？** 标题固定构造成 `类别: 内容前100字符...`；
+> 即使内容不足 100 字符也会带 `...`，并不表示这里发生了截断。完整、无省略号的内容在
+> observation 行的 `content_snippet`（这里展示为最后一段）里。
 
 ---
 
 ### 2.3 第 3 步：一段话 → 若干块
 
 切块规则（`src/search/chunking.rs`）：
+
+> 每个条件分支的输入、预期输出和覆盖测试见 [chunking-walkthrough.md](chunking-walkthrough.md)。
 
 1. **markdown 标题、列表项**是天然边界，先按它们切
 2. 某一节仍超过 **900 字符**，就按 900 字符开窗、相邻窗口**重叠 120 字符**继续切
@@ -564,7 +648,7 @@ relation:10:0     simple -> Alpha Project
 |---|---|
 | 术语定义（entity / observation / relation / permalink …） | [glossary.md](glossary.md) |
 | 完整语法契约 | [data-format.md](data-format.md) |
-| 检索三种模式与融合 | [search-spec.md](search-spec.md) |
+| 检索三种模式与融合 | [search-spec.md](../specs/search-spec.md) |
 | 分层结构与表关系 | [architecture-guide.md](architecture-guide.md) |
 | 入门概念（三个概念 + 图解） | [knowledge-graph.md](knowledge-graph.md) |
 | 代码位置 | `src/search/chunking.rs`、`src/indexing/service.rs`、`src/storage/store.rs` |

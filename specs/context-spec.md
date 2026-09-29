@@ -81,7 +81,7 @@ cjk, …` vs `dup-a, observations, frontmatter, simple, …`). Because the trave
 and truncates with `LIMIT max_related`, the *tail* of `related_results` — and therefore
 `total_relations` / `total_observations` for truncated cases, and the exact text order — is
 run-dependent. `auto-memory-rs` reproduces the rules (and the relative order of relations that
-share a source, see `data-format.md`) deterministically; the golden tests compare the related
+share a source, see `docs/data-format.md`) deterministically; the golden tests compare the related
 *set* (plus the untruncated rows exactly) and `tests/golden/context/find-related.json` replays
 the reference traversal against the reference ids row-for-row.
 

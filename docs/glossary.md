@@ -170,7 +170,7 @@ flowchart LR
 **解析顺序**（`resolve_entity_path`）：permalink 精确匹配 → file_path 精确匹配 → `file_path + ".md"` → permalink 后缀匹配（`*/<path>`，用来剥掉项目前缀）。**解析不到时返回空结果，而不是报错。**
 
 **代码**：`src/graph/mod.rs`（`normalize_memory_url`、`resolve_entity_path`）
-**契约**：规范化与校验见 [context-spec.md](context-spec.md) §1，解析与遍历见 §3
+**契约**：规范化与校验见 [context-spec.md](../specs/context-spec.md) §1，解析与遍历见 §3
 
 ### search item type — 搜索条目类型
 

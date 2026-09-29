@@ -11,7 +11,7 @@
 //! `src/storage/schema.rs` and `src/storage/records.rs`.
 //!
 //! New to the graph? Read `docs/knowledge-graph.md` first — it explains the
-//! concepts with real fixture examples. `docs/context-spec.md` is the precise
+//! concepts with real fixture examples. `specs/context-spec.md` is the precise
 //! traversal contract.
 
 use std::collections::{HashSet, VecDeque};

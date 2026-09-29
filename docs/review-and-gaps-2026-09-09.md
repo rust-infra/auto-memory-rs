@@ -2,12 +2,12 @@
 
 - **Review date:** 2026-09-08 (UTC) / 2026-09-09 (local)
 - **Reviewed docs:**
-  - `docs/auto-memory-rs-spec.md`（规格说明）
-  - `docs/auto-memory-rs-execution-plan.md`（执行计划）
+  - `specs/auto-memory-rs-spec.md`（规格说明）
+  - `plans/auto-memory-rs-execution-plan.md`（执行计划）
 - **Reviewer:** Codex
 - **Status:** Review complete — gaps logged. **P0 contract docs now delivered** (2026-09-09):
-  `reference.md`, `data-format.md`, `search-spec.md`, `context-spec.md`, `mcp-spec.md`,
-  `compatibility-spec.md`, `docs/README.md`.
+  `docs/reference.md`, `docs/data-format.md`, `specs/search-spec.md`, `specs/context-spec.md`, `specs/mcp-spec.md`,
+  `specs/compatibility-spec.md`, `docs/README.md`.
   **Phase 1 golden corpus also delivered (2026-09-10):** `tools/export_reference.py` oracle
   harness, `tests/fixtures/vault`, 51 golden artifacts, `tests/compatibility_helpers.rs`.
   Rust implementation work remains.
@@ -36,11 +36,11 @@
 Plan §2 说 Phase 0 产出：
 
 ```text
-docs/compatibility-spec.md
+specs/compatibility-spec.md
 docs/data-format.md
-docs/search-spec.md
-docs/context-spec.md
-docs/mcp-spec.md
+specs/search-spec.md
+specs/context-spec.md
+specs/mcp-spec.md
 ```
 
 这五份才是"算法一致"的实际载体，目前全部缺失。现两份文档是总纲；下一步应先产出这五份（或其合并版），而不是直接写代码。

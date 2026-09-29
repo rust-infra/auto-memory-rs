@@ -2,7 +2,7 @@
 //!
 //! Database-backed subcommands build a runtime and await the shared async application
 //! services; `parse` remains synchronous because it is pure CPU/parsing work. CPU-heavy
-//! ONNX work still moves to the blocking pool. See `docs/auto-memory-rs-spec.md` §6 and
+//! ONNX work still moves to the blocking pool. See `specs/auto-memory-rs-spec.md` §6 and
 //! `docs/patterns.md` for the boundary.
 
 use std::future::Future;

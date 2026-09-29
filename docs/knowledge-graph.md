@@ -313,7 +313,7 @@ flowchart LR
 | "关系行可以直接改" | 关系是从 Markdown 重新解析出来的派生数据，改数据库没用，下次索引就覆盖 |
 | "多词类型随便写" | 必须加引号；不加引号不会报错，但会退化成一条 `links_to` |
 | "`[[a|b]]` 指向的是 b" | 指向的是 `a`，`b` 只是显示名 |
-| "改名后系统会帮我改别人的引用" | 不会，目前没有 backlink 回写（见 `docs/mcp-spec.md` 的说明） |
+| "改名后系统会帮我改别人的引用" | 不会，目前没有 backlink 回写（见 `specs/mcp-spec.md` 的说明） |
 | "代码块里的链接也算" | 不算，围栏代码块被整体跳过 |
 | "`to_name` 就是文件名" | 不一定，它是你原文写的字符串，可能带项目前缀、`|显示名`，也可能根本不存在 |
 
@@ -330,7 +330,7 @@ flowchart LR
 | 表结构和约束 | `src/storage/schema.rs` 的 `relation` 表 |
 | 目标怎么解析 | `src/storage/store.rs` 的 `resolve_relations`、`normalize_target` |
 | 图怎么遍历 | `src/storage/store.rs` 的 `find_related`、`src/graph/mod.rs` |
-| 遍历出来的上下文 | `docs/context-spec.md`、`docs/architecture-guide.md` §4.5 |
+| 遍历出来的上下文 | `specs/context-spec.md`、`docs/architecture-guide.md` §4.5 |
 | 架构图 / ER 图 | `docs/architecture-guide.md` §2.2 |
 | 会动的数据流图 | `docs/visuals/data-flow.html`（浏览器打开） |
 | 可参考的真实样例 | `tests/fixtures/vault/notes/{simple,wikilinks,relations,unresolved}.md` |
