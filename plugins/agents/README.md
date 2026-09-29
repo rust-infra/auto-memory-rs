@@ -50,6 +50,23 @@ The `source.path` form must match the existing entries in that catalog (Codex
 resolves local paths against the marketplace root; the bundled entries use the
 `./.codex/plugins/<name>` shape).
 
+## Install into Tact
+
+Tact **auto-discovers** local marketplaces — `$HOME/.agents/plugins/marketplace.json`
+(personal) or, walking up from the cwd, the first `<root>/.agents/plugins/marketplace.json`.
+`tact-ui plugin marketplace add` does *not* take a `file://` path (`MarketplaceSource::parse`
+accepts only git/http/https/ssh or an `owner/repo` shorthand), so the discovered file is
+the only local route. This repo ships one, so from the repo root:
+
+```sh
+tact-ui plugin marketplace list            # auto-memory (discovered)
+tact-ui plugin install auto-memory-rs@auto-memory
+tact-ui plugin list
+```
+
+The catalog entry's `name` must equal the manifest `name` (`auto-memory-rs` in
+`.codex-plugin/plugin.json`), and `source` is resolved relative to the marketplace root.
+
 ## What the hooks do
 
 | Event | Verb | Effect |

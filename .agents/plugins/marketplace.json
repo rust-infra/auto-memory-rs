@@ -1,0 +1,9 @@
+{
+  "name": "auto-memory",
+  "plugins": [
+    {
+      "name": "auto-memory-rs",
+      "source": "./plugins/agents"
+    }
+  ]
+}

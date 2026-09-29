@@ -126,25 +126,37 @@ hook 里的 `--vault/--index/--project` 必须写全，别依赖 cwd。
 
 ## 4. 接线：Tact 插件 hook
 
-Tact 的插件来自 marketplace（Git URL 或 GitHub 短写），本地目录要走 `file://`：
+Tact 的 marketplace 有两个来源：`tact-ui plugin marketplace add <Git URL 或 owner/repo 短写>`，
+以及**自动发现的本地目录**。`file://` **不被接受**（`MarketplaceSource::parse` 只认 git / http /
+https / ssh 和 `owner/repo`），本地目录只能走自动发现：
+
+- `$HOME/.agents/plugins/marketplace.json`（个人）
+- 从 cwd 逐级向上找到的第一个 `<root>/.agents/plugins/marketplace.json`（仓库内）
+
+本仓库已经带了后者，cwd 在仓库里就能直接装：
+
+```bash
+cd /path/to/auto-memory-rs
+tact-ui plugin marketplace list          # 应看到 auto-memory（discovered）
+tact-ui plugin install auto-memory-rs@auto-memory
+tact-ui plugin list                      # 确认已安装
+```
 
 ```
-auto-memory-hooks/                 # 一个 git 仓库
-├── marketplace.json                # marketplace 目录清单
-├── .codex-plugin/plugin.json       # 插件清单
-└── hooks/
-    ├── hooks.json                  # 事件 → 命令
-    └── auto-memory-hook.py           # 即 tools/auto-memory-hook.py
+auto-memory-rs/
+├── .agents/plugins/marketplace.json    # Tact 从这里发现 marketplace
+└── plugins/agents/                     # 插件本体
+    ├── .codex-plugin/plugin.json       # 插件清单（name 必须等于 catalog 里的 name）
+    └── hooks/hooks.json                # 事件 → 命令
 ```
 
 ```json
-// marketplace.json
-{ "name": "my-memory", "plugins": [ { "name": "auto-memory-hooks", "source": "./auto-memory-hooks" } ] }
+// .agents/plugins/marketplace.json —— source 相对 marketplace 根解析，且不能越出根目录
+{ "name": "auto-memory", "plugins": [ { "name": "auto-memory-rs", "source": "./plugins/agents" } ] }
 ```
-```json
-// .codex-plugin/plugin.json
-{ "name": "auto-memory-hooks", "version": "0.1.0", "hooks": "./hooks/hooks.json" }
-```
+
+插件至少要贡献 skills / commands / hooks / MCP 之一才会被接受。`hooks/hooks.json` 的写法
+（`$CLAUDE_PLUGIN_ROOT` 由 Tact 展开）：
 ```json
 // hooks/hooks.json
 {
@@ -159,12 +171,6 @@ auto-memory-hooks/                 # 一个 git 仓库
                    "timeout": 10, "statusMessage": "Searching memory" } ] } ]
   }
 }
-```
-
-```bash
-tact-ui plugin marketplace add file:///path/to/your-marketplace-repo
-tact-ui plugin install auto-memory-hooks@my-memory
-tact-ui plugin list                      # 确认已安装
 ```
 
 ⚠️ 上面那份 `hooks.json` 里的 **`SessionStart` 在 Tact 上不会生效**：脚本会被执行，返回的
