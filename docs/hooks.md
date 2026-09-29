@@ -8,15 +8,15 @@
 |---|---|---|---|
 | 文件系统 | `watch` 守护进程（notify + 1000 ms 去抖） | Obsidian/编辑器一改文件就更新索引 | 已经内建，无需配置 |
 | git | `post-commit` / `post-merge` / `post-checkout` | "提交即索引"，兜住 watch 没跑的场景 | 一行 shell，本地即用 |
-| agent 会话 | 内建 `auto-memory hook` + `plugins/agents`（Codex）/ Tact 插件的 command hook | 会话开始喂上下文（briefing）、压缩后 checkpoint | 插件目录；引擎已内建 |
-| agent 进程内 | Tact 的 `Hook` trait（Rust） | 同上，但同进程直调，无子进程 | 要改 Tact 代码 |
+| agent 会话 | 内建 `auto-memory hook` + `plugins/agents`（Codex）/ Tact 插件的 command hook | 会话开始喂上下文（briefing）、压缩后 checkpoint | 插件目录；引擎已内建。**Tact 的 `SessionStart` 会被丢弃，喂 briefing 得挂 `UserPromptSubmit`（§1）** |
+| agent 进程内 | Tact 的 `Hook` trait（Rust） | 同上，但同进程直调，无子进程 | 要改 Tact 代码；`SessionStart` 同样注入不了（§6） |
 
 三层可以并存：它们最终都只是"读 vault、写同一个 SQLite 索引"。索引的写由 SQLite
 （WAL + `busy_timeout=10s`）串行化，读完全无冲突。
 
 ---
 
-## 1. 命令 hook 的契约（Codex 与 Tact 一致）
+## 1. 命令 hook 的契约（stdin/stdout 两边一致，采纳范围不同）
 
 两套 harness 都沿用 Claude Code 的插件 hook 契约：
 
@@ -36,7 +36,23 @@ exit  : 永远 0 —— hook 失败绝不能弄坏会话
 - Codex：插件 `hooks/hooks.json`，每个命令拿到同样的 stdin JSON；参考实现的
   `session_start.py` 明确写着 fail-open（`except BaseException: pass; sys.exit(0)`）。
 
-**因此：脚本只要能读 stdin JSON、把 brief 写 stdout、永远 exit 0，两边都能用。**
+但"输出被接受"不等于"输出被采纳"：Tact 会解析 `additionalContext`，却只在部分事件上把它接进
+会话——`SessionStart` 恰恰是**不接**的那个（对应分支里只有一条 `warn!`：
+`plugin SessionStart hook returned additional context; not applied in v1`）。所以 Codex 上
+好用的"启动喂 briefing"，原样搬到 Tact 上等于没有。
+
+| 事件 | Tact 对 `additionalContext` 的处理 |
+|---|---|
+| `SessionStart` | ❌ 丢弃，只 `warn!`（`system_prompt` 同样丢弃） |
+| `UserPromptSubmit` | ✅ 追加到本次 prompt 文本（`prompt.push_str(extra)`） |
+| `PreToolUse` | ✅ 塞进 tool input 的 `_hook_context` 字段 |
+| `SubagentStart` | ✅ 追加到子 agent 的 system prompt |
+| `PostToolUse` | 只支持 `suppress_output`（清空工具结果），不接 `additionalContext` |
+
+（都在 `crates/tact/src/plugin/hooks.rs` 的对应分支。）
+
+**因此：脚本只要能读 stdin JSON、把 brief 写 stdout、永远 exit 0，两边都能被加载；但要真把
+brief 喂进上下文，Codex 用 `SessionStart`，Tact 得挂 `UserPromptSubmit`。**
 
 ---
 
@@ -151,6 +167,10 @@ tact-ui plugin install auto-memory-hooks@my-memory
 tact-ui plugin list                      # 确认已安装
 ```
 
+⚠️ 上面那份 `hooks.json` 里的 **`SessionStart` 在 Tact 上不会生效**：脚本会被执行，返回的
+brief 却会被 `warn!` 丢掉（见 §1 的表）。要在 Tact 上真的喂进上下文，把这个脚本挂到
+`UserPromptSubmit`（Tact 会把它追加进本次 prompt），`SessionStart` 那段留给 Codex。
+
 注意：Tact 只展开 `${CLAUDE_PLUGIN_ROOT}`（不是 `${PLUGIN_ROOT}`），同时也会把它放进
 环境变量——上面用 `"$CLAUDE_PLUGIN_ROOT/…"` 交给 shell 展开，两种 harness 都成立。
 脚本里的环境变量（`AUTO_MEMORY_*`）要在**宿主进程**里导出（hook 继承宿主环境）。
@@ -173,13 +193,28 @@ tact-ui plugin list                      # 确认已安装
 ## 6. 接线：Tact 进程内 hook（最快、也最"深"）
 
 如果不想走插件与子进程，Tact 的 hook 本身是 Rust trait（`crates/tact/src/hook/mod.rs`），
-`tact-ui` 已经用它注册了 SessionStart：
+`tact-ui` 已经注册了一个（目前是空实现，见 `crates/tact-ui/src/interactive.rs`）：
+
+```rust
+// tact-ui 侧（现状）
+agent.with_session_start(|_agent| Box::pin(async move { Ok(HookControl::Continue) }))
+```
+
+注意签名是 `Fn(&LoopState) -> Result<HookControl>`，而 `LoopState = Agent`
+（`crates/tact/src/lib.rs`）——**入参只有不可变引用，返回值也只有 Continue/Block**，
+所以进程内 `SessionStart` 和插件 `SessionStart` 一样注入不了 briefing。
+
+要注入就用 `with_user_prompt_submit`（拿到 `&mut String`，会追加进 prompt），在里面
+同进程直查 auto-memory：
 
 ```rust
 // tact-ui 侧（示意）
-agent.with_session_start(|_agent| Box::pin(async move {
-    // 同进程直接查库：把 auto-memory-rs 作为依赖加进来
+// Cargo.toml: auto-memory-rs = { path = "../auto-memory-rs" }   // lib 名是 auto_memory
+agent.with_user_prompt_submit(|_agent, prompt: &mut String| Box::pin(async move {
     // auto_memory::storage::Store + auto_memory::application::activity
+    if let Ok(brief) = brief_from_index().await {
+        prompt.push_str(&brief);
+    }
     Ok(HookControl::Continue)
 }))
 ```
@@ -191,6 +226,8 @@ agent.with_session_start(|_agent| Box::pin(async move {
 
 ## 7. 设计约束与坑
 
+- **Tact 的 `SessionStart` 注入不了**：脚本会被执行，但 `additionalContext` 只进 warning
+  日志（§1）。要在 Tact 上喂上下文就挂 `UserPromptSubmit`；`SessionStart` 留给 Codex。
 - **只能在 stdout 写约定内容**：`auto-memory` 自己把所有日志写 stderr（integration-guide
   §6.1），hook 脚本也别往 stdout 打调试信息——那会被当成 context 注入。
 - **超时要短**：Tact/Codex 的 `timeout` 建议 10 s 内；脚本内部对 `auto-memory` 的调用

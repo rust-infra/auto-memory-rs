@@ -7,8 +7,11 @@ and Tact plugins (`tact-ui plugin install`) — because the contract is the same
 
     stdin : one JSON object  (session_id, transcript_path, cwd, hook_event_name, …)
     stdout: one JSON object  ({"hookSpecificOutput": {"additionalContext": …}})
-            or, for SessionStart / UserPromptSubmit, plain text (Tact treats it as
-            the context verbatim, the reference implementation does the same)
+            or plain text, which the harness reads as the context verbatim.
+            Caveat: Tact only *applies* that context on UserPromptSubmit. It runs
+            SessionStart hooks but drops their output (warns and continues), so
+            the SessionStart briefing below only lands on Codex — hang the same
+            script off UserPromptSubmit if you want it in a Tact session.
     exit  : always 0 — a hook must never break the session
 
 What it does:

@@ -69,6 +69,13 @@ Both hooks are **fail-open**: `auto-memory` exits 0 on every error path (missing
 index, malformed stdin, unknown project), so a hook can never break a session.
 stdout carries the brief and nothing else; diagnostics go to stderr.
 
+On **Codex** this is what briefs a session. On **Tact** the `SessionStart` half is
+inert: Tact runs the command but does not apply a SessionStart hook's
+`additionalContext` (it only logs a warning), so the brief is discarded. Tact
+*does* apply `UserPromptSubmit` context, so re-point the same script at that event
+if you want the memory brief there — see `docs/hooks.md` §1 for the per-event
+table.
+
 ## Configure
 
 Project mapping is read from JSON, project keys overriding user keys:
@@ -109,16 +116,21 @@ and index paths are per-user, so declare the server in the user-level config
 instead:
 
 ```json
-// ~/.tact/mcp.json
+// ~/.tact/.mcp.json   <- note the leading dot
 {
   "mcpServers": {
     "auto-memory-rs": {
-      "command": "auto-memory",
+      "command": "/absolute/path/to/auto-memory",
       "args": ["mcp", "--vault", "/path/to/vault", "--index", "/path/to/memory.db", "--project", "my-project"]
     }
   }
 }
 ```
+
+Tact reads `~/.tact/.mcp.json` (user scope) and `<workdir>/.tact/.mcp.json` (project
+scope); a bare `~/.tact/mcp.json` is a legacy path and is **not** read. Because Tact
+does not expand environment variables in `args`, both paths must be absolute, and
+`command` must be absolute too unless `auto-memory` is on `PATH`.
 
 The server provides the `write_note`, `search`, `fetch`, and `build_context`
 tools the skills call. (For Codex, add the same entry under `mcpServers` in

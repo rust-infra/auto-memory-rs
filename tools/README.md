@@ -162,7 +162,8 @@ runs it with the repo as `cwd`), so that name is ignored by git.
 
 ## Not part of the harness
 
-`auto-memory-hook.py` is user-facing: an agent-lifecycle hook that briefs a Codex or
-Tact session from an existing index (see `docs/hooks.md`). It talks to the built
-binary, never to the reference implementation, and nothing in the test suite imports
-it.
+`auto-memory-hook.py` is user-facing: an agent-lifecycle hook that briefs a Codex
+session from an existing index — or a Tact session, if it is hung off
+`UserPromptSubmit` (`SessionStart` output is dropped by Tact; see `docs/hooks.md`
+§1). It talks to the built binary, never to the reference implementation, and
+nothing in the test suite imports it.
