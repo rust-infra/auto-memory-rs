@@ -55,7 +55,14 @@
 # 或者自己编译
 cargo build --release
 ./target/release/auto-memory --version      # auto-memory 0.1.0
+
+# 或者直接装到 PATH 上（→ ~/.cargo/bin/auto-memory）
+cargo install --path .
 ```
+
+`--path .` 不能省：cargo 不再把当前目录当隐式来源，裸写 `cargo install --bin auto-memory`
+会被直接拒绝。release 编译要拉 `fastembed` / `ort` / `tokenizers`，第一次比较慢——只想要一个
+能跑的二进制可以用 `--debug`，`--root <dir>` 则装到别处、不碰 `~/.cargo/bin`。
 
 装完先跑一次自检，它会告诉你这台机器上什么可用（尤其是语义检索那两个可选项）：
 

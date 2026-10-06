@@ -28,6 +28,18 @@ cargo build --release            # add --offline when the registry cache is warm
 ./target/release/auto-memory --version
 ```
 
+To put the binary on `PATH` in one step:
+
+```bash
+cargo install --path .           # → ~/.cargo/bin/auto-memory
+```
+
+`--path .` is not optional: cargo no longer treats the working directory as an implicit source,
+so a bare `cargo install --bin auto-memory` is rejected. The release build pulls `fastembed` /
+`ort` / `tokenizers`, so the first one is slow — `cargo install --path . --debug` is much faster
+if you only want a runnable binary, and `--root <dir>` installs elsewhere without touching
+`~/.cargo/bin`.
+
 Either way, the first thing to run afterwards is `auto-memory doctor`, which reports
 whether the index, the embedding runtime, and the model cache are usable.
 
