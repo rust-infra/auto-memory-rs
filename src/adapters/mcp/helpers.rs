@@ -305,8 +305,19 @@ pub(crate) fn parse_activity_types(value: &Value) -> Result<Vec<SearchItemType>>
             });
         }
     };
-    let mut types = Vec::with_capacity(raw.len());
-    for item in raw {
+    parse_entity_type_names(&raw)
+}
+
+/// Parse a list of entity-type names, case-insensitively.
+///
+/// An unknown name is an **error**, not something to drop: dropping it (or falling
+/// back to the implicit default) answers a different question than the caller
+/// asked, silently. `search_notes` used to do exactly that — `entity_types:
+/// ["observations"]` returned *entity* rows — while the CLI rejected the same
+/// value, so one request meant two things depending on the surface.
+pub(crate) fn parse_entity_type_names(items: &[&str]) -> Result<Vec<SearchItemType>> {
+    let mut types = Vec::with_capacity(items.len());
+    for item in items {
         // The reference accepts the types case-insensitively and quotes the valid
         // names in its error, so normalizing here is better than making the enum's
         // `FromStr` case-insensitive for every caller.

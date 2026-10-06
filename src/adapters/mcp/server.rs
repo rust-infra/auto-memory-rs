@@ -1377,9 +1377,17 @@ impl<'a> McpServer<'a> {
         params: &SearchNotesParams,
         output_format: OutputFormat,
     ) -> Result<Value> {
-        let page = params.page.unwrap_or(1).max(1) as u32;
-        let page_size = params.page_size.unwrap_or(10).max(1) as u32;
-        let per_project_page_size = page * page_size;
+        // `page`/`page_size` arrive as u64 and the reference is a Python int, so a
+        // huge page just yields an empty page. The rest of this function is u32
+        // arithmetic; `as u32` used to *truncate* 2^32 to 0 and then underflow on
+        // `page - 1`, which panicked and took the whole MCP server with it.
+        let page = params.page.unwrap_or(1).max(1).min(u64::from(u32::MAX)) as u32;
+        let page_size = params
+            .page_size
+            .unwrap_or(10)
+            .max(1)
+            .min(u64::from(u32::MAX)) as u32;
+        let per_project_page_size = page.saturating_mul(page_size);
         let projects = self.store.projects().await?;
 
         let mut merged: Vec<Value> = Vec::new();
@@ -1425,8 +1433,9 @@ impl<'a> McpServer<'a> {
                 .unwrap_or(std::cmp::Ordering::Equal)
         });
 
-        let start = ((page - 1) * page_size) as usize;
-        let end = start + page_size as usize;
+        let start =
+            usize::try_from(u64::from(page - 1) * u64::from(page_size)).unwrap_or(usize::MAX);
+        let end = start.saturating_add(page_size as usize);
         let paged_results: Vec<Value> = merged
             .iter()
             .skip(start)
@@ -1589,8 +1598,11 @@ impl<'a> McpServer<'a> {
         let categories = params.categories().to_vec();
         let mut options = TextSearchOptions {
             query: params.query.clone(),
-            page: params.page.unwrap_or(1) as u32,
-            page_size: params.page_size.unwrap_or(10) as u32,
+            // Clamp rather than truncate: `as u32` turned 2^32 into 0, and
+            // `search_text`'s own `.max(1)` then silently served page 1 — or one row
+            // per page — instead of what the caller asked for.
+            page: params.page.unwrap_or(1).min(u64::from(u32::MAX)) as u32,
+            page_size: params.page_size.unwrap_or(10).min(u64::from(u32::MAX)) as u32,
             categories: categories.clone(),
             ..TextSearchOptions::default()
         };
@@ -1615,10 +1627,8 @@ impl<'a> McpServer<'a> {
         options.entity_types = if entity_types.is_empty() {
             crate::search::default_entity_types(&options.categories)
         } else {
-            entity_types
-                .iter()
-                .filter_map(|value| value.parse::<SearchItemType>().ok())
-                .collect()
+            let names: Vec<&str> = entity_types.iter().map(String::as_str).collect();
+            parse_entity_type_names(&names)?
         };
         if let Some(status) = params.status.as_deref() {
             options.status = Some(status.to_owned());

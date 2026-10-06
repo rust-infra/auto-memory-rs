@@ -146,3 +146,55 @@ fn mcp_search_combines_a_title_filter_with_a_query() {
     assert_eq!(payload["total"], 1, "{payload}");
     assert_eq!(payload["results"][0]["permalink"], "oracle/projects/alpha");
 }
+
+/// An unrecognized `entity_types` value is an error, not a silent fallback.
+///
+/// Dropping it left the parsed list empty, and the implicit default then answered
+/// with *entity* rows — a different question than the caller asked. The CLI rejects
+/// the same value, so one request meant two things depending on the surface.
+#[test]
+fn mcp_search_rejects_an_unknown_entity_type() {
+    let dir = Scratch::new("session");
+    let vault = dir.join("vault");
+    copy_dir_with_mtimes(&fixtures_vault(), &vault);
+    let requests = vec![
+        json!({"jsonrpc": "2.0", "id": 1, "method": "initialize",
+               "params": {"protocolVersion": "2024-11-05", "capabilities": {}}}),
+        json!({"jsonrpc": "2.0", "method": "notifications/initialized"}),
+        json!({"jsonrpc": "2.0", "id": 2, "method": "tools/call",
+               "params": {"name": "search_notes",
+                          "arguments": {"query": "ada", "entity_types": ["observations"]}}}),
+    ];
+    let SessionOutput { frames, .. } = Session::new(&vault, dir.join("memory.db")).run(&requests);
+    let message = frame_of(&frames, 2)["error"]["message"]
+        .as_str()
+        .unwrap_or_default()
+        .to_owned();
+    assert!(message.contains("Invalid type: observations"), "{message}");
+    assert!(message.contains("\"observation\""), "{message}");
+}
+
+/// Any page number is answerable; a huge one yields an empty page.
+///
+/// `search_all_projects` truncated the u64 `page` to u32 — 2^32 became 0 — and then
+/// computed `page - 1`, which underflowed and panicked the whole server process.
+#[test]
+fn mcp_search_answers_an_out_of_range_page() {
+    let dir = Scratch::new("session");
+    let vault = dir.join("vault");
+    copy_dir_with_mtimes(&fixtures_vault(), &vault);
+    let requests = vec![
+        json!({"jsonrpc": "2.0", "id": 1, "method": "initialize",
+               "params": {"protocolVersion": "2024-11-05", "capabilities": {}}}),
+        json!({"jsonrpc": "2.0", "method": "notifications/initialized"}),
+        json!({"jsonrpc": "2.0", "id": 2, "method": "tools/call",
+               "params": {"name": "search_notes",
+                          "arguments": {"query": "ada", "search_all_projects": true,
+                                        "page": 4_294_967_296u64,
+                                        "output_format": "json"}}}),
+    ];
+    let SessionOutput { frames, .. } = Session::new(&vault, dir.join("memory.db")).run(&requests);
+    let text = text_payload(frame_of(&frames, 2));
+    let payload: Value = serde_json::from_str(&text).expect("payload");
+    assert_eq!(payload["results"], json!([]), "{payload}");
+}
