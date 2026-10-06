@@ -191,7 +191,8 @@ Error: plugin source is absent from revision f0abbc96…: the path 'tact' does n
 同一条命令、同一台机器，已提交的 `plugins/agents` 装得上、未提交的 `plugins/tact` 装不上
 （`git ls-tree HEAD plugins/` 里只有 `agents`）。→ **发布前必须 commit**；走 git 路线还要 push。
 顺带：git tree 复制同样**跳过 symlink**（只写 `filemode != 0o120000` 的 blob），和 §2.2 里
-`copy_regular_files` 的结论一致。
+`copy_regular_files` 的结论一致。另外实测：即使 git tree 里记的是 `100755`，装出来的 `.sh`
+也是 `644`（拷贝路径不保留 exec 位）——**无影响**，因为 `hooks.json` 用 `sh <path>` 调用它。
 
 **已验证的完整流程**（真实 `tact-ui` 二进制 + 隔离的 `HOME`，cwd 在仓库内）：
 
@@ -215,8 +216,10 @@ hook 确实不会运行——所以安装说明里的 `hooks trust` 不是可选
 一条 catalog，`source` 用 `{"source": "local", "path": "./.agents/plugins/auto-memory-tact"}` 形状
 ——`plugins/agents/README.md` 已给出 agents 版的完整示例，tact 版同理。
 
-**交付状态**：`plugins/tact` 目前**未提交**，所以现在从工作树装不上。这是它和"能装"之间唯一
-剩下的一步。
+**交付状态**：`plugins/tact` 已提交，上面那条命令现在能装成功（实测 `Installed plugin
+'auto-memory-tact' from 'auto-memory'`，`hooks list` 显示 2 条待 review，标签 `plugin
+auto-memory-tact`）。仍未 push——本地 catalog 走的是 HEAD 的 git tree，所以本地装不需要 push；
+要让 `plugin marketplace add <owner/repo>` 那台机器装上才需要。
 
 ### 2.6 `hooks.json` 的两处细节
 
