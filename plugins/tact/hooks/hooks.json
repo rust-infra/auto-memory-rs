@@ -1,5 +1,5 @@
 {
-  "description": "Auto Memory for Codex hooks - brief from the index on session start, request an authored checkpoint after compaction.",
+  "description": "Auto Memory for Tact hooks - brief from the index on session start, request an authored checkpoint after compaction.",
   "hooks": {
     "SessionStart": [
       {
@@ -22,7 +22,7 @@
           {
             "type": "command",
             "command": "sh \"$CLAUDE_PLUGIN_ROOT/hooks/pre_compact.sh\"",
-            "statusMessage": "Checkpointing Codex work to Auto Memory",
+            "statusMessage": "Checkpointing Tact work to Auto Memory",
             "timeout": 60
           }
         ]

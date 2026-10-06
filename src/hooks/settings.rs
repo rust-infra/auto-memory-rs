@@ -83,26 +83,45 @@ pub fn load_harness_settings(harness: Harness, directory: &Path) -> (Settings, b
         }
         Harness::Codex => load_codex_settings(directory, home.as_deref()),
         Harness::Pi => load_pi_settings(directory),
+        Harness::Tact => load_tact_settings(directory, home.as_deref()),
     }
 }
 
-// --- Codex ---
+// --- Codex and Tact: the `<dir>/basic-memory.json` layout ---
 
 fn load_codex_settings(directory: &Path, home: Option<&Path>) -> (Settings, bool) {
-    let profile = Harness::Codex.profile();
-    let mut settings = Settings::defaults(profile, codex_capture_folder(directory));
-    // Codex lifecycle capture and checkpoint prompting are enabled when omitted.
+    load_agent_dir_settings(Harness::Codex.profile(), ".codex", directory, home)
+}
+
+/// Tact keeps its configuration in `.tact/` (the same directory as `tact.db`
+/// and `hooks.json`), so the mapping file is `.tact/basic-memory.json`.
+fn load_tact_settings(directory: &Path, home: Option<&Path>) -> (Settings, bool) {
+    load_agent_dir_settings(Harness::Tact.profile(), ".tact", directory, home)
+}
+
+/// Load settings from a `<dir>/basic-memory.json` pair: a user-level file under
+/// `home` and the nearest ancestor's project file.
+///
+/// Codex (`.codex/`) and Tact (`.tact/`) share this layout, so they share the
+/// loader — only the profile's defaults, capture folder and phrasing differ.
+fn load_agent_dir_settings(
+    profile: &HarnessProfile,
+    dir_name: &str,
+    directory: &Path,
+    home: Option<&Path>,
+) -> (Settings, bool) {
+    let mut settings = Settings::defaults(profile, repo_scoped_capture_folder(profile, directory));
+    // Lifecycle capture and checkpoint prompting are enabled when omitted.
     settings.checkpoint_on_compact = true;
     settings.capture_events = true;
 
+    let file = |root: &Path| root.join(dir_name).join("basic-memory.json");
     let mut sources: Vec<PathBuf> = Vec::new();
     if let Some(home) = home {
-        sources.push(home.join(".codex").join("basic-memory.json"));
+        sources.push(file(home));
     }
-    let project = project_dir(directory, |dir| {
-        dir.join(".codex").join("basic-memory.json").is_file()
-    });
-    let project_path = project.join(".codex").join("basic-memory.json");
+    let project = project_dir(directory, |dir| file(dir).is_file());
+    let project_path = file(&project);
     if sources.first() != Some(&project_path) {
         sources.push(project_path);
     }
@@ -119,7 +138,7 @@ fn load_codex_settings(directory: &Path, home: Option<&Path>) -> (Settings, bool
             }
             Some(Some(data)) => {
                 found = true;
-                if let Some(block) = codex_block(&data) {
+                if let Some(block) = settings_block(&data) {
                     apply_block(&mut settings, block);
                 }
             }
@@ -128,9 +147,11 @@ fn load_codex_settings(directory: &Path, home: Option<&Path>) -> (Settings, bool
     (settings, found)
 }
 
-/// Codex reads `basicMemory` when present, else the whole document; a non-object
+/// Reads `basicMemory` when present, else the whole document; a non-object
 /// `basicMemory` is malformed and disables recall.
-fn codex_block(data: &serde_json::Map<String, Value>) -> Option<&serde_json::Map<String, Value>> {
+fn settings_block(
+    data: &serde_json::Map<String, Value>,
+) -> Option<&serde_json::Map<String, Value>> {
     match data.get("basicMemory") {
         Some(Value::Object(block)) => Some(block),
         Some(_) => None,
@@ -138,9 +159,9 @@ fn codex_block(data: &serde_json::Map<String, Value>) -> Option<&serde_json::Map
     }
 }
 
-/// Namespace the Codex capture folder by the current repository directory, so
-/// one user-level config serves many checkouts.
-fn codex_capture_folder(directory: &Path) -> String {
+/// Namespace the capture folder by the current repository directory, so one
+/// user-level config serves many checkouts.
+fn repo_scoped_capture_folder(profile: &HarnessProfile, directory: &Path) -> String {
     let repo_root = Command::new("git")
         .args(["rev-parse", "--show-toplevel"])
         .current_dir(directory)
@@ -150,14 +171,14 @@ fn codex_capture_folder(directory: &Path) -> String {
         .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_owned())
         .filter(|value| !value.is_empty());
     let Some(root) = repo_root else {
-        return Harness::Codex.profile().default_capture_folder.to_owned();
+        return profile.default_capture_folder.to_owned();
     };
     match Path::new(&root)
         .file_name()
         .map(|name| name.to_string_lossy())
     {
-        Some(name) if !name.is_empty() => format!("codex/{name}"),
-        _ => Harness::Codex.profile().default_capture_folder.to_owned(),
+        Some(name) if !name.is_empty() => format!("{}/{name}", profile.default_capture_folder),
+        _ => profile.default_capture_folder.to_owned(),
     }
 }
 
@@ -419,6 +440,66 @@ mod tests {
         assert!(found);
         assert!(!settings.capture_events);
         assert!(!settings.checkpoint_on_compact);
+    }
+
+    #[test]
+    fn tact_defaults_enable_capture_and_checkpointing() {
+        let home = tempfile::tempdir().expect("home");
+        let project = tempfile::tempdir().expect("project");
+        let (settings, found) = load_tact_settings(project.path(), Some(home.path()));
+        assert!(!found);
+        assert!(settings.checkpoint_on_compact);
+        assert!(settings.capture_events);
+        assert_eq!(settings.capture_folder, "tact");
+        assert_eq!(settings.recall_timeframe, "7d");
+        assert_eq!(settings.primary_project, None);
+    }
+
+    #[test]
+    fn tact_project_file_overrides_user_file() {
+        let home = tempfile::tempdir().expect("home");
+        let project = tempfile::tempdir().expect("project");
+        write(
+            &home.path().join(".tact/basic-memory.json"),
+            r#"{"primaryProject": "user", "checkpointOnCompact": false}"#,
+        );
+        write(
+            &project.path().join(".tact/basic-memory.json"),
+            r#"{"basicMemory": {"primaryProject": "project", "captureFolder": "notes"}}"#,
+        );
+        let (settings, found) = load_tact_settings(project.path(), Some(home.path()));
+        assert!(found);
+        assert_eq!(settings.primary_project.as_deref(), Some("project"));
+        assert_eq!(settings.capture_folder, "notes");
+        // The project file did not mention it, so the user value survives.
+        assert!(!settings.checkpoint_on_compact);
+    }
+
+    #[test]
+    fn tact_malformed_source_fails_closed() {
+        let home = tempfile::tempdir().expect("home");
+        let project = tempfile::tempdir().expect("project");
+        write(
+            &project.path().join(".tact/basic-memory.json"),
+            "{ not json",
+        );
+        let (settings, found) = load_tact_settings(project.path(), Some(home.path()));
+        assert!(found);
+        assert!(!settings.capture_events);
+        assert!(!settings.checkpoint_on_compact);
+    }
+
+    /// `.tact/` also holds `tact.db` and `hooks.json`; a mapping file is what
+    /// makes a directory the project root, so a bare `.tact/tact.db` must not.
+    #[test]
+    fn tact_ignores_a_tact_directory_without_a_mapping_file() {
+        let home = tempfile::tempdir().expect("home");
+        let project = tempfile::tempdir().expect("project");
+        std::fs::create_dir_all(project.path().join(".tact")).expect("mkdir");
+        std::fs::write(project.path().join(".tact/tact.db"), b"not a mapping").expect("write");
+        let (settings, found) = load_tact_settings(project.path(), Some(home.path()));
+        assert!(!found);
+        assert_eq!(settings.primary_project, None);
     }
 
     #[test]

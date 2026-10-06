@@ -122,6 +122,10 @@ CI must run offline-capable subset; full golden suite runs with the reference ha
 Tracked here; move to `codex/decisions` as they resolve:
 
 1. Index DB location: mirror reference (app config dir) vs vault `.basic-memory/` deviation.
+   **Answered for the runtime surfaces 2026-10-06** — `specs/config-discovery-spec.md`: the index
+   stays where it is (`~/.local/share/auto-memory/memory.db`) and becomes discoverable through a
+   user config file instead of being re-stated on every command line. The vault's `.basic-memory/`
+   layout is unchanged.
 2. Whether to reuse SQLite FTS5 engine (recommended) vs pure-Rust FTS.
 3. Embedding: reuse ONNX model + onnxruntime vs pure-Rust runtime; offline model sourcing.
 4. Float epsilon value; score normalization policy for bm25 differences.

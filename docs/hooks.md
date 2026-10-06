@@ -8,8 +8,8 @@
 |---|---|---|---|
 | 文件系统 | `watch` 守护进程（notify + 1000 ms 去抖） | Obsidian/编辑器一改文件就更新索引 | 已经内建，无需配置 |
 | git | `post-commit` / `post-merge` / `post-checkout` | "提交即索引"，兜住 watch 没跑的场景 | 一行 shell，本地即用 |
-| agent 会话 | 内建 `auto-memory hook` + `plugins/agents`（Codex）/ Tact 插件的 command hook | 会话开始喂上下文（briefing）、压缩后 checkpoint | 插件目录；引擎已内建。**Tact 的 `SessionStart` 会被丢弃，喂 briefing 得挂 `UserPromptSubmit`（§1）** |
-| agent 进程内 | Tact 的 `Hook` trait（Rust） | 同上，但同进程直调，无子进程 | 要改 Tact 代码；`SessionStart` 同样注入不了（§6） |
+| agent 会话 | 内建 `auto-memory hook` + `plugins/agents`（Codex）/ Tact 插件的 command hook | 会话开始喂上下文（briefing）、压缩后 checkpoint | 插件目录；引擎已内建。Tact 的 `SessionStart` 现在会采纳 `additionalContext`（§1），挂 `SessionStart` 即可 |
+| agent 进程内 | Tact 的 `Hook` trait（Rust） | 同上，但同进程直调，无子进程 | 要改 Tact 代码；要共享句柄得自己捕获 `Arc<Mutex<Store>>`（§6） |
 
 三层可以并存：它们最终都只是"读 vault、写同一个 SQLite 索引"。索引的写由 SQLite
 （WAL + `busy_timeout=10s`）串行化，读完全无冲突。
@@ -36,23 +36,25 @@ exit  : 永远 0 —— hook 失败绝不能弄坏会话
 - Codex：插件 `hooks/hooks.json`，每个命令拿到同样的 stdin JSON；参考实现的
   `session_start.py` 明确写着 fail-open（`except BaseException: pass; sys.exit(0)`）。
 
-但"输出被接受"不等于"输出被采纳"：Tact 会解析 `additionalContext`，却只在部分事件上把它接进
-会话——`SessionStart` 恰恰是**不接**的那个（对应分支里只有一条 `warn!`：
-`plugin SessionStart hook returned additional context; not applied in v1`）。所以 Codex 上
-好用的"启动喂 briefing"，原样搬到 Tact 上等于没有。
+Tact 现在把 `additionalContext` 接进会话的事件比早期版本多，**包括 `SessionStart`**——早先
+那条 `plugin SessionStart hook returned additional context; not applied in v1` 的 `warn!`
+分支已经被 `collect_session_start_output` 取代（源码注释点名了原因：把 briefing 丢掉让参考
+实现的 `basic-memory` 插件形同虚设）。所以"启动喂 brief"在 Tact 上是有效的。
 
 | 事件 | Tact 对 `additionalContext` 的处理 |
 |---|---|
-| `SessionStart` | ❌ 丢弃，只 `warn!`（`system_prompt` 同样丢弃） |
+| `SessionStart` | ✅ 收进 `SessionStartContext`，首轮之前注入为合成的 `<hook-context>` user 消息（`inject_pending_session_context`） |
 | `UserPromptSubmit` | ✅ 追加到本次 prompt 文本（`prompt.push_str(extra)`） |
-| `PreToolUse` | ✅ 塞进 tool input 的 `_hook_context` 字段 |
+| `PreToolUse` | ✅ 排进 `runtime.pending_hook_context`，下一次请求前注入（**不再**写进 tool input 的 `_hook_context`；那个字段只写不读，已废弃） |
+| `PostToolUse` | ✅ 与 `PreToolUse` 同一条注入路径；另外仍支持 `suppress_output`（清空工具结果） |
 | `SubagentStart` | ✅ 追加到子 agent 的 system prompt |
-| `PostToolUse` | 只支持 `suppress_output`（清空工具结果），不接 `additionalContext` |
+| `SubagentStop` | ✅ 可改写子 agent 回给父 agent 的 summary |
 
-（都在 `crates/tact/src/plugin/hooks.rs` 的对应分支。）
+（都在 `crates/tact/src/plugin/hooks.rs` 的对应分支。命令 hook 还能用
+`additionalContextLimit`（token 数）声明"最多喂多少"，超出的部分在进入上下文前被截断。）
 
-**因此：脚本只要能读 stdin JSON、把 brief 写 stdout、永远 exit 0，两边都能被加载；但要真把
-brief 喂进上下文，Codex 用 `SessionStart`，Tact 得挂 `UserPromptSubmit`。**
+**因此：脚本只要能读 stdin JSON、把 brief 写 stdout、永远 exit 0，两边都能被加载；brief 也
+在两边都能真的进上下文——Codex 和 Tact 都挂 `SessionStart` 即可。**
 
 ---
 
@@ -133,49 +135,57 @@ https / ssh 和 `owner/repo`），本地目录只能走自动发现：
 - `$HOME/.agents/plugins/marketplace.json`（个人）
 - 从 cwd 逐级向上找到的第一个 `<root>/.agents/plugins/marketplace.json`（仓库内）
 
-本仓库已经带了后者，cwd 在仓库里就能直接装：
+本仓库已经带了后者，cwd 在仓库里就能直接装（Tact 装 `plugins/tact`，Codex 装
+`plugins/agents`——**每个 host 只装自己那一个包**，理由见 §8）：
 
 ```bash
 cd /path/to/auto-memory-rs
 tact-ui plugin marketplace list          # 应看到 auto-memory（discovered）
-tact-ui plugin install auto-memory-rs@auto-memory
+tact-ui plugin install auto-memory-tact@auto-memory
 tact-ui plugin list                      # 确认已安装
 ```
 
 ```
 auto-memory-rs/
 ├── .agents/plugins/marketplace.json    # Tact 从这里发现 marketplace
-└── plugins/agents/                     # 插件本体
+└── plugins/tact/                       # 插件本体（Tact 版）
     ├── .codex-plugin/plugin.json       # 插件清单（name 必须等于 catalog 里的 name）
     └── hooks/hooks.json                # 事件 → 命令
 ```
 
 ```json
 // .agents/plugins/marketplace.json —— source 相对 marketplace 根解析，且不能越出根目录
-{ "name": "auto-memory", "plugins": [ { "name": "auto-memory-rs", "source": "./plugins/agents" } ] }
+{ "name": "auto-memory", "plugins": [
+  { "name": "auto-memory-rs",   "source": "./plugins/agents" },
+  { "name": "auto-memory-tact", "source": "./plugins/tact" } ] }
 ```
 
 插件至少要贡献 skills / commands / hooks / MCP 之一才会被接受。`hooks/hooks.json` 的写法
-（`$CLAUDE_PLUGIN_ROOT` 由 Tact 展开）：
+（`$CLAUDE_PLUGIN_ROOT` 由 Tact 展开）——薄壳只做 `command -v` 兜底再调 `auto-memory hook`，
+逻辑在引擎里，所以脚本本身与 harness 无关：
 ```json
 // hooks/hooks.json
 {
   "hooks": {
     "SessionStart": [ { "matcher": "startup|resume|compact",
       "hooks": [ { "type": "command",
-                   "command": "python3 \"$CLAUDE_PLUGIN_ROOT/hooks/auto-memory-hook.py\"",
-                   "timeout": 10, "statusMessage": "Briefing from Auto Memory" } ] } ],
-    "UserPromptSubmit": [ { "matcher": "",
+                   "command": "sh \"$CLAUDE_PLUGIN_ROOT/hooks/session_start.sh\"",
+                   "timeout": 30, "additionalContextLimit": 4000,
+                   "statusMessage": "Loading Auto Memory context" } ] } ],
+    "PreCompact": [ { "matcher": "manual|auto",
       "hooks": [ { "type": "command",
-                   "command": "python3 \"$CLAUDE_PLUGIN_ROOT/hooks/auto-memory-hook.py\"",
-                   "timeout": 10, "statusMessage": "Searching memory" } ] } ]
+                   "command": "sh \"$CLAUDE_PLUGIN_ROOT/hooks/pre_compact.sh\"",
+                   "timeout": 60,
+                   "statusMessage": "Checkpointing Tact work to Auto Memory" } ] } ]
   }
 }
 ```
 
-⚠️ 上面那份 `hooks.json` 里的 **`SessionStart` 在 Tact 上不会生效**：脚本会被执行，返回的
-brief 却会被 `warn!` 丢掉（见 §1 的表）。要在 Tact 上真的喂进上下文，把这个脚本挂到
-`UserPromptSubmit`（Tact 会把它追加进本次 prompt），`SessionStart` 那段留给 Codex。
+这份 `hooks.json` 在 Tact 和 Codex 上都能用：`SessionStart` 的 brief 会被注入（见 §1 的表）；
+`PreCompact` 那段只是占位——两边都忽略它的 stdout，checkpoint 请求由压缩后那次
+`SessionStart(trigger=compact)` 带出（见 §8）。装完记得让 hook 通过信任检查——
+`tact-ui hooks list` 会把它列在 "Needs review" 下，`tact-ui hooks trust`（或 `--all`）
+之后才会真的执行。
 
 注意：Tact 只展开 `${CLAUDE_PLUGIN_ROOT}`（不是 `${PLUGIN_ROOT}`），同时也会把它放进
 环境变量——上面用 `"$CLAUDE_PLUGIN_ROOT/…"` 交给 shell 展开，两种 harness 都成立。
@@ -199,31 +209,57 @@ brief 却会被 `warn!` 丢掉（见 §1 的表）。要在 Tact 上真的喂进
 ## 6. 接线：Tact 进程内 hook（最快、也最"深"）
 
 如果不想走插件与子进程，Tact 的 hook 本身是 Rust trait（`crates/tact/src/hook/mod.rs`），
-`tact-ui` 已经注册了一个（目前是空实现，见 `crates/tact-ui/src/interactive.rs`）：
+注册点在 `crates/tact-ui/src/session_bootstrap.rs`（`apply_plugin_hooks_with_report` 那几行，
+命令 hook 和 Rust hook 最终都挂到同一个 `Agent` 上）。
+
+签名现在是**带可变上下文**的，`SessionStart` 注入得了 briefing：
 
 ```rust
-// tact-ui 侧（现状）
-agent.with_session_start(|_agent| Box::pin(async move { Ok(HookControl::Continue) }))
+// crates/tact/src/hook/mod.rs（现状）
+pub trait SessionStartFn: for<'a> Fn(
+    &'a LoopState,
+    &'a mut SessionStartContext,   // push_additional_context(source, text)
+) -> Pin<Box<dyn Future<Output = Result<HookControl>> + Send + 'a>> + Send + Sync {}
 ```
 
-注意签名是 `Fn(&LoopState) -> Result<HookControl>`，而 `LoopState = Agent`
-（`crates/tact/src/lib.rs`）——**入参只有不可变引用，返回值也只有 Continue/Block**，
-所以进程内 `SessionStart` 和插件 `SessionStart` 一样注入不了 briefing。
-
-要注入就用 `with_user_prompt_submit`（拿到 `&mut String`，会追加进 prompt），在里面
-同进程直查 auto-memory：
+所以两条都能用——`SessionStart` 喂 briefing，`UserPromptSubmit` 做按 prompt 的召回
+（它是唯一能拿到用户文本的那个，`&mut String`）：
 
 ```rust
 // tact-ui 侧（示意）
 // Cargo.toml: auto-memory-rs = { path = "../auto-memory-rs" }   // lib 名是 auto_memory
-agent.with_user_prompt_submit(|_agent, prompt: &mut String| Box::pin(async move {
-    // auto_memory::storage::Store + auto_memory::application::activity
-    if let Ok(brief) = brief_from_index().await {
-        prompt.push_str(&brief);
-    }
-    Ok(HookControl::Continue)
-}))
+// Store 不是 Clone，服务全是 &mut Store 形状 → 用 Arc<tokio::sync::Mutex<Store>> 捕获进去
+let store = Arc::new(tokio::sync::Mutex::new(Store::open(&index).await?));
+
+let for_start = store.clone();
+agent = agent.with_session_start(move |_agent, context: &mut SessionStartContext| {
+    let store = for_start.clone();
+    Box::pin(async move {
+        let guard = store.lock().await;
+        if let Ok(brief) = brief_from_index(&guard).await {   // 失败就 fail-open
+            context.push_additional_context(Some("auto-memory"), &brief);
+        }
+        Ok(HookControl::Continue)
+    })
+});
+
+let for_prompt = store.clone();
+agent = agent.with_user_prompt_submit(move |_agent, prompt: &mut String| {
+    let store = for_prompt.clone();
+    Box::pin(async move {
+        let guard = store.lock().await;
+        if let Ok(extra) = recall_for(&guard, prompt).await {
+            prompt.push_str(&extra);
+        }
+        Ok(HookControl::Continue)
+    })
+});
 ```
+
+代价与注意：hook 闭包要求 `Fn + Send + Sync + 'static` 且只拿 `&LoopState`（**拿不到 agent
+状态**，共享句柄只能自己捕获）；Rust hook 没有 `additionalContextLimit` 那个上限，得自己截断；
+`Store::open` 走 `block_in_place`，在 `#[tokio::test]`（current-thread）里会 panic，
+碰 memory 的测试要写 `flavor = "multi_thread"`。完整清单见 `docs/tact-ui-integration.md`。
 
 好处：没有子进程、没有 JSON 往返、不会超时；代价是要改 Tact 的代码并且直接依赖
 `auto-memory` crate（两个项目都是 Rust，可行）。适合"我就是想把记忆接进 tact-ui"的场景。
@@ -232,8 +268,9 @@ agent.with_user_prompt_submit(|_agent, prompt: &mut String| Box::pin(async move 
 
 ## 7. 设计约束与坑
 
-- **Tact 的 `SessionStart` 注入不了**：脚本会被执行，但 `additionalContext` 只进 warning
-  日志（§1）。要在 Tact 上喂上下文就挂 `UserPromptSubmit`；`SessionStart` 留给 Codex。
+- **Tact 的 `SessionStart` 现在注入得了**：`additionalContext` 会被收进 `SessionStartContext`，
+  首轮之前注入为 `<hook-context>` 消息（§1）。挂 `SessionStart` 喂 briefing、挂
+  `UserPromptSubmit` 做按 prompt 的召回（那是唯一能拿到用户文本的事件）。
 - **只能在 stdout 写约定内容**：`auto-memory` 自己把所有日志写 stderr（integration-guide
   §6.1），hook 脚本也别往 stdout 打调试信息——那会被当成 context 注入。
 - **超时要短**：Tact/Codex 的 `timeout` 建议 10 s 内；脚本内部对 `auto-memory` 的调用
@@ -254,7 +291,7 @@ agent.with_user_prompt_submit(|_agent, prompt: &mut String| Box::pin(async move 
 `basic_memory.cli.commands.hook`：
 
 ```
-auto-memory hook <session-start|pre-compact> --harness <claude|codex|pi> \
+auto-memory hook <session-start|pre-compact> --harness <claude|codex|pi|tact> \
     [--index <db>] [--project <permalink>] [--project-dir <dir>]
 ```
 
@@ -263,17 +300,34 @@ auto-memory hook <session-start|pre-compact> --harness <claude|codex|pi> \
 
 | 文件 | 作用 |
 |---|---|
-| `src/hooks/profiles.rs` | 每 harness 的默认值/文案（recall 窗口、capture 目录、session note type） |
+| `src/hooks/profiles.rs` | 每 harness 的默认值/文案（recall 窗口、capture 目录、session note type、checkpoint 提示） |
 | `src/hooks/event.rs` | 把各 harness 的 stdin JSON 归一成 `NormalizedHookEvent` |
-| `src/hooks/settings.rs` | 合并 user / project 配置（`.codex/basic-memory.json`、`.claude/settings.json` 的 `basicMemory` 块）；坏文件 **fail-closed** |
+| `src/hooks/settings.rs` | 合并 user / project 配置（`.codex/basic-memory.json`、`.tact/basic-memory.json`、`.claude/settings.json` 的 `basicMemory` 块）；坏文件 **fail-closed** |
 | `src/hooks/brief.rs` | 组装 SessionStart brief（fenced 数据 + 截断边界 + 写作指引） |
-| `src/hooks/checkpoint.rs` | 压缩后的 checkpoint 提示（附 host 元数据） |
+| `src/hooks/checkpoint.rs` | 压缩后的 checkpoint 提示（附 host 元数据；按 harness 选提示文本，元数据键沿用 skill 的 `codex_turn_id`） |
 
-`plugins/agents/` 是配套的插件包：清单 + `hooks/hooks.json` + 两个 fail-open 薄壳
-（`sh "${PLUGIN_ROOT}/hooks/session_start.sh"`）+ skills + schemas。**Codex 忽略
-PreCompact 的 stdout**，所以 checkpoint 请求由压缩后那次 `SessionStart`
+**`tact` 是 port 自己加的 harness**（参考实现没有）：Tact 的 hook 契约和 Codex 同源，
+stdin 字段也对得上（`session_id` / `cwd` / `source` / `turn_id` / `model`，只有
+`transcript_path` 恒为 `null`），所以它复用同一套引擎，差异只在三处——事件上盖的 identity
+（`tact`）、读的配置文件（`.tact/basic-memory.json`，与 Tact 自己的 `.tact/` 布局一致）、
+以及打印给用户的文案。验证不需要起 TUI：
+
+```bash
+echo '{"hook_event_name":"SessionStart","cwd":"/abs/repo","source":"startup"}' \
+    | auto-memory hook session-start --harness tact --index "$INDEX" --project oracle
+```
+
+`plugins/` 下是配套的插件包，**每个 host 一个**：`plugins/agents`（Codex）和
+`plugins/tact`（Tact）。两者是同一套 skills/schemas 的两个版本，差异只在 harness identity
+（薄壳的 `--harness`、skill 读的配置路径、note type、标题前缀），详见
+[tact-ui-integration.md](tact-ui-integration.md) §2.2 和各自的 README。
+**两个 host 都忽略 PreCompact 的 stdout**，所以 checkpoint 请求由压缩后那次 `SessionStart`
 （`trigger: compact`）带出；`am-checkpoint` skill 再用 MCP `write_note` 写一条不可变的
-`codex_session` / `coding_session` 笔记。详见 `plugins/agents/README.md`。
+`codex_session` / `tact_session` / `coding_session` 笔记。
+
+⚠️ **每个 host 只装自己那一个包**：Tact 会加载所有已安装插件的 skills 和 hooks，两个都装就会
+一次会话收到两份 brief、skill 列表里出现两套 `am-*`（`auto-memory-rs:am-checkpoint` 和
+`auto-memory-tact:am-checkpoint`）。
 
 已实现的两个 verb 之外，参考实现还有 `hook stop|flush|status|install|remove`、SPEC-55
 envelope/inbox WAL、transcript 抽取与自动 capture 笔记、以及 claude-code / pi 插件包，

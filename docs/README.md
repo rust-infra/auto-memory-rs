@@ -17,9 +17,11 @@ Project specs and plans are stored outside the user-documentation tree in `../sp
 | [search-spec.md](../specs/search-spec.md) | Search behavior contract (FTS5, vector, hybrid fusion, filters, pagination) |
 | [context-spec.md](../specs/context-spec.md) | `build_context` / memory:// / recent_activity contract |
 | [mcp-spec.md](../specs/mcp-spec.md) | MCP tool inventory, parameters, response models, behavior contracts |
+| [config-discovery-spec.md](../specs/config-discovery-spec.md) | Design spec: how the CLI and `auto-memory hook` resolve index / project / vault — the user config file, precedence chains, and why environment variables are the wrong channel for a per-host setting |
 | [usage.md](usage.md) | Install, Obsidian setup, indexing, MCP setup, querying, recovery |
 | [integration-guide.md](integration-guide.md) | 中文接入指南：构建 → vault/index/project 约定 → 索引/检索/watch → MCP 客户端接入（Codex/Claude Code/通用）→ 工具速查 → 排障 |
 | [hooks.md](hooks.md) | 中文 hook 接入：四层触发点（watch / git hook / Codex·Tact 插件 hook / Tact 进程内）、命令 hook 契约、`tools/auto-memory-hook.py` 用法与实测 |
+| [tact-ui-integration.md](tact-ui-integration.md) | 中文集成分析：auto-memory 作为**独立产品**接进 tact-ui——两条进程边界（MCP 子进程 / 插件 command hook）、Tact 侧现状对照、产品侧要补的适配（`tact` harness、插件包、配置发现、分发），以及为什么不链接库 |
 | [architecture-guide.md](architecture-guide.md) | 中文架构与数据流：分层图、磁盘布局、SQLite 表关系（ER）、索引/写入流程、检索各路径流程（文本/向量/混合/重排/图遍历）、常量出处 |
 | [knowledge-graph.md](knowledge-graph.md) | 中文入门：实体/观察/关系三个概念、关系从 Markdown 怎么产生、数据库字段、目标解析、图遍历，以及新手常见误解 |
 | [glossary.md](glossary.md) | 术语表：entity / observation / relation / permalink / note_type / `memory://` 等正式名与中文对照，含易混对照表和"不是本项目术语"清单 |

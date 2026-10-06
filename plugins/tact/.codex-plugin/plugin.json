@@ -1,0 +1,36 @@
+{
+  "name": "auto-memory-tact",
+  "version": "0.1.0",
+  "description": "A Tact-native bridge to a local auto-memory-rs index for durable engineering context and resumable checkpoints.",
+  "author": {
+    "name": "auto-memory-rs"
+  },
+  "license": "AGPL-3.0-or-later",
+  "keywords": [
+    "auto-memory",
+    "tact",
+    "memory",
+    "knowledge-graph",
+    "mcp",
+    "checkpoints"
+  ],
+  "skills": "./skills/",
+  "hooks": "./hooks/hooks.json",
+  "interface": {
+    "displayName": "Auto Memory for Tact",
+    "shortDescription": "Carry decisions and handoffs across Tact sessions",
+    "longDescription": "Brief each Tact session from a local auto-memory-rs index, capture engineering decisions, and checkpoint long-running work so a later session can resume with repo-backed context.",
+    "developerName": "auto-memory-rs",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Use Auto Memory to orient before changing this repo.",
+      "Checkpoint this Tact session into Auto Memory.",
+      "Capture the decision we just made."
+    ]
+  }
+}

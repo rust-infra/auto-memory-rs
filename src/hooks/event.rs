@@ -32,10 +32,11 @@ impl HookEvent {
     }
 }
 
-/// One harness lifecycle event, normalized across Claude Code, Codex, and Pi.
+/// One harness lifecycle event, normalized across Claude Code, Codex, Pi, and
+/// Tact.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NormalizedHookEvent {
-    /// SPEC-55 source id (`claude-code`, `codex`, `pi`).
+    /// SPEC-55 source id (`claude-code`, `codex`, `pi`, `tact`).
     pub source: &'static str,
     /// The normalized event.
     pub event: HookEvent,
@@ -72,14 +73,18 @@ pub fn normalize(harness: Harness, event: HookEvent, payload: &Value) -> Normali
     };
     let trigger = field("trigger").or_else(|| field("source"));
     // Pi names its turn id `branch_id` in some payloads; Claude has neither.
+    // Tact's payload is Codex-shaped (`build_payload` in
+    // `crates/tact/src/plugin/hooks.rs` reports `turn_id` as the turn counter
+    // and `model`), with one deliberate difference: `transcript_path` is
+    // `null` rather than a path, which `field` already normalizes to empty.
     let turn_id = match harness {
         Harness::Claude => None,
-        Harness::Codex => field("turn_id"),
+        Harness::Codex | Harness::Tact => field("turn_id"),
         Harness::Pi => field("turn_id").or_else(|| field("branch_id")),
     };
     let model = match harness {
         Harness::Claude => None,
-        Harness::Codex | Harness::Pi => field("model"),
+        Harness::Codex | Harness::Pi | Harness::Tact => field("model"),
     };
 
     NormalizedHookEvent {
@@ -141,6 +146,44 @@ mod tests {
         let event = normalize(Harness::Pi, HookEvent::CompactionImminent, &payload);
         assert_eq!(event.turn_id.as_deref(), Some("b1"));
         assert_eq!(event.model.as_deref(), Some("m"));
+    }
+
+    /// Tact's real payload, field for field (`build_payload` in
+    /// `crates/tact/src/plugin/hooks.rs`): the session id is the live one,
+    /// `source` carries the SessionStart trigger, `turn_id` is the turn counter
+    /// and `transcript_path` is `null` — not a path.
+    #[test]
+    fn tact_reads_its_real_payload_including_a_null_transcript_path() {
+        let payload = json!({
+            "session_id": "3f6a1c",
+            "transcript_path": null,
+            "cwd": "/Users/me/repo",
+            "hook_event_name": "SessionStart",
+            "model": "gpt-5",
+            "permission_mode": "default",
+            "turn_id": "0",
+            "source": "startup",
+        });
+        let event = normalize(Harness::Tact, HookEvent::SessionStarted, &payload);
+        assert_eq!(event.source, "tact");
+        assert_eq!(event.session_id, "3f6a1c");
+        assert_eq!(event.cwd, "/Users/me/repo");
+        assert_eq!(event.transcript_path, "");
+        assert_eq!(event.trigger.as_deref(), Some("startup"));
+        assert_eq!(event.turn_id.as_deref(), Some("0"));
+        assert_eq!(event.model.as_deref(), Some("gpt-5"));
+    }
+
+    /// The compaction trigger is the only SessionStart `source` a checkpoint
+    /// rides on, so it has to survive normalization.
+    #[test]
+    fn tact_reports_the_compact_trigger_after_compaction() {
+        let event = normalize(
+            Harness::Tact,
+            HookEvent::SessionStarted,
+            &json!({"hook_event_name": "SessionStart", "source": "compact"}),
+        );
+        assert_eq!(event.trigger.as_deref(), Some("compact"));
     }
 
     #[test]

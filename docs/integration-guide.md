@@ -89,14 +89,16 @@ PROJECT=oracle                                     # 项目名（见 §2）
 `--vault` 是 Markdown 目录（Obsidian 打开的那个）；`--index` 是 SQLite 文件，
 **放在 vault 外面**，否则它会被 Obsidian 的文件树看到。
 
-- `--index` 的父目录不存在时会自动创建；
-- `reindex` 要求 `--vault` 是一个**已存在的目录**，否则直接报错退出
+- `--index` 的父目录不存在时会自动创建；不传时按 `--index` → `AUTO_MEMORY_INDEX` →
+  `~/.config/auto-memory/config.json` → 默认路径 这条链解析（见 `docs/usage.md` §3）；
+- `reindex` / `watch` / `mcp` 都会在扫描前检查 `--vault` 是**已存在的目录**，否则报错退出
   （`vault directory not found: ...`）；
-- `mcp` 和 `watch` 不做这个检查，**而且启动时会按 `--vault` 做一次 reconcile**。
-  路径写错时服务照常起来，reconcile 却会认为"vault 里一个文件都没有"，
-  于是把该项目已有的索引行全部 prune 掉（实测 `entities: 1 → 0`）。
-  Markdown 不受影响，`reindex --full` 即可恢复，但"接上 MCP 发现搜不到"往往就是这个原因——
-  **接完 MCP 第一次自检一定要看 vault 路径**（见 §7.1）。
+- **不传 `--vault` 时用的是项目注册表里那条 vault 路径**（`projects` 行本来就有），
+  所以 `project add` 之后 `reindex` / `watch` / `mcp` 不必再传——这也顺带消掉了下面这个坑；
+- 但**传了一个存在却不对的目录**仍然危险：`mcp` / `watch` 启动时会按它做一次 reconcile，
+  目录里没有笔记时 reconcile 会认为"vault 里一个文件都没有"，把该项目已有的索引行全部
+  prune 掉（实测 `entities: 1 → 0`）。Markdown 不受影响，`reindex --full` 即可恢复，但
+  "接上 MCP 发现搜不到"往往就是这个原因——**接完 MCP 第一次自检一定要看 vault 路径**（见 §7.1）。
 
 ### 2.2 project：写命令传"名字"，读命令传"permalink"
 

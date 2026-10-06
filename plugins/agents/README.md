@@ -62,10 +62,23 @@ the only local route. This repo ships one, so from the repo root:
 tact-ui plugin marketplace list            # auto-memory (discovered)
 tact-ui plugin install auto-memory-rs@auto-memory
 tact-ui plugin list
+tact-ui hooks list                         # the package's two hooks land under "Needs review"
+tact-ui hooks trust                        # unapproved hooks are never registered
 ```
 
 The catalog entry's `name` must equal the manifest `name` (`auto-memory-rs` in
 `.codex-plugin/plugin.json`), and `source` is resolved relative to the marketplace root.
+
+**This package is the Codex one.** Tact has its own: [`plugins/tact`](../tact/README.md)
+(same skills and schemas, `.tact/` config paths, `--harness tact`, `tact_session`
+note type). Install one per host — Tact loads the skills of every installed
+plugin, so installing both gives you two near-identical skill sets and two
+`SessionStart` hooks, one of them reading `.codex/`.
+
+Installing *this* package into Tact still works, but only as the Codex
+configuration: the shims hardcode `--harness codex` and the skills read
+`.codex/basic-memory.json`, so a Tact session gets Codex-worded briefs and a
+`codex/<repo>` capture folder.
 
 ## What the hooks do
 
@@ -86,12 +99,13 @@ Both hooks are **fail-open**: `auto-memory` exits 0 on every error path (missing
 index, malformed stdin, unknown project), so a hook can never break a session.
 stdout carries the brief and nothing else; diagnostics go to stderr.
 
-On **Codex** this is what briefs a session. On **Tact** the `SessionStart` half is
-inert: Tact runs the command but does not apply a SessionStart hook's
-`additionalContext` (it only logs a warning), so the brief is discarded. Tact
-*does* apply `UserPromptSubmit` context, so re-point the same script at that event
-if you want the memory brief there — see `docs/hooks.md` §1 for the per-event
-table.
+On **Codex** this is what briefs a session. On **Tact** the `SessionStart` brief is
+applied too — Tact collects a hook's `additionalContext` and injects it as a
+`<hook-context>` message before the first turn (`crates/tact/src/plugin/hooks.rs`,
+`collect_session_start_output`). The shim still has to ask for the Tact harness
+(`--harness tact`) for the brief to be worded for Tact and to read
+`.tact/basic-memory.json`; see the packaging note above and `docs/hooks.md` §1 for the
+per-event table.
 
 ## Configure
 
@@ -117,11 +131,29 @@ The engine reads `primaryProject`, `captureFolder`, `recallTimeframe`,
 `checkpointOnCompact`, and `captureEvents`. A malformed file **fails closed**
 (capture and checkpointing disabled) rather than merging a partial route.
 
-### Environment
+### Where the index and project come from
 
-- `AUTO_MEMORY_BIN` — binary to invoke (default `auto-memory` from `PATH`).
-- `AUTO_MEMORY_INDEX` — index path (default `~/.local/share/auto-memory/memory.db`),
-  used when `--index` is not passed.
+The shims pass no `--index` and no `--project`, so the hook resolves them itself, from files —
+there is nothing to export in a shell profile. Highest precedence first:
+
+1. `--index` / `--project` (a flag, if you wire one up yourself)
+2. `$AUTO_MEMORY_INDEX` — still honoured, no longer the way to configure the tool
+3. the user config file, `~/.config/auto-memory/config.json`:
+
+   ```json
+   { "index": "~/.local/share/auto-memory/memory.db", "default_project": "my-project" }
+   ```
+
+4. the mapping file for the project (`.codex/basic-memory.json` → `primaryProject`), for the
+   project only; the index has no equivalent here
+5. the built-in default index (`~/.local/share/auto-memory/memory.db`); with no project at all the
+   hook prints the first-run nudge instead of guessing
+
+Keys in the config file are **snake_case** (`default_project`), unlike the mapping files'
+camelCase (`primaryProject`) — a camelCase key there is ignored as an unknown key.
+
+`AUTO_MEMORY_BIN` is separate: it selects the binary the shim invokes (default `auto-memory` from
+`PATH`).
 
 ### MCP server
 

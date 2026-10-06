@@ -1,21 +1,23 @@
 //! Harness lifecycle hooks (`auto-memory hook ...`).
 //!
-//! Agents (Codex, Claude Code, Pi) call a hook command at session boundaries:
-//! `SessionStart` on startup/resume/after-compaction, `PreCompact` before the
-//! transcript is summarized. The hook is *advisory*: it reads the index and
-//! prints context, and **every failure path is fail-open** — a hook must never
-//! disrupt a session, so a missing index, malformed stdin, or unknown project
-//! degrades to "no brief" rather than a non-zero exit.
+//! Agents (Codex, Claude Code, Pi, Tact) call a hook command at session
+//! boundaries: `SessionStart` on startup/resume/after-compaction, `PreCompact`
+//! before the transcript is summarized. The hook is *advisory*: it reads the
+//! index and prints context, and **every failure path is fail-open** — a hook
+//! must never disrupt a session, so a missing index, malformed stdin, or
+//! unknown project degrades to "no brief" rather than a non-zero exit.
 //!
 //! This is a scoped port of the reference hook front door
 //! (`basic_memory.cli.commands.hook` + `basic_memory.hooks.adapters`). The first
 //! slice implements the two verbs Codex needs — `session-start` (brief, plus the
 //! post-compaction checkpoint prompt) and `pre-compact` — for the Codex harness.
-//! Not yet ported: the SPEC-55 envelope/inbox WAL, the `install`/`remove`/
-//! `status`/`flush` verbs, transcript extraction, and auto-capture note writing
-//! for Claude/Pi. See `docs/hooks.md`.
+//! Tact was added on top of the reference (its hook contract is Codex-shaped, so
+//! it reuses the same engine and differs only in identity, config path, and
+//! phrasing). Not yet ported: the SPEC-55 envelope/inbox WAL, the
+//! `install`/`remove`/`status`/`flush` verbs, transcript extraction, and
+//! auto-capture note writing for Claude/Pi. See `docs/hooks.md`.
 //!
-//! Contract (identical for Claude Code and Codex plugins):
+//! Contract (identical for Claude Code, Codex, and Tact plugins):
 //!
 //! ```text
 //! stdin : one JSON object  (hook_event_name, session_id, cwd, transcript_path, …)

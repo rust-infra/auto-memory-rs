@@ -44,6 +44,7 @@ It serves streamable HTTP MCP on `/mcp`; see [`docs/release-checklist.md`](docs/
 | `plans/` | execution plans and delivery records |
 | `tools/` | the oracle harness that captures it (needs the reference CLI) |
 | `plugins/agents/` | the Codex plugin package (hooks, skills, schemas) |
+| `plugins/tact/` | the Tact plugin package (same skills/schemas, `.tact/` config, `--harness tact`) |
 
 ## Development
 

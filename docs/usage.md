@@ -75,11 +75,46 @@ auto-memory project remove oracle  --index ~/.local/share/auto-memory/memory.db
 `--no-index` registers without scanning, and `--permalink` decouples the generated-permalink
 prefix from the display name. `project remove` deletes the project's derived rows and leaves the
 markdown alone — the vault is the source of truth, and a lifecycle command should never delete
-your notes. `--index` defaults to `~/.local/share/auto-memory/memory.db` everywhere.
+your notes.
+
+### Where `--index` and `--vault` come from
+
+Every command resolves them through one chain, so a flag is only needed when it differs
+from what is already on disk (`specs/config-discovery-spec.md`):
+
+`--index`, highest precedence first:
+
+1. `--index <path>`
+2. `$AUTO_MEMORY_INDEX` (still honoured, but not the way to configure the tool)
+3. the user config file, `~/.config/auto-memory/config.json`
+4. the built-in default, `~/.local/share/auto-memory/memory.db`
+
+```json
+// ~/.config/auto-memory/config.json — keys are snake_case, like the rest of this file
+{
+  "index": "~/.local/share/auto-memory/memory.db",
+  "default_project": "oracle"
+}
+```
+
+`--vault` (on `reindex`, `watch`, `mcp`, and the `schema` verbs) falls back to the vault the
+project was registered from, so a command that follows `project add` does not repeat it. That is
+also safer than the flag: a typo used to point `mcp`/`watch` reconcile at the wrong directory and
+prune the project's index rows. Either way the directory is checked before anything is scanned.
+
+`default_project` is the fallback for a command that needs a project when nothing more specific
+(like a plugin's `.tact/basic-memory.json`) names one; it is a **permalink**, like those mapping
+files' `primaryProject`, not a display name.
+
+An unusable config file is an error for the CLI and a warning for the hook: a broken file must
+never break a session. `doctor` prints which step each value came from, which is the fastest way
+to answer "why is it using *that* index".
 
 ```bash
-auto-memory reindex --vault ~/vault --index ~/.local/share/auto-memory/memory.db --project oracle
-auto-memory status  --index ~/.local/share/auto-memory/memory.db --project oracle
+auto-memory project add oracle ~/vault --index ~/.local/share/auto-memory/memory.db
+# afterwards, neither --index nor --vault is needed:
+auto-memory reindex --project oracle
+auto-memory status  --project oracle
 ```
 
 `reindex` is incremental (only changed files are rewritten); `--full` prunes stale rows and
