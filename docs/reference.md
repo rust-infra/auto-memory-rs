@@ -9,12 +9,17 @@
 
 | Item | Value |
 |---|---|
-| CLI binary | `/home/rg/.local/bin/basic-memory` |
-| uv tool env | `/home/rg/.local/share/uv/tools/basic-memory/` |
-| Package | `/home/rg/.local/share/uv/tools/basic-memory/lib/python3.14/site-packages/basic_memory` |
-| Config dir (local) | `~/.config/basic-memory/` (`config.json`, `memory.db`(+WAL), `.bmignore`, `fastembed_cache/`, logs) |
+| CLI binary | `~/.local/bin/basic-memory` (a symlink to `~/.local/share/uv/tools/basic-memory/bin/basic-memory`) |
+| uv tool env | `~/.local/share/uv/tools/basic-memory/` |
+| Package | `~/.local/share/uv/tools/basic-memory/lib/python3.13/site-packages/basic_memory` |
+| Config dir (local) | `~/.config/basic-memory/` (`config.json`, `memory.db`(+WAL), `.bmignore`, `fastembed_cache/`, logs — created on first use, so a fresh install holds only the model cache) |
 | Project layout | Markdown vault + `.basic-memory/config.json` (project config only) |
-| Python | 3.14 (uv tool venv) |
+| Python | 3.13 (uv tool venv) |
+
+These are machine-local paths. Re-read them before trusting the citations below: `basic-memory
+--version` must say `0.23.2`, and the `site-packages` segment moves with the interpreter's minor
+version whenever the tool is reinstalled — that is exactly how `src/runtime/embedding.rs` once
+lost the ONNX Runtime (it hardcoded `python3.14`; see `docs/README.md`, productization pass).
 
 The names in that table — and the `BASIC_MEMORY_*` variables and `.basic-memory/` directory used
 below — are the upstream project's **own identifiers**, recorded verbatim. They are not this

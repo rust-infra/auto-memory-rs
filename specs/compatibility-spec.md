@@ -129,7 +129,12 @@ Tracked here; move to `codex/decisions` as they resolve:
 6. Tie-break secondary sort key.
 7. Symlink policy, `.bmignore` parity, hidden-file policy.
 8. Checksum algorithm parity (`file_utils.compute_checksum`).
-9. CLI command/text parity scope (status/doctor/reindex/orphans/project/config).
+9. CLI command/text parity scope (status/doctor/reindex/orphans/project/config). **Inventoried
+    2026-10-02** — the full reference-verb → port-status table is in
+    `docs/release-checklist.md` §6a. Standing rule: the contract covers the MCP tool surface and
+    observable search/parse/index behavior, not the CLI verb list. Two verbs share a name but not
+    a job (`status`, `doctor`). Still open: whether to port the filesystem-facing verbs
+    (`format`, `import`, `reset`).
 10. `write_note_overwrite_default` default value parity.
 11. Rust crate layout: single crate vs workspace (decision deferred until parser milestone).
 12. Licenses/trademark: AGPL-3.0 obligations and `auto-memory-rs` naming. **Answered

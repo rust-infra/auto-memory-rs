@@ -41,7 +41,7 @@ Project specs and plans are stored outside the user-documentation tree in `../sp
 | [visuals/pipeline-tutorial.mp4](visuals/pipeline-tutorial.mp4) | **合并版**：封面 + 向量化 7 步 + 章节卡 + 检索 7 步，共 14 步连续播放（H.264，1180×1420，30 fps，21.3 s，1.07 MB，内嵌 16 个章节标记） |
 | [visuals/pipeline-tutorial-music.mp4](visuals/pipeline-tutorial-music.mp4) | 同上，但带一段极简和弦背景音（ffmpeg 合成，无版权素材；视频流与上面完全一致，AAC 128k，1.31 MB） |
 | [visuals/pipeline-tutorial-narrated.mp4](visuals/pipeline-tutorial-narrated.mp4) | **中文旁白版**：同样 14 步，但每步停留按讲解长度重排（2 分 35 秒），旁白用 edge-tts 神经语音 `zh-CN-XiaoxiaoNeural` 生成（2 分 29 秒），仍带 16 个章节标记；旁白稿与换音色方法见 [visuals/pipeline-tutorial-narration.md](visuals/pipeline-tutorial-narration.md) |
-| [release-checklist.md](release-checklist.md) | Quality gates, compatibility evidence, offline/perf smoke, parked work |
+| [release-checklist.md](release-checklist.md) | Quality gates, compatibility evidence, offline/perf smoke, parked work, and the CLI surface inventory (§6a) |
 | [compatibility-spec.md](../specs/compatibility-spec.md) | Golden-test strategy, canonicalization, oracle harness, open decisions |
 | [licensing.md](licensing.md) | AGPL-3.0-or-later status, the derivative relationship to the upstream project, and which commercial models it permits |
 | [patterns.md](patterns.md) | Design patterns in use, ones deliberately avoided, and the trigger to revisit each |
@@ -49,7 +49,7 @@ Project specs and plans are stored outside the user-documentation tree in `../sp
 | [../tests/golden/README.md](../tests/golden/README.md) | Golden corpus layout, canonicalization, verified behaviors |
 | [review-and-gaps-2026-09-09.md](review-and-gaps-2026-09-09.md) | Doc review + gap log (2026-09-09) |
 
-## Status (2026-09-10)
+## Status (through 2026-09-19)
 
 - Phase 0 (reference baseline + contract docs): **done** — reference.md + data/search/context/mcp/compatibility specs created from the installed 0.23.2 source.
 - Phase 1 (golden corpus + oracle harness): **done** — `tools/export_reference.py` + `tests/fixtures/vault` + golden artifacts (parse/index/search/context in JSON, plain text and markdown/cli/errors + 17 normalized vault files) + `tests/common/` (shared canonicalization + fixture/Session helpers). The harness now also dumps the reference graph rows and its `find_related` traversal (`tools/dump_reference_graph.py`) and replays the MCP markdown formatter (`tools/dump_reference_context_text.py`).

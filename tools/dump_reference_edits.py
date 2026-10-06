@@ -3,7 +3,7 @@
 
 Run with the *reference* interpreter:
 
-    /home/rg/.local/share/uv/tools/basic-memory/bin/python tools/dump_reference_edits.py
+    ~/.local/share/uv/tools/basic-memory/bin/python tools/dump_reference_edits.py
 
 `basic_memory.services.note_preparation` implements the edit semantics as pure text
 functions (`apply_edit_operation`, `replace_section_content`,

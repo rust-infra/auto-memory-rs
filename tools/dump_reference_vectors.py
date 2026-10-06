@@ -4,7 +4,7 @@
 Run with the reference interpreter (needs the reference DB built by
 `tools/export_reference.py` and the fastembed cache copied into its work dir):
 
-    /home/rg/.local/share/uv/tools/basic-memory/bin/python \
+    ~/.local/share/uv/tools/basic-memory/bin/python \
         tools/dump_reference_vectors.py --workdir /tmp/basic-memory-oracle-xxxx
 
 Writes `tests/golden/vector/chunks.json` and `embeddings.json`. The model is the

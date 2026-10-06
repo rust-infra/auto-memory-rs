@@ -3,7 +3,7 @@
 
 Run with the *reference* interpreter against an oracle work dir:
 
-    /home/rg/.local/share/uv/tools/basic-memory/bin/python \
+    ~/.local/share/uv/tools/basic-memory/bin/python \
         tools/dump_reference_graph.py --db /tmp/basic-memory-oracle-XXXX/config/memory.db
 
 Two artifacts are produced:
