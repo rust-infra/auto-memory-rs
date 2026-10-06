@@ -140,8 +140,9 @@ const PI: HarnessProfile = HarnessProfile {
 /// way — a coding agent working in a repository — so the recall window, the
 /// capture-folder namespacing and the "keep required rules in AGENTS.md"
 /// guidance all carry over. What differs is the identity stamped on events, the
-/// settings file (`.tact/basic-memory.json`, matching Tact's own `.tact/`
-/// layout) and the phrasing shown to the reader.
+/// settings file (`.tact/auto-memory.json` under an `autoMemory` block — Tact's
+/// own file, since nothing else reads `.tact/`) and the phrasing shown to the
+/// reader.
 ///
 /// `session_note_type` / `recall_session_types` are `tact_session`, matching the
 /// note type the Tact plugin package writes
@@ -158,10 +159,10 @@ const TACT: HarnessProfile = HarnessProfile {
     default_recall_prompt: "Search Auto Memory before answering questions about prior decisions or \
         status. Capture durable engineering decisions as typed decision notes. Use Auto Memory as \
         durable context, but keep required repo rules in AGENTS.md or checked-in docs.",
-    setup_nudge: "_This repo is not configured for Auto Memory yet. Add `.tact/basic-memory.json` \
-        with a `basicMemory.primaryProject` naming the project permalink to turn on session \
+    setup_nudge: "_This repo is not configured for Auto Memory yet. Add `.tact/auto-memory.json` \
+        with an `autoMemory.primaryProject` naming the project permalink to turn on session \
         briefings for this repo._",
-    pin_tip: "_Tip: set `basicMemory.primaryProject` in `.tact/basic-memory.json` to pin this \
+    pin_tip: "_Tip: set `autoMemory.primaryProject` in `.tact/auto-memory.json` to pin this \
         project._",
     status_hint: "Run `auto-memory project list` to check the Auto Memory project mapping.",
 };

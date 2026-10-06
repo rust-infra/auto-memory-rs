@@ -280,7 +280,8 @@ fn cli_unknown_harness_fails_open() {
     );
 }
 
-/// The first-run nudge names the file Tact actually reads.
+/// The first-run nudge names the file Tact actually reads — auto-memory's own
+/// `auto-memory.json`, never the upstream `basic-memory.json`.
 #[tokio::test(flavor = "multi_thread")]
 async fn tact_brief_points_at_the_tact_config_file() {
     let (_dir, store, project_id) = common::indexed_store("hook-tact-nudge");
@@ -293,7 +294,8 @@ async fn tact_brief_points_at_the_tact_config_file() {
         None,
     )
     .await;
-    assert!(brief.contains(".tact/basic-memory.json"), "{brief}");
+    assert!(brief.contains(".tact/auto-memory.json"), "{brief}");
+    assert!(!brief.contains("basic-memory.json"), "{brief}");
     assert!(!brief.contains(".codex/"), "{brief}");
 }
 

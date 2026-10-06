@@ -63,9 +63,11 @@ Precedence, highest first. `[new]` marks a step this spec adds.
 ### 3.2 Project (permalink)
 
 1. `--project <permalink>`
-2. the harness mapping file's `primaryProject` — `.tact/basic-memory.json`,
-   `.codex/basic-memory.json`, `.claude/settings.json`, `.pi/basic-memory.json`, resolved from
-   `--project-dir` or the payload `cwd` *(unchanged; `src/hooks/settings.rs`)*
+2. the harness mapping file's `primaryProject` — `.tact/auto-memory.json` (an `autoMemory`
+   block; auto-memory's own file, since nothing else reads `.tact/`),
+   `.codex/basic-memory.json`, `.claude/settings.json`, `.pi/basic-memory.json` (the reference
+   product's names, which it reads too), resolved from `--project-dir` or the payload `cwd`
+   *(unchanged; `src/hooks/settings.rs`)*
 3. `[new]` user config `default_project` key (§4)
 4. no project: print the first-run nudge and stop (fail-open, §5)
 
@@ -133,7 +135,7 @@ it is inspecting.
 ## 6. First-run nudge becomes actionable
 
 Today, when no project resolves, the hook prints the profile's `setup_nudge` ("this repo is not
-configured yet, add `.tact/basic-memory.json`"). It does not say **what to put in it**, and the
+configured yet, add `.tact/auto-memory.json`"). It does not say **what to put in it**, and the
 user has to run `auto-memory project list` to find a permalink.
 
 `[new]` The message gains a second paragraph naming the permalinks the index actually has:
@@ -141,8 +143,8 @@ user has to run `auto-memory project list` to find a permalink.
 ```
 # Auto Memory
 
-_This repo is not configured for Auto Memory yet. Add `.tact/basic-memory.json` with a
-`basicMemory.primaryProject` naming the project permalink to turn on session briefings for this
+_This repo is not configured for Auto Memory yet. Add `.tact/auto-memory.json` with an
+`autoMemory.primaryProject` naming the project permalink to turn on session briefings for this
 repo._
 
 _Registered projects in this index: oracle, work-notes._

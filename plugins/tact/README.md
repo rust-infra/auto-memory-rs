@@ -78,12 +78,12 @@ stderr.
 
 Project mapping is read from JSON, project keys overriding user keys:
 
-1. `~/.tact/basic-memory.json`
-2. `<nearest ancestor>/.tact/basic-memory.json`
+1. `~/.tact/auto-memory.json`
+2. `<nearest ancestor>/.tact/auto-memory.json`
 
 ```json
 {
-  "basicMemory": {
+  "autoMemory": {
     "primaryProject": "my-project",
     "captureFolder": "tact/my-repo",
     "recallTimeframe": "7d",
@@ -111,7 +111,7 @@ there is nothing to export in a shell profile. Highest precedence first:
    { "index": "~/.local/share/auto-memory/memory.db", "default_project": "my-project" }
    ```
 
-4. the mapping file for the project (`.tact/basic-memory.json` → `primaryProject`), for the
+4. the mapping file for the project (`.tact/auto-memory.json` → `primaryProject`), for the
    project only; the index has no equivalent here
 5. the built-in default index (`~/.local/share/auto-memory/memory.db`); with no project at all the
    hook prints the first-run nudge instead of guessing
@@ -156,7 +156,7 @@ the skills call.
 |---|---|---|
 | Plugin id | `auto-memory-rs` | `auto-memory-tact` |
 | Shims | `--harness codex` | `--harness tact` |
-| Mapping file | `~/.codex/basic-memory.json`, `.codex/…` | `~/.tact/basic-memory.json`, `.tact/…` |
+| Mapping file | `~/.codex/basic-memory.json`, `.codex/…` | `~/.tact/auto-memory.json`, `.tact/…` |
 | Session note type | `codex_session` | `tact_session` |
 | Checkpoint title | `Codex checkpoint - …` | `Tact checkpoint - …` |
 

@@ -21,7 +21,7 @@ hook 前端 + `plugins/agents/` 包**大部分能直接跑**，缺的是"Tact �
 | 纯文本 stdout | ✅ SessionStart / UserPromptSubmit 的非 JSON stdout 直接当 context | 就是纯文本 | 无需改 |
 | stdin payload 字段 | `session_id`（真实会话 id）、`cwd`、`hook_event_name`、`source`、`model`、`permission_mode`、`turn_id`、`transcript_path: null` | Codex 分支读 `source`→trigger、`turn_id`、`model` | 字段已对齐，但见 §2.1 |
 | `--harness` | — | ✅ 已支持 `claude` / `codex` / `pi` / `tact` | 完成（§2.1） |
-| 项目映射配置 | — | ✅ 另读 `~/.tact/basic-memory.json` + `.tact/basic-memory.json` | 完成（§2.1） |
+| 项目映射配置 | — | ✅ 另读 `~/.tact/auto-memory.json` + `.tact/auto-memory.json`（`autoMemory` 块） | 完成（§2.1） |
 | 插件包 | 读 `.codex-plugin/plugin.json` + `hooks/hooks.json`，`${CLAUDE_PLUGIN_ROOT}` 会展开 | 整包是 Codex 的（wrapper 硬编码 `--harness codex`） | 出 Tact 版措辞/wrapper |
 | `PreCompact` 的 stdout | **忽略**（只用 `control` 做 veto） | 自己也早退，不打印 | 无需改，见 §2.4 |
 | 市场来源 | `file://` 与裸本地路径都不接受；只认 `owner/repo` / git URL / 本地发现 | 仓库根有 `.agents/plugins/marketplace.json` | ✅ 已核对（§2.5）：**插件必须先 commit**，tact 从 HEAD 的 git tree 复制 |
@@ -40,10 +40,13 @@ hook 前端 + `plugins/agents/` 包**大部分能直接跑**，缺的是"Tact �
   skill 的词汇**（`codex_turn_id`、`codex_session`），理由见 §2.2 末段。
 - `src/hooks/event.rs` — normalize 加 `Tact` 分支，与 Codex 共用 `turn_id` / `model`。
   `transcript_path: null` 被现有的 `field()` 归一成空，不用特判（有单测钉住真实 payload）。
-- `src/hooks/settings.rs` — 新增 `load_tact_settings`：读 user `~/.tact/basic-memory.json` +
-  最近的含 `<root>/.tact/basic-memory.json` 的祖先目录，坏文件 fail-closed。Codex 和 Tact
-  的加载器合并成一个 `load_agent_dir_settings`（只有 `.codex` / `.tact` 和 profile 不同），
+- `src/hooks/settings.rs` — 新增 `load_tact_settings`：读 user `~/.tact/auto-memory.json` +
+  最近的含 `<root>/.tact/auto-memory.json` 的祖先目录，坏文件 fail-closed。Codex 和 Tact
+  的加载器合并成一个 `load_agent_dir_settings`（目录、文件名、块键、profile 不同），
   capture 目录的按仓库分目录逻辑也合并成 `repo_scoped_capture_folder`。
+  **文件名故意和 Codex 那份不同**：`.codex/basic-memory.json` 是参考实现自己也在读的文件
+  （互操作面，名字不能改），而 `.tact/` 下没有任何别的东西在读，所以 auto-memory 用自己的
+  `auto-memory.json` + `autoMemory` 块，不借用别人的名字。
 - `src/main.rs` — `--harness tact` 可用；checkpoint 闸门从 Codex-only 放宽到
   `Codex | Tact`；**未知 `--harness` 改成 fail-open**（warn + exit 0，不再走 `usage()` 的
   exit 2），这样"任何失败都 exit 0"对整条命令成立。
@@ -77,7 +80,7 @@ echo '{"hook_event_name":"SessionStart","cwd":"/abs/repo","source":"startup"}' \
 
 **两个选项**
 
-- **(a) 一个包 + 一个环境变量**：薄壳改成 `harness="${AUTO_MEMORY_HARNESS:-codex}"`；清单和 skill 文案改中性；skill 里的路径写成"`~/.codex/basic-memory.json` 或 `~/.tact/basic-memory.json`"。
+- **(a) 一个包 + 一个环境变量**：薄壳改成 `harness="${AUTO_MEMORY_HARNESS:-codex}"`；清单和 skill 文案改中性；skill 里的路径写成"`~/.codex/basic-memory.json` 或 `~/.tact/auto-memory.json`"。
   好处只有一份 skill/schema；代价是 Tact 用户得在 shell rc 里 export 一个变量（hook 继承宿主环境）——**而这正是 §2.3 要消灭的配置方式**。
 - **(b) 两个包**：`plugins/agents/`（Codex，不动）+ `plugins/tact/`（复制一份，改薄壳、清单 `name`、skill 里的路径与措辞、schema 的 entity 名）。
   好处是各自措辞正确、可独立更新，也和参考实现按 harness 分包的做法一致（本 port 的 README 说 skills/schemas 是从参考实现的 `plugins/codex` 移植的，claude-code / pi 那两份还没移植）；代价是约 600 行双份维护，catalog 要两条 entry。
@@ -156,7 +159,7 @@ echo '{"hook_event_name":"SessionStart","cwd":"/abs/repo","source":"startup"}' \
   `reindex` / `watch` / `mcp` 在项目注册之后不必再传 `--vault`；而且这比接受用户输入**更安全**
   ——路径打错不会再让 reconcile prune 掉索引行（integration-guide §2.1 那个坑）。
 - 首跑提示改成可执行：列出索引里已注册的 permalink，让用户知道该往
-  `.tact/basic-memory.json` 里填什么；**不做"只有一个项目就猜它"**——猜错比没有更糟。
+  `.tact/auto-memory.json` 里填什么；**不做"只有一个项目就猜它"**——猜错比没有更糟。
 - `doctor` 打印每个值的**来源**（哪个文件 / 哪一步 / 默认），排障一条命令。
 
 这一步做完，tact-ui 侧就是**零配置**：装插件、trust、完事。

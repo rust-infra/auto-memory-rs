@@ -10,8 +10,8 @@ choice with rationale and consequences, not a casual preference.
 
 ## Steps
 
-1. Resolve `~/.tact/basic-memory.json`, then the nearest project
-   `.tact/basic-memory.json`; project keys override user keys:
+1. Resolve `~/.tact/auto-memory.json`, then the nearest project
+   `.tact/auto-memory.json`; project keys override user keys:
    - write to `primaryProject` when set
    - follow `placementConventions` for the directory when they are specific
    - otherwise use `tact/decisions`

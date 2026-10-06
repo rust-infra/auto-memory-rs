@@ -302,14 +302,15 @@ auto-memory hook <session-start|pre-compact> --harness <claude|codex|pi|tact> \
 |---|---|
 | `src/hooks/profiles.rs` | 每 harness 的默认值/文案（recall 窗口、capture 目录、session note type、checkpoint 提示） |
 | `src/hooks/event.rs` | 把各 harness 的 stdin JSON 归一成 `NormalizedHookEvent` |
-| `src/hooks/settings.rs` | 合并 user / project 配置（`.codex/basic-memory.json`、`.tact/basic-memory.json`、`.claude/settings.json` 的 `basicMemory` 块）；坏文件 **fail-closed** |
+| `src/hooks/settings.rs` | 合并 user / project 配置（`.codex/basic-memory.json` 的 `basicMemory` 块、`.tact/auto-memory.json` 的 `autoMemory` 块、`.claude/settings.json`、`.pi/basic-memory.json`）；坏文件 **fail-closed** |
 | `src/hooks/brief.rs` | 组装 SessionStart brief（fenced 数据 + 截断边界 + 写作指引） |
 | `src/hooks/checkpoint.rs` | 压缩后的 checkpoint 提示（附 host 元数据；按 harness 选提示文本，元数据键沿用 skill 的 `codex_turn_id`） |
 
 **`tact` 是 port 自己加的 harness**（参考实现没有）：Tact 的 hook 契约和 Codex 同源，
 stdin 字段也对得上（`session_id` / `cwd` / `source` / `turn_id` / `model`，只有
 `transcript_path` 恒为 `null`），所以它复用同一套引擎，差异只在三处——事件上盖的 identity
-（`tact`）、读的配置文件（`.tact/basic-memory.json`，与 Tact 自己的 `.tact/` 布局一致）、
+（`tact`）、读的配置文件（`.tact/auto-memory.json` 的 `autoMemory` 块——**auto-memory 自己的
+文件**：参考实现从不读 `.tact/` 下的任何东西，所以名字不用跟它一致）、
 以及打印给用户的文案。验证不需要起 TUI：
 
 ```bash

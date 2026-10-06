@@ -10,8 +10,8 @@ a small fact that should survive the current thread.
 
 ## Steps
 
-1. Read `~/.tact/basic-memory.json`, then the nearest project
-   `.tact/basic-memory.json`; project keys override user keys:
+1. Read `~/.tact/auto-memory.json`, then the nearest project
+   `.tact/auto-memory.json`; project keys override user keys:
    - `primaryProject`, default omitted
    - `rememberFolder`, default `tact/remember`
 

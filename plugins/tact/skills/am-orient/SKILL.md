@@ -11,8 +11,8 @@ permalink, or topic after `$am-orient`.
 
 ## Resolve Configuration
 
-Read `~/.tact/basic-memory.json`, then the nearest project
-`.tact/basic-memory.json`; project keys override user keys. Use
+Read `~/.tact/auto-memory.json`, then the nearest project
+`.tact/auto-memory.json`; project keys override user keys. Use
 `primaryProject`, `secondaryProjects`, `recallTimeframe`, `sessionProfile`,
 `repository`, and `placementConventions`. If the file is missing, continue
 against the default Auto Memory project and mention that setup has not been

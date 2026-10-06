@@ -115,7 +115,7 @@ also safer than the flag: a typo used to point `mcp`/`watch` reconcile at the wr
 prune the project's index rows. Either way the directory is checked before anything is scanned.
 
 `default_project` is the fallback for a command that needs a project when nothing more specific
-(like a plugin's `.tact/basic-memory.json`) names one; it is a **permalink**, like those mapping
+(like a plugin's `.tact/auto-memory.json`) names one; it is a **permalink**, like those mapping
 files' `primaryProject`, not a display name.
 
 An unusable config file is an error for the CLI and a warning for the hook: a broken file must

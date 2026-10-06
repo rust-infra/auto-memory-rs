@@ -11,8 +11,8 @@ the post-compaction SessionStart context requests the deliberate handoff.
 
 ## Gather
 
-Read `~/.tact/basic-memory.json`, then the nearest project
-`.tact/basic-memory.json`; project keys override user keys:
+Read `~/.tact/auto-memory.json`, then the nearest project
+`.tact/auto-memory.json`; project keys override user keys:
 
 - `primaryProject`, default omitted
 - `captureFolder`, default `tact/<git top-level directory name>`

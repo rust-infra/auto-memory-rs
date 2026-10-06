@@ -104,7 +104,7 @@ applied too — Tact collects a hook's `additionalContext` and injects it as a
 `<hook-context>` message before the first turn (`crates/tact/src/plugin/hooks.rs`,
 `collect_session_start_output`). The shim still has to ask for the Tact harness
 (`--harness tact`) for the brief to be worded for Tact and to read
-`.tact/basic-memory.json`; see the packaging note above and `docs/hooks.md` §1 for the
+`.tact/auto-memory.json`; see the packaging note above and `docs/hooks.md` §1 for the
 per-event table.
 
 ## Configure
