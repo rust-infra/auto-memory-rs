@@ -55,6 +55,78 @@ async fn brief_reports_project_and_stays_bounded() {
     assert!(brief.chars().count() <= auto_memory::hooks::profiles::MAX_BRIEF_CHARS);
 }
 
+/// A scratch vault holding one session note of `note_type`, indexed.
+async fn vault_with_one_session(tag: &str, note_type: &str) -> (common::Scratch, Store, i64) {
+    let scratch = common::Scratch::new(tag);
+    let vault = scratch.join("vault");
+    let note = vault.join("tact/demo/checkpoint.md");
+    std::fs::create_dir_all(note.parent().expect("parent")).expect("mkdir");
+    std::fs::write(
+        &note,
+        format!(
+            "---\ntitle: Checkpoint probe\ntype: {note_type}\nstatus: open\n---\n\n\
+             # Checkpoint probe\n\n- [fact] a session note for recall\n"
+        ),
+    )
+    .expect("write note");
+
+    let mut store = Store::open_in_memory().await.expect("store");
+    let project_id = store
+        .upsert_project("oracle", "oracle", &vault.to_string_lossy())
+        .await
+        .expect("project");
+    rebuild_vault(
+        &mut store,
+        project_id,
+        &vault,
+        &RebuildOptions::new("oracle"),
+    )
+    .await
+    .expect("rebuild");
+    (scratch, store, project_id)
+}
+
+/// A recall window is a relative expression (`7d`), and it has to be resolved
+/// before it reaches SQL. Regression: the brief passed it straight into
+/// `datetime(updated_at) > datetime(?)`, which SQLite reads as `NULL`, so
+/// "Recent sessions" came back empty on every default profile.
+#[tokio::test(flavor = "multi_thread")]
+async fn brief_recalls_a_recent_session_through_the_relative_window() {
+    let (_scratch, store, project_id) =
+        vault_with_one_session("hook-recall-window", "tact_session").await;
+    let brief = build_session_brief(
+        &store,
+        project_id,
+        Harness::Tact.profile(),
+        &tact_settings(),
+        true,
+        None,
+    )
+    .await;
+    assert!(brief.contains("Recent sessions"), "{brief}");
+    assert!(brief.contains("Checkpoint probe"), "{brief}");
+}
+
+/// The Tact profile recalls Codex-written checkpoints too. The vault is shared,
+/// and the Tact package already reads `codex_session_id` as a legacy field — so a
+/// brief that hides the checkpoints the same vault already holds is worse than
+/// one that shows another host's.
+#[tokio::test(flavor = "multi_thread")]
+async fn tact_brief_recalls_a_codex_written_checkpoint() {
+    let (_scratch, store, project_id) =
+        vault_with_one_session("hook-recall-cross", "codex_session").await;
+    let brief = build_session_brief(
+        &store,
+        project_id,
+        Harness::Tact.profile(),
+        &tact_settings(),
+        true,
+        None,
+    )
+    .await;
+    assert!(brief.contains("Checkpoint probe"), "{brief}");
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn checkpoint_prompt_prefixes_the_brief() {
     let (_dir, store, project_id) = common::indexed_store("hook-checkpoint");

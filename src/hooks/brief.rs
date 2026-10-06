@@ -12,6 +12,7 @@
 
 use std::collections::BTreeMap;
 
+use crate::domain::dateparser;
 use crate::domain::search::SearchResult;
 use crate::search::text::TextSearchOptions;
 use crate::storage::Store;
@@ -234,7 +235,14 @@ async fn query(
     let options = TextSearchOptions {
         note_types: note_types.iter().map(|value| (*value).to_owned()).collect(),
         status: status.map(str::to_owned),
-        after_date: after_date.map(str::to_owned),
+        // A recall window is a *relative* expression (`7d`), not a timestamp, and
+        // `search_text` binds `after_date` straight into
+        // `datetime(updated_at) > datetime(?)`. SQLite reads `datetime('7d')` as
+        // NULL, so passing the raw window silently matches nothing — the whole
+        // "recent sessions" section came back empty on every default profile.
+        // Resolve it the way the CLI does; an unparsable value means "no bound",
+        // which is what the reference does with a `dateparser` miss.
+        after_date: after_date.and_then(dateparser::parse_after_date),
         metadata_filters: repository
             .map(|repository| BTreeMap::from([("repository".to_owned(), repository.to_owned())]))
             .unwrap_or_default(),

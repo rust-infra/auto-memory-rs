@@ -154,7 +154,12 @@ const TACT: HarnessProfile = HarnessProfile {
     default_recall_timeframe: "7d",
     default_capture_folder: "tact",
     session_note_type: "tact_session",
-    recall_session_types: &["tact_session"],
+    // Also recall Codex-written checkpoints. The vault is shared — the Tact
+    // package keeps `codex_session_id` as a legacy field precisely because a
+    // vault may already hold Codex-authored notes — so a brief that hides them
+    // would be worse than one that shows another host's. `session_note_type`
+    // stays `tact_session`: that one is what this harness *writes*.
+    recall_session_types: &["tact_session", "codex_session"],
     coding_session_note_type: "coding_session",
     default_recall_prompt: "Search Auto Memory before answering questions about prior decisions or \
         status. Capture durable engineering decisions as typed decision notes. Use Auto Memory as \
