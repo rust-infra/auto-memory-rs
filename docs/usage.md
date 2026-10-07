@@ -28,12 +28,24 @@ cargo build --release            # add --offline when the registry cache is warm
 ./target/release/auto-memory --version
 ```
 
+To put the binary on `PATH` in one step:
+
+```bash
+cargo install --path .           # → ~/.cargo/bin/auto-memory
+```
+
+`--path .` is not optional: cargo no longer treats the working directory as an implicit source,
+so a bare `cargo install --bin auto-memory` is rejected. The release build pulls `fastembed` /
+`ort` / `tokenizers`, so the first one is slow — `cargo install --path . --debug` is much faster
+if you only want a runnable binary, and `--root <dir>` installs elsewhere without touching
+`~/.cargo/bin`.
+
 Either way, the first thing to run afterwards is `auto-memory doctor`, which reports
 whether the index, the embedding runtime, and the model cache are usable.
 
 The embedding runtime (`search --vector` / `--hybrid`, `reindex --embeddings`) needs the fastembed
 cache and the ONNX Runtime shared library; text search, context, schema, and the MCP server work
-without either. See `docs/auto-memory-rs-execution-plan.md` Phase 8b for the model details.
+without either. See `plans/auto-memory-rs-execution-plan.md` Phase 8b for the model details.
 
 ## 2. The vault
 
@@ -75,11 +87,46 @@ auto-memory project remove oracle  --index ~/.local/share/auto-memory/memory.db
 `--no-index` registers without scanning, and `--permalink` decouples the generated-permalink
 prefix from the display name. `project remove` deletes the project's derived rows and leaves the
 markdown alone — the vault is the source of truth, and a lifecycle command should never delete
-your notes. `--index` defaults to `~/.local/share/auto-memory/memory.db` everywhere.
+your notes.
+
+### Where `--index` and `--vault` come from
+
+Every command resolves them through one chain, so a flag is only needed when it differs
+from what is already on disk (`specs/config-discovery-spec.md`):
+
+`--index`, highest precedence first:
+
+1. `--index <path>`
+2. `$AUTO_MEMORY_INDEX` (still honoured, but not the way to configure the tool)
+3. the user config file, `~/.config/auto-memory/config.json`
+4. the built-in default, `~/.local/share/auto-memory/memory.db`
+
+```json
+// ~/.config/auto-memory/config.json — keys are snake_case, like the rest of this file
+{
+  "index": "~/.local/share/auto-memory/memory.db",
+  "default_project": "oracle"
+}
+```
+
+`--vault` (on `reindex`, `watch`, `mcp`, and the `schema` verbs) falls back to the vault the
+project was registered from, so a command that follows `project add` does not repeat it. That is
+also safer than the flag: a typo used to point `mcp`/`watch` reconcile at the wrong directory and
+prune the project's index rows. Either way the directory is checked before anything is scanned.
+
+`default_project` is the fallback for a command that needs a project when nothing more specific
+(like a plugin's `.tact/auto-memory.json`) names one; it is a **permalink**, like those mapping
+files' `primaryProject`, not a display name.
+
+An unusable config file is an error for the CLI and a warning for the hook: a broken file must
+never break a session. `doctor` prints which step each value came from, which is the fastest way
+to answer "why is it using *that* index".
 
 ```bash
-auto-memory reindex --vault ~/vault --index ~/.local/share/auto-memory/memory.db --project oracle
-auto-memory status  --index ~/.local/share/auto-memory/memory.db --project oracle
+auto-memory project add oracle ~/vault --index ~/.local/share/auto-memory/memory.db
+# afterwards, neither --index nor --vault is needed:
+auto-memory reindex --project oracle
+auto-memory status  --project oracle
 ```
 
 `reindex` is incremental (only changed files are rewritten); `--full` prunes stale rows and
@@ -258,6 +305,19 @@ link-before-target paths; `tests/incremental_golden.rs` pins incremental/full co
   stages, which this port's tests cover directly against captured reference output instead.
   `auto-memory doctor` is **not** that command — it is new, and reports the local environment
   (index, schema, vault, projects, ONNX Runtime, model cache) rather than retrieval internals.
+
+- **The reference's CLI verb list is not fully ported.** The compatibility contract covers the MCP
+  tool surface and the observable search/parse/index behavior, not every `bm` subcommand. Not
+  ported: `format`, `import`, `reset`, `config`, `tool`, `man`, `update`. Partial: `project` (no
+  `default`/`move`/`ls`/`info`) and `hook` (no installer/inbox verbs). `mcp` has no `sse`
+  transport. `status` shares the reference's name but prints index counts rather than the
+  project-index observation. The verb-by-verb inventory is `docs/release-checklist.md` §6a.
+
+- **`config.json` is not read.** The reference's behavior knobs (`ensure_frontmatter_on_sync`,
+  `permalinks_include_project`, `disable_permalinks`, `index_changes`,
+  `update_permalinks_on_move`) are pinned to their reference defaults — that is the other half of
+  the "the vault is never rewritten" bullet above — and per-run settings come from CLI flags and
+  the harness mapping. A `config.json` that changes one of those defaults is ignored.
 
 Everything else is pinned against captured reference behavior; see `docs/reference.md` for the
 per-phase evidence and `tests/golden/README.md` for the corpus.

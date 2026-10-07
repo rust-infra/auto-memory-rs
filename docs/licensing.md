@@ -3,7 +3,7 @@
 - **Status:** Engineering analysis. Not legal advice — a lawyer has to sign off before any
   commercial commitment, and this document is the input to that review.
 - **Date:** 2026-09-19
-- **Resolves:** open decision #12 in `docs/compatibility-spec.md` §7 ("AGPL-3.0 obligations and
+- **Resolves:** open decision #12 in `specs/compatibility-spec.md` §7 ("AGPL-3.0 obligations and
   `auto-memory-rs` naming (needs legal review)").
 
 ## 1. What this repository is licensed under
@@ -24,7 +24,7 @@ deliberately, documentedly a port of **Basic Memory 0.23.2**:
 |---|---|
 | The pinned baseline, its version, and its source files | `docs/reference.md` §1–§3 |
 | Reference is `License: AGPL-3.0-or-later` (verified in the installed distribution's `METADATA`) | `basic_memory-0.23.2.dist-info/METADATA:9` |
-| `Store::find_related` "ports the reference recursive CTE **verbatim**" | `docs/auto-memory-rs-execution-plan.md` §0, Phase 9 |
+| `Store::find_related` "ports the reference recursive CTE **verbatim**" | `plans/auto-memory-rs-execution-plan.md` §0, Phase 9 |
 | `src/search/chunking.rs` — "reference chunking port" | same, Phase 8 |
 | `src/schema/` — "ports the whole `basic_memory.picoschema` package as five modules" | same, Phase 12–13 |
 | `src/markdown/serialize.rs` — PyYAML-compatible emitter, verified byte-for-byte | same, Phase 10 |

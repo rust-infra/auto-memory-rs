@@ -3,7 +3,7 @@
 
 Run with the *reference* interpreter:
 
-    /home/rg/.local/share/uv/tools/basic-memory/bin/python \
+    ~/.local/share/uv/tools/basic-memory/bin/python \
         tools/dump_reference_context_text.py --payload <raw-payload.json> --project oracle
 
 `bm tool build-context --json` always asks the MCP tool for ``output_format="json"``

@@ -4,9 +4,10 @@
 //! (0.23.2, see `docs/reference.md`) while organizing the code in
 //! idiomatic Rust. Markdown is the source of truth; every index is rebuildable.
 //!
-//! Layering rule: adapters (CLI/MCP/filesystem) depend on application services,
-//! which depend on the domain and infrastructure. The domain must not depend on
-//! CLI, MCP, SQLite, or a concrete embedding runtime.
+//! Layering rule: adapters depend on application services, which depend on the domain
+//! and infrastructure. The domain must not depend on CLI, MCP, SQLite, or a concrete
+//! embedding runtime. `adapters::mcp` is the only adapter with a body — the CLI is the
+//! binary in `src/main.rs`, and vault I/O belongs to `indexing`.
 #![warn(missing_docs)]
 #![warn(clippy::all)]
 

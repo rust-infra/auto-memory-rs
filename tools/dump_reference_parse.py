@@ -3,7 +3,7 @@
 
 Run with the *reference* interpreter, e.g.:
 
-    /home/rg/.local/share/uv/tools/basic-memory/bin/python \
+    ~/.local/share/uv/tools/basic-memory/bin/python \
         tools/dump_reference_parse.py
 
 This captures the parse layer (frontmatter + observations + relations) BEFORE the

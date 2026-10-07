@@ -327,6 +327,165 @@ mod tests {
     }
 
     #[test]
+    fn branch_tour_empty_input_returns_no_chunks() {
+        // C01 / B01: the public entry returns before sectioning.
+        assert!(split_text_into_chunks("").is_empty());
+        assert!(split_text_into_chunks(" \n\t\r\n ").is_empty());
+    }
+
+    #[test]
+    fn branch_tour_boundaries_bullets_and_empty_tail() {
+        // C02 / B03-B05, B11-B19.
+        let text = "# First Heading\n\nintro one\n\n## Second Heading\n\nintro two\n\n- bullet one\n- bullet two\n\ntail";
+        assert_eq!(
+            split_text_into_chunks(text),
+            vec![
+                "# First Heading\n\nintro one\n\n## Second Heading\n\nintro two",
+                "- bullet one",
+                "- bullet two\n\ntail",
+            ]
+        );
+    }
+
+    #[test]
+    fn branch_tour_candidate_limit_flushes_before_merging() {
+        // C03 / B03-B05, B14-B18.
+        let a = "a".repeat(600);
+        let b = "b".repeat(400);
+        let first = format!("# A\n{a}");
+        let second = format!("# B\n{b}");
+        let third = "# C\ntail";
+        let text = format!("{first}\n{second}\n{third}");
+        assert_eq!(
+            split_text_into_chunks(&text),
+            vec![first, format!("{second}\n\n{third}")]
+        );
+    }
+
+    #[test]
+    fn branch_tour_long_section_flushes_current_chunk() {
+        // C04 / B03-B10, B18; includes split_long_section merge/flush paths.
+        let short = "short prose";
+        let a = "a".repeat(500);
+        let b = "b".repeat(500);
+        let long = format!("# Long\n{a}\n\n{b}");
+        let text = format!("{short}\n{long}");
+        assert_eq!(
+            split_text_into_chunks(&text),
+            vec![short.to_owned(), format!("# Long\n{a}"), b]
+        );
+    }
+
+    #[test]
+    fn branch_tour_long_paragraph_uses_overlapping_windows() {
+        // C05 / B02, B06-B10, B18; covers split_by_char_window loop and overlap.
+        let text: String = (0..2500)
+            .map(|index| char::from(b'a' + (index % 26) as u8))
+            .collect();
+        let chunks = split_text_into_chunks(&text);
+        let lengths: Vec<usize> = chunks.iter().map(|chunk| chunk.chars().count()).collect();
+        assert_eq!(lengths, vec![900, 900, 900, 160]);
+
+        let c0: Vec<char> = chunks[0].chars().collect();
+        let c1: Vec<char> = chunks[1].chars().collect();
+        let c2: Vec<char> = chunks[2].chars().collect();
+        assert_eq!(&c0[780..900], &c1[..120]);
+        assert_eq!(&c1[780..900], &c2[..120]);
+    }
+
+    #[test]
+    fn branch_tour_boundary_classification_edges() {
+        // C08: the exact heading and bullet classifiers.
+        assert!(is_header_line("# title"));
+        assert!(is_header_line("  ## title"));
+        assert!(!is_header_line("#title"));
+        assert!(!is_header_line("#"));
+        assert!(!is_header_line("####### title"));
+        assert!(!is_header_line("plain text"));
+
+        assert!(is_bullet_line("- item"));
+        assert!(is_bullet_line("* item"));
+        assert!(!is_bullet_line(""));
+        assert!(!is_bullet_line("-"));
+        assert!(!is_bullet_line("-item"));
+        assert!(!is_bullet_line("+ item"));
+        assert!(!is_bullet_line("  - item"));
+    }
+
+    #[test]
+    fn branch_tour_long_paragraph_after_short_paragraph() {
+        // C07 / L03, L08; current is non-empty when the long paragraph starts.
+        let short = "s".repeat(100);
+        let long = "l".repeat(1000);
+        let text = format!("{short}\n\n{long}");
+        let chunks = split_text_into_chunks(&text);
+        let lengths: Vec<usize> = chunks.iter().map(|chunk| chunk.chars().count()).collect();
+        assert_eq!(lengths, vec![100, 900, 220]);
+        assert_eq!(chunks[0], short);
+    }
+
+    #[test]
+    fn branch_tour_walkthrough_example() {
+        // C09: the single running example in docs/chunking-walkthrough.md.
+        let a = "a".repeat(100);
+        let b = "b".repeat(600);
+        let c = "c".repeat(400);
+        let d = "d".repeat(100);
+        let e = "e".repeat(1000);
+        let text = format!(
+            "# 开场\n{a}\n\n## 中段\n{b}\n\n## 继续\n{c}\n\n- 第一条 bullet\n- 第二条 bullet\nbullet 后面的普通文字\n\n## 长段\n{d}\n\n{e}\n\n- 最后一条 bullet"
+        );
+        let chunks = split_text_into_chunks(&text);
+        assert_eq!(chunks.len(), 8);
+        assert!(chunks[0].contains("# 开场"));
+        assert!(chunks[0].contains("## 中段"));
+        assert!(chunks[1].contains("## 继续"));
+        assert_eq!(chunks[2], "- 第一条 bullet");
+        assert!(chunks[3].starts_with("- 第二条 bullet"));
+        assert!(chunks[4].contains("## 长段"));
+        assert_eq!(chunks[5].chars().count(), 900);
+        assert_eq!(chunks[6].chars().count(), 220);
+        assert_eq!(chunks[7], "- 最后一条 bullet");
+    }
+
+    #[test]
+    fn branch_tour_field_prefix_can_be_its_own_chunk() {
+        // C10: composed fields are paragraphs, not special chunk types.
+        let title = "Title";
+        let permalink = "project/notes/example";
+        let body = "x".repeat(1000);
+        let text = format!("{title}\n\n{permalink}\n\n{body}");
+        let chunks = split_text_into_chunks(&text);
+        let lengths: Vec<usize> = chunks.iter().map(|chunk| chunk.chars().count()).collect();
+        assert_eq!(chunks[0], format!("{title}\n\n{permalink}"));
+        assert_eq!(lengths, vec![chunks[0].chars().count(), 900, 220]);
+    }
+
+    #[test]
+    fn branch_tour_long_bullet_uses_long_section_before_bullet_rule() {
+        // C11: the >900 branch has priority over the short-bullet branch.
+        let bullet = format!("- {}", "x".repeat(1000));
+        let text = format!("before\n{bullet}");
+        let chunks = split_text_into_chunks(&text);
+        let lengths: Vec<usize> = chunks.iter().map(|chunk| chunk.chars().count()).collect();
+        assert_eq!(chunks[0], "before");
+        assert_eq!(lengths, vec![6, 900, 222]);
+    }
+
+    #[test]
+    fn branch_tour_helper_defensive_paths() {
+        // C06 / L01, P01-P04, W01; direct helper branches that the public entry
+        // cannot reach once sectioning has removed blank input.
+        assert!(split_long_section("").is_empty());
+        assert!(split_by_char_window("").is_empty());
+        assert_eq!(split_into_paragraphs("A\n\n\n\nB"), vec!["A", "B"]);
+        assert_eq!(
+            split_into_paragraphs("- one\n- two"),
+            vec!["- one", "- two"]
+        );
+    }
+
+    #[test]
     fn chunk_keys_use_type_id_index() {
         let rows = vec![SemanticRow {
             id: 7,

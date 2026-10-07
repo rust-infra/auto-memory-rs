@@ -26,6 +26,7 @@ use auto_memory::adapters::mcp::{McpServer, ensure_project};
 use auto_memory::application::context::{ContextOptions, build_context, render_plain};
 use auto_memory::application::schema::SchemaService;
 use auto_memory::application::schema_tools;
+use auto_memory::config::{UserConfig, load_user_config, resolve_index, resolve_project};
 use auto_memory::domain::permalink::generate_permalink;
 use auto_memory::domain::search::SearchItemType;
 use auto_memory::domain::timeframe;
@@ -129,12 +130,13 @@ struct RerankArgs {
 /// `auto-memory reindex --vault <dir> --index <db>`.
 #[derive(Args)]
 struct ReindexArgs {
-    /// Vault directory to index.
+    /// Vault directory to index (defaults to the registered project's vault).
     #[arg(long, value_name = "DIR")]
-    vault: PathBuf,
-    /// Index database.
+    vault: Option<PathBuf>,
+    /// Index database (defaults to `AUTO_MEMORY_INDEX`, the user config file, then
+    /// the standard path).
     #[arg(long, value_name = "DB")]
-    index: PathBuf,
+    index: Option<PathBuf>,
     /// Project name (defaults to the vault directory name).
     #[arg(long, value_name = "NAME")]
     project: Option<String>,
@@ -151,12 +153,13 @@ struct ReindexArgs {
 /// `auto-memory watch --vault <dir> --index <db>`.
 #[derive(Args)]
 struct WatchArgs {
-    /// Vault directory to watch.
+    /// Vault directory to watch (defaults to the registered project's vault).
     #[arg(long, value_name = "DIR")]
-    vault: PathBuf,
-    /// Index database.
+    vault: Option<PathBuf>,
+    /// Index database (defaults to `AUTO_MEMORY_INDEX`, the user config file, then
+    /// the standard path).
     #[arg(long, value_name = "DB")]
-    index: PathBuf,
+    index: Option<PathBuf>,
     /// Project name (defaults to the vault directory name).
     #[arg(long, value_name = "NAME")]
     project: Option<String>,
@@ -175,12 +178,13 @@ struct WatchArgs {
 /// `auto-memory mcp --vault <dir> --index <db>`.
 #[derive(Args)]
 struct McpArgs {
-    /// Vault directory to serve.
+    /// Vault directory to serve (defaults to the registered project's vault).
     #[arg(long, value_name = "DIR")]
-    vault: PathBuf,
-    /// Index database.
+    vault: Option<PathBuf>,
+    /// Index database (defaults to `AUTO_MEMORY_INDEX`, the user config file, then
+    /// the standard path).
     #[arg(long, value_name = "DB")]
-    index: PathBuf,
+    index: Option<PathBuf>,
     /// Project name (defaults to the vault directory name).
     #[arg(long, value_name = "NAME")]
     project: Option<String>,
@@ -208,9 +212,10 @@ struct McpArgs {
 /// `auto-memory status --index <db> --project <permalink>`.
 #[derive(Args)]
 struct StatusArgs {
-    /// Index database.
+    /// Index database (defaults to `AUTO_MEMORY_INDEX`, the user config file, then
+    /// the standard path).
     #[arg(long, value_name = "DB")]
-    index: PathBuf,
+    index: Option<PathBuf>,
     /// Project permalink.
     #[arg(long, value_name = "NAME")]
     project: String,
@@ -219,7 +224,8 @@ struct StatusArgs {
 /// `auto-memory doctor`.
 #[derive(Args)]
 struct DoctorArgs {
-    /// Index database (defaults to the standard per-user path).
+    /// Index database (defaults to `AUTO_MEMORY_INDEX`, the user config file, then
+    /// the standard per-user path).
     #[arg(long, value_name = "DB")]
     index: Option<PathBuf>,
     /// Vault to inspect.
@@ -257,7 +263,8 @@ struct ProjectAddArgs {
     name: String,
     /// Vault directory.
     path: PathBuf,
-    /// Index database (defaults to the standard per-user path).
+    /// Index database (defaults to `AUTO_MEMORY_INDEX`, the user config file, then
+    /// the standard per-user path).
     #[arg(long, value_name = "DB")]
     index: Option<PathBuf>,
     /// Permalink slug (defaults to one generated from the name).
@@ -274,7 +281,8 @@ struct ProjectAddArgs {
 /// `project list`.
 #[derive(Args)]
 struct ProjectListArgs {
-    /// Index database (defaults to the standard per-user path).
+    /// Index database (defaults to `AUTO_MEMORY_INDEX`, the user config file, then
+    /// the standard per-user path).
     #[arg(long, value_name = "DB")]
     index: Option<PathBuf>,
     /// Emit the result as JSON.
@@ -287,7 +295,8 @@ struct ProjectListArgs {
 struct ProjectRemoveArgs {
     /// Project name or permalink.
     identifier: String,
-    /// Index database (defaults to the standard per-user path).
+    /// Index database (defaults to `AUTO_MEMORY_INDEX`, the user config file, then
+    /// the standard per-user path).
     #[arg(long, value_name = "DB")]
     index: Option<PathBuf>,
     /// Emit the result as JSON.
@@ -300,9 +309,10 @@ struct ProjectRemoveArgs {
 struct ContextArgs {
     /// `memory://` URL to resolve.
     url: String,
-    /// Index database.
+    /// Index database (defaults to `AUTO_MEMORY_INDEX`, the user config file, then
+    /// the standard path).
     #[arg(long, value_name = "DB")]
-    index: PathBuf,
+    index: Option<PathBuf>,
     /// Project permalink.
     #[arg(long, value_name = "NAME")]
     project: String,
@@ -343,9 +353,10 @@ enum SchemaCommand {
 /// Index/project/vault selection shared by the schema verbs.
 #[derive(Args)]
 struct SchemaCommonArgs {
-    /// Index database.
+    /// Index database (defaults to `AUTO_MEMORY_INDEX`, the user config file, then
+    /// the standard path).
     #[arg(long, value_name = "DB")]
-    index: PathBuf,
+    index: Option<PathBuf>,
     /// Project permalink.
     #[arg(long, value_name = "NAME")]
     project: String,
@@ -389,10 +400,11 @@ struct SchemaInferArgs {
 struct HookArgs {
     /// Hook verb: `session-start` or `pre-compact`.
     verb: String,
-    /// Harness emitting the hook (`claude`, `codex`, or `pi`).
+    /// Harness emitting the hook (`claude`, `codex`, `pi`, or `tact`).
     #[arg(long, value_name = "NAME")]
     harness: Option<String>,
-    /// Index database (defaults to `AUTO_MEMORY_INDEX`, then the standard path).
+    /// Index database (defaults to `AUTO_MEMORY_INDEX`, the user config file, then
+    /// the standard path).
     #[arg(long, value_name = "DB")]
     index: Option<PathBuf>,
     /// Project permalink (overrides the harness mapping).
@@ -409,9 +421,10 @@ struct SearchArgs {
     /// Query terms; omit them for a filter-only search.
     #[arg(value_name = "QUERY", num_args = 0..)]
     query: Vec<String>,
-    /// Index database.
+    /// Index database (defaults to `AUTO_MEMORY_INDEX`, the user config file, then
+    /// the standard path).
     #[arg(long, value_name = "DB")]
-    index: PathBuf,
+    index: Option<PathBuf>,
     /// Project permalink.
     #[arg(long, value_name = "NAME")]
     project: String,
@@ -490,6 +503,139 @@ fn usage(message: &str) -> ExitCode {
     ExitCode::from(2)
 }
 
+/// The environment half of the index chain.
+///
+/// Read here rather than inside the resolver so the chain stays pure and testable
+/// (`specs/config-discovery-spec.md` §8).
+fn index_from_environment() -> Option<PathBuf> {
+    std::env::var_os("AUTO_MEMORY_INDEX").map(PathBuf::from)
+}
+
+/// Resolve `--index` for a CLI command: flag → environment → config file → default.
+///
+/// Returns the loaded config alongside it, because the commands that need an index
+/// usually need `default_project` too. An unusable config file is an error here (the
+/// user asked for a specific index and something is wrong with the file that might have
+/// supplied one) while the hook warns and carries on — the same chain, two policies.
+fn cli_index(explicit: Option<PathBuf>) -> Option<(PathBuf, UserConfig)> {
+    let user = load_user_config();
+    if let UserConfig::Malformed { path, error } = &user {
+        eprintln!("Error: unusable config {}: {error}", path.display());
+        return None;
+    }
+    let index = resolve_index(explicit, index_from_environment(), &user).value;
+    Some((index, user))
+}
+
+/// Resolve the `(name, permalink, vault)` a vault-reading command runs against.
+///
+/// Shared by `reindex`, `watch`, and `mcp` so the precedence cannot drift between them
+/// (`specs/config-discovery-spec.md` §8). Highest precedence first:
+///
+/// - project: `--project <name>` (a display name, normalized to a permalink) → the user
+///   config's `default_project` (already a permalink, like the mapping files'
+///   `primaryProject`) → the vault's directory name;
+/// - vault: `--vault <dir>` → the registered project row's `path`.
+///
+/// Deriving the vault from the row is *safer* than accepting it: a typo used to point
+/// `mcp`/`watch` reconcile at the wrong directory, which prunes that project's index rows
+/// (`docs/integration-guide.md` §2.1). Either way the directory is checked before any
+/// scan, because a missing vault otherwise looks exactly like an empty one.
+async fn resolve_project_target(
+    store: &Store,
+    user: &UserConfig,
+    project: Option<String>,
+    vault: Option<PathBuf>,
+) -> std::result::Result<(String, String, PathBuf), String> {
+    let (name, permalink, registered) = match project {
+        Some(name) => {
+            let permalink = generate_permalink(&name);
+            let row = store
+                .project_by_permalink(&permalink)
+                .await
+                .map_err(|error| format!("failed to read project {permalink}: {error}"))?;
+            (name, permalink, row)
+        }
+        None => match resolve_project(None, None, user) {
+            Some(resolved) => {
+                let permalink = resolved.value;
+                let row = store
+                    .project_by_permalink(&permalink)
+                    .await
+                    .map_err(|error| format!("failed to read project {permalink}: {error}"))?
+                    .ok_or_else(|| format!("project not found: {permalink}"))?;
+                (row.name.clone(), permalink, Some(row))
+            }
+            None => match &vault {
+                Some(vault) => {
+                    // A vault that is already registered names its own project.
+                    // Minting a name from the directory instead would create a
+                    // *second* project row for the same vault and split the
+                    // permalinks — `--vault ~/agent-memory` would index the notes
+                    // again under `agent-memory` while `1m` already owned them.
+                    let existing = store
+                        .projects()
+                        .await
+                        .map_err(|error| format!("failed to read projects: {error}"))?
+                        .into_iter()
+                        .find(|row| same_path(&row.path, vault));
+                    if let Some(row) = existing {
+                        (row.name.clone(), row.permalink.clone(), Some(row))
+                    } else {
+                        let name = vault.file_name().map_or_else(
+                            || "default".to_owned(),
+                            |name| name.to_string_lossy().into_owned(),
+                        );
+                        let permalink = generate_permalink(&name);
+                        (name, permalink, None)
+                    }
+                }
+                None => {
+                    return Err(
+                        "no project: pass `--project <name>`, or set `default_project` in \
+                         ~/.config/auto-memory/config.json, or pass `--vault <dir>`"
+                            .to_owned(),
+                    );
+                }
+            },
+        },
+    };
+
+    let vault = match vault {
+        Some(vault) => vault,
+        None => match &registered {
+            Some(row) => PathBuf::from(&row.path),
+            None => {
+                return Err(format!(
+                    "no vault for project {permalink}: pass `--vault <dir>`, or register it \
+                     with `auto-memory project add {name} <vault>`"
+                ));
+            }
+        },
+    };
+    if !vault.is_dir() {
+        return Err(format!("vault directory not found: {}", vault.display()));
+    }
+    Ok((name, permalink, vault))
+}
+
+/// Whether a registered vault path and a given directory name the same place.
+///
+/// The stored path is whatever the user typed at `project add` time, so a trailing
+/// slash or a symlinked home would miss an exact comparison; both sides fall back
+/// to `canonicalize` before giving up. A path that cannot be canonicalised (it does
+/// not exist yet) is simply not a match.
+fn same_path(registered: &str, vault: &Path) -> bool {
+    let registered = Path::new(registered);
+    if registered == vault {
+        return true;
+    }
+    match (registered.canonicalize(), vault.canonicalize()) {
+        (Ok(left), Ok(right)) => left == right,
+        _ => false,
+    }
+}
+
 /// Install the diagnostics subscriber.
 ///
 /// stdout is reserved for machine-readable output — the `watch --once` report, the
@@ -551,11 +697,21 @@ async fn schema_command(command: SchemaCommand) -> ExitCode {
 
 /// Open the index and resolve the project (and vault) a schema command runs against.
 async fn schema_context(
-    index: &Path,
+    index: Option<&Path>,
     permalink: &str,
     vault: Option<&Path>,
 ) -> Result<(Store, i64, PathBuf), String> {
-    let store = Store::open(index)
+    let user = load_user_config();
+    if let UserConfig::Malformed { path, error } = &user {
+        return Err(format!("unusable config {}: {error}", path.display()));
+    }
+    let index = resolve_index(
+        index.map(Path::to_path_buf),
+        index_from_environment(),
+        &user,
+    )
+    .value;
+    let store = Store::open(&index)
         .await
         .map_err(|error| format!("failed to open index {}: {error}", index.display()))?;
     let project = store
@@ -571,7 +727,7 @@ async fn schema_context(
 
 async fn schema_validate_command(args: SchemaArgs) -> ExitCode {
     let (store, project_id, vault) = match schema_context(
-        &args.common.index,
+        args.common.index.as_deref(),
         &args.common.project,
         args.common.vault.as_deref(),
     )
@@ -607,7 +763,7 @@ async fn schema_infer_command(args: SchemaInferArgs) -> ExitCode {
         .threshold
         .unwrap_or(auto_memory::application::schema::OPTIONAL_THRESHOLD);
     let (store, project_id, vault) = match schema_context(
-        &args.common.index,
+        args.common.index.as_deref(),
         &args.common.project,
         args.common.vault.as_deref(),
     )
@@ -630,7 +786,7 @@ async fn schema_diff_command(args: SchemaArgs) -> ExitCode {
         return usage("schema diff requires a note type");
     };
     let (store, project_id, vault) = match schema_context(
-        &args.common.index,
+        args.common.index.as_deref(),
         &args.common.project,
         args.common.vault.as_deref(),
     )
@@ -669,9 +825,20 @@ async fn hook_command(args: HookArgs) -> ExitCode {
         Some(value) => match Harness::parse(value) {
             Some(harness) => harness,
             None => {
-                return usage(&format!(
-                    "unknown harness: {value} (expected claude, codex, or pi)"
-                ));
+                // A hook is invoked by a host agent, so a bad `--harness` is a
+                // configuration mistake in *that* host — not a usage error the
+                // caller can act on. Failing open keeps the documented contract
+                // ("every failure path exits 0") true for the whole command;
+                // `usage()` here used to be the one path that broke it.
+                //
+                // One line, not two: the subscriber already writes to stderr
+                // (see `init_tracing`), so an extra `eprintln!` would print the
+                // same sentence twice.
+                tracing::warn!(
+                    "hook {}: unknown harness: {value} (expected claude, codex, pi, or tact)",
+                    args.verb
+                );
+                return ExitCode::SUCCESS;
             }
         },
     };
@@ -697,33 +864,51 @@ async fn run_hook(verb: &str, harness: Harness, args: &HookArgs) -> Result<(), S
     let mapping = mapping_dir(args.project_dir.as_deref(), &event.cwd);
     let (settings, configured) = load_harness_settings(harness, &mapping);
 
-    // Codex ignores PreCompact stdout and asks for the checkpoint from the
-    // post-compaction SessionStart instead, so there is nothing to print here.
+    // Codex and Tact both ignore PreCompact stdout and ask for the checkpoint
+    // from the post-compaction SessionStart instead, so there is nothing to
+    // print here.
     if matches!(hook_event, HookEvent::CompactionImminent) {
         return Ok(());
     }
 
-    let Some(permalink) = args
-        .project
-        .clone()
-        .or_else(|| settings.primary_project.clone())
-    else {
-        // No mapping: emit the first-run nudge instead of guessing a project.
-        if !configured {
-            println!("# Auto Memory\n\n{}", harness.profile().setup_nudge);
-        }
+    // The user config file supplies both values below when nothing more specific
+    // does. A broken file must not break a session: warn and continue down the
+    // chain (the CLI errors instead — same chain, two policies).
+    let user = load_user_config();
+    if let UserConfig::Malformed { path, error } = &user {
+        tracing::warn!("ignoring unusable config {}: {error}", path.display());
+    }
+    let Some(permalink) = resolve_project(
+        args.project.clone(),
+        settings.primary_project.clone(),
+        &user,
+    ) else {
+        // No project resolved, so there is no brief to give. Say why, and name the
+        // projects this index actually has — a nudge that does not name them makes the
+        // user run another command to find out what to write in the mapping file.
+        //
+        // Still no guessing: an unnamed project is never used, because a brief from the
+        // wrong knowledge graph is worse than no brief.
+        let index = resolve_index(args.index.clone(), index_from_environment(), &user).value;
+        let candidates = registered_permalinks(&index).await;
+        let hint = if configured {
+            harness.profile().pin_tip
+        } else {
+            harness.profile().setup_nudge
+        };
+        println!(
+            "# Auto Memory\n\n{}",
+            nudge_with_projects(hint, &candidates)
+        );
         return Ok(());
     };
+    let permalink = permalink.value;
     // An explicit `--project` overrides the mapping; reflect it in the brief so
     // the header and placement guidance name the project actually queried.
     let mut settings = settings;
     settings.primary_project = Some(permalink.clone());
 
-    let index = args
-        .index
-        .clone()
-        .or_else(|| std::env::var_os("AUTO_MEMORY_INDEX").map(PathBuf::from))
-        .unwrap_or_else(default_index_path);
+    let index = resolve_index(args.index.clone(), index_from_environment(), &user).value;
     let store = Store::open(&index)
         .await
         .map_err(|error| format!("failed to open index {}: {error}", index.display()))?;
@@ -735,7 +920,9 @@ async fn run_hook(verb: &str, harness: Harness, args: &HookArgs) -> Result<(), S
         return Err(format!("project not found: {permalink}"));
     };
 
-    let checkpoint = if harness == Harness::Codex
+    // Both harnesses deliver the checkpoint request from the post-compaction
+    // SessionStart; Claude and Pi have no checkpoint path.
+    let checkpoint = if matches!(harness, Harness::Codex | Harness::Tact)
         && event.trigger.as_deref() == Some("compact")
         && settings.checkpoint_on_compact
     {
@@ -775,11 +962,47 @@ fn read_hook_payload() -> serde_json::Value {
     serde_json::from_str(&text).unwrap_or(empty)
 }
 
-/// Default index path, matching `tools/auto-memory-hook.py`.
-fn default_index_path() -> PathBuf {
-    std::env::var_os("HOME").map_or_else(
-        || PathBuf::from(".local/share/auto-memory/memory.db"),
-        |home| PathBuf::from(home).join(".local/share/auto-memory/memory.db"),
+/// Maximum permalinks the first-run nudge names before trailing off.
+const MAX_NUDGE_PROJECTS: usize = 10;
+
+/// The permalinks registered in the index, for the first-run nudge.
+///
+/// Best-effort and strictly read-only: a missing or unreadable index yields an empty list
+/// and the nudge keeps its generic wording. It must not *create* the index — `Store::open`
+/// does, and a diagnostic that writes is a diagnostic you cannot trust.
+async fn registered_permalinks(index: &Path) -> Vec<String> {
+    if !index.exists() {
+        return Vec::new();
+    }
+    let Ok(store) = Store::open(index).await else {
+        return Vec::new();
+    };
+    store
+        .projects()
+        .await
+        .map(|rows| rows.into_iter().map(|row| row.permalink).collect())
+        .unwrap_or_default()
+}
+
+/// A profile's nudge or tip, with the permalinks this index actually has.
+///
+/// Naming the candidates is what makes the message actionable: the user learns the exact
+/// value to put in the mapping file without running `auto-memory project list` first.
+fn nudge_with_projects(hint: &str, candidates: &[String]) -> String {
+    if candidates.is_empty() {
+        return hint.to_owned();
+    }
+    let mut listed: Vec<&str> = candidates
+        .iter()
+        .take(MAX_NUDGE_PROJECTS)
+        .map(String::as_str)
+        .collect();
+    if candidates.len() > MAX_NUDGE_PROJECTS {
+        listed.push("…");
+    }
+    format!(
+        "{hint}\n\n_Registered projects in this index: {}._",
+        listed.join(", ")
     )
 }
 
@@ -815,7 +1038,9 @@ async fn project_add_command(args: ProjectAddArgs) -> ExitCode {
         ));
     }
     let permalink = permalink.unwrap_or_else(|| generate_permalink(&name));
-    let index = index.unwrap_or_else(default_index_path);
+    let Some((index, _user)) = cli_index(index) else {
+        return ExitCode::FAILURE;
+    };
 
     let mut store = match Store::open(&index).await {
         Ok(store) => store,
@@ -882,7 +1107,9 @@ async fn project_add_command(args: ProjectAddArgs) -> ExitCode {
 /// `project list` — every registered project with its index counts.
 async fn project_list_command(args: ProjectListArgs) -> ExitCode {
     let ProjectListArgs { index, json } = args;
-    let index = index.unwrap_or_else(default_index_path);
+    let Some((index, _user)) = cli_index(index) else {
+        return ExitCode::FAILURE;
+    };
     let store = match Store::open(&index).await {
         Ok(store) => store,
         Err(error) => {
@@ -959,7 +1186,9 @@ async fn project_remove_command(args: ProjectRemoveArgs) -> ExitCode {
         index,
         json,
     } = args;
-    let index = index.unwrap_or_else(default_index_path);
+    let Some((index, _user)) = cli_index(index) else {
+        return ExitCode::FAILURE;
+    };
     let mut store = match Store::open(&index).await {
         Ok(store) => store,
         Err(error) => {
@@ -1053,15 +1282,30 @@ async fn doctor_command(args: DoctorArgs) -> ExitCode {
     } = args;
     let mut checks = Vec::new();
 
+    // --- configuration ---------------------------------------------------------
+    //
+    // First, because every later check depends on the values it supplies: "which
+    // index is it even looking at" is the question a wrong-path report usually
+    // answers, and the origin is the part the user cannot see from the flags.
+    let user = load_user_config();
+    checks.push(match &user {
+        UserConfig::Malformed { path, error } => {
+            Check::fail("config", format!("{} is unusable: {error}", path.display()))
+        }
+        other => Check::ok("config", other.describe()),
+    });
+    let resolved = resolve_index(index, index_from_environment(), &user);
+
     // --- index -----------------------------------------------------------------
     //
     // `Store::open` creates a missing index, so `doctor` must not call it on a path that
     // does not exist: a diagnostic that writes is a diagnostic you cannot trust.
-    let index = index.unwrap_or_else(default_index_path);
+    let index = resolved.value;
+    let index_label = format!("{} (from {})", index.display(), resolved.origin);
     let store = if index.exists() {
         match Store::open(&index).await {
             Ok(store) => {
-                checks.push(Check::ok("index", index.display().to_string()));
+                checks.push(Check::ok("index", index_label));
                 Some(store)
             }
             Err(error) => {
@@ -1076,9 +1320,8 @@ async fn doctor_command(args: DoctorArgs) -> ExitCode {
         checks.push(Check::warn(
             "index",
             format!(
-                "{} does not exist yet — run `auto-memory project add <name> <path>` or \
-                 `auto-memory reindex --vault <dir>`",
-                index.display()
+                "{index_label} does not exist yet — run `auto-memory project add <name> <path>` \
+                 or `auto-memory reindex --vault <dir>`"
             ),
         ));
         None
@@ -1309,26 +1552,20 @@ async fn reindex_command(args: ReindexArgs) -> ExitCode {
         embeddings,
         embed,
     } = args;
-    // A missing vault used to look like an empty one (`read_dir` failure is tolerated),
-    // which is indistinguishable from "indexed nothing" in the summary output.
-    if !vault.is_dir() {
-        return usage(&format!("vault directory not found: {}", vault.display()));
-    }
-    let name = match project {
-        Some(name) => name,
-        None => vault.file_name().map_or_else(
-            || "default".to_owned(),
-            |name| name.to_string_lossy().into_owned(),
-        ),
+    let Some((index, user)) = cli_index(index) else {
+        return ExitCode::FAILURE;
     };
-    let permalink = generate_permalink(&name);
-
     let mut store = match Store::open(&index).await {
         Ok(store) => store,
         Err(error) => {
             eprintln!("failed to open index {}: {error}", index.display());
             return ExitCode::FAILURE;
         }
+    };
+    let (name, permalink, vault) = match resolve_project_target(&store, &user, project, vault).await
+    {
+        Ok(target) => target,
+        Err(message) => return usage(&message),
     };
     let project_id = match store
         .upsert_project(&name, &permalink, &vault.to_string_lossy())
@@ -1406,21 +1643,20 @@ async fn mcp_command(args: McpArgs) -> ExitCode {
         embed,
         rerank,
     } = args;
-    let name = match project {
-        Some(name) => name,
-        None => vault.file_name().map_or_else(
-            || "default".to_owned(),
-            |name| name.to_string_lossy().into_owned(),
-        ),
+    let Some((index, user)) = cli_index(index) else {
+        return ExitCode::FAILURE;
     };
-    let permalink = generate_permalink(&name);
-
     let mut store = match Store::open(&index).await {
         Ok(store) => store,
         Err(error) => {
             eprintln!("failed to open index {}: {error}", index.display());
             return ExitCode::FAILURE;
         }
+    };
+    let (name, permalink, vault) = match resolve_project_target(&store, &user, project, vault).await
+    {
+        Ok(target) => target,
+        Err(message) => return usage(&message),
     };
     let project_id = match ensure_project(&mut store, &name, &permalink, &vault).await {
         Ok(project_id) => project_id,
@@ -1618,20 +1854,20 @@ async fn watch_command(args: WatchArgs) -> ExitCode {
              run `auto-memory reindex --vault <dir> --index <db> --embeddings` for the vectors",
         );
     }
-    let name = match project {
-        Some(name) => name,
-        None => vault.file_name().map_or_else(
-            || "default".to_owned(),
-            |name| name.to_string_lossy().into_owned(),
-        ),
+    let Some((index, user)) = cli_index(index) else {
+        return ExitCode::FAILURE;
     };
-    let permalink = generate_permalink(&name);
     let mut store = match Store::open(&index).await {
         Ok(store) => store,
         Err(error) => {
             eprintln!("failed to open index {}: {error}", index.display());
             return ExitCode::FAILURE;
         }
+    };
+    let (name, permalink, vault) = match resolve_project_target(&store, &user, project, vault).await
+    {
+        Ok(target) => target,
+        Err(message) => return usage(&message),
     };
     let project_id = match store
         .upsert_project(&name, &permalink, &vault.to_string_lossy())
@@ -1716,6 +1952,9 @@ async fn status_command(args: StatusArgs) -> ExitCode {
         index,
         project: permalink,
     } = args;
+    let Some((index, _user)) = cli_index(index) else {
+        return ExitCode::FAILURE;
+    };
     let store = match Store::open(&index).await {
         Ok(store) => store,
         Err(error) => {
@@ -1760,6 +1999,9 @@ async fn context_command(args: ContextArgs) -> ExitCode {
         plain,
         json: _json,
     } = args;
+    let Some((index, _user)) = cli_index(index) else {
+        return ExitCode::FAILURE;
+    };
 
     let context = match (|| {
         let timeframe = window.as_deref().unwrap_or("7d");
@@ -1854,6 +2096,9 @@ async fn search_command(args: SearchArgs) -> ExitCode {
         embed,
         rerank,
     } = args;
+    let Some((index, _user)) = cli_index(index) else {
+        return ExitCode::FAILURE;
+    };
     let store = match Store::open(&index).await {
         Ok(store) => store,
         Err(error) => {

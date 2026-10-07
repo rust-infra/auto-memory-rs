@@ -1,6 +1,6 @@
 //! Minimal MCP stdio server exposing the local core tools.
 //!
-//! Transport contract (`docs/mcp-spec.md` §1): newline-delimited JSON-RPC 2.0 on
+//! Transport contract (`specs/mcp-spec.md` §1): newline-delimited JSON-RPC 2.0 on
 //! **stdout**, logs and diagnostics on stderr. Implemented methods: `initialize`,
 //! `notifications/initialized`, `ping`, `tools/list`, and `tools/call` for the note,
 //! search, graph, and diagnostics tools this port supports.
@@ -60,7 +60,7 @@ pub const SERVER_NAME: &str = "auto-memory-rs";
 
 /// The tools `tools/list` advertises and `tools/call` accepts.
 ///
-/// The wire names are the compatibility contract (`docs/mcp-spec.md` §3–5); the
+/// The wire names are the compatibility contract (`specs/mcp-spec.md` §3–5); the
 /// `strum` derives generate them from the variant names (`WriteNote` → `write_note`,
 /// `AutoMemoryDiagnostics` → `auto_memory_diagnostics`), so the enum is the only
 /// place a tool name is written down. `EnumIter` supplies the advertised order for
@@ -1377,9 +1377,17 @@ impl<'a> McpServer<'a> {
         params: &SearchNotesParams,
         output_format: OutputFormat,
     ) -> Result<Value> {
-        let page = params.page.unwrap_or(1).max(1) as u32;
-        let page_size = params.page_size.unwrap_or(10).max(1) as u32;
-        let per_project_page_size = page * page_size;
+        // `page`/`page_size` arrive as u64 and the reference is a Python int, so a
+        // huge page just yields an empty page. The rest of this function is u32
+        // arithmetic; `as u32` used to *truncate* 2^32 to 0 and then underflow on
+        // `page - 1`, which panicked and took the whole MCP server with it.
+        let page = params.page.unwrap_or(1).max(1).min(u64::from(u32::MAX)) as u32;
+        let page_size = params
+            .page_size
+            .unwrap_or(10)
+            .max(1)
+            .min(u64::from(u32::MAX)) as u32;
+        let per_project_page_size = page.saturating_mul(page_size);
         let projects = self.store.projects().await?;
 
         let mut merged: Vec<Value> = Vec::new();
@@ -1425,8 +1433,9 @@ impl<'a> McpServer<'a> {
                 .unwrap_or(std::cmp::Ordering::Equal)
         });
 
-        let start = ((page - 1) * page_size) as usize;
-        let end = start + page_size as usize;
+        let start =
+            usize::try_from(u64::from(page - 1) * u64::from(page_size)).unwrap_or(usize::MAX);
+        let end = start.saturating_add(page_size as usize);
         let paged_results: Vec<Value> = merged
             .iter()
             .skip(start)
@@ -1589,8 +1598,11 @@ impl<'a> McpServer<'a> {
         let categories = params.categories().to_vec();
         let mut options = TextSearchOptions {
             query: params.query.clone(),
-            page: params.page.unwrap_or(1) as u32,
-            page_size: params.page_size.unwrap_or(10) as u32,
+            // Clamp rather than truncate: `as u32` turned 2^32 into 0, and
+            // `search_text`'s own `.max(1)` then silently served page 1 — or one row
+            // per page — instead of what the caller asked for.
+            page: params.page.unwrap_or(1).min(u64::from(u32::MAX)) as u32,
+            page_size: params.page_size.unwrap_or(10).min(u64::from(u32::MAX)) as u32,
             categories: categories.clone(),
             ..TextSearchOptions::default()
         };
@@ -1615,10 +1627,8 @@ impl<'a> McpServer<'a> {
         options.entity_types = if entity_types.is_empty() {
             crate::search::default_entity_types(&options.categories)
         } else {
-            entity_types
-                .iter()
-                .filter_map(|value| value.parse::<SearchItemType>().ok())
-                .collect()
+            let names: Vec<&str> = entity_types.iter().map(String::as_str).collect();
+            parse_entity_type_names(&names)?
         };
         if let Some(status) = params.status.as_deref() {
             options.status = Some(status.to_owned());
@@ -2130,7 +2140,7 @@ mod tests {
     /// `call_tool` matches on `ToolName` exhaustively, so this covers the remaining
     /// surface: every variant is advertised exactly once with a description and an
     /// object input schema, and the wire names still spell the compatibility contract
-    /// (`docs/mcp-spec.md` §3–5) that clients and the reference golden depend on. The
+    /// (`specs/mcp-spec.md` §3–5) that clients and the reference golden depend on. The
     /// list below is the contract, deliberately not derived from the enum, so a
     /// renamed variant cannot quietly rename a tool on the wire.
     #[test]

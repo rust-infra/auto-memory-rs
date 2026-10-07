@@ -18,7 +18,7 @@ pub use embedding::{
     cosine_similarity, normalize,
 };
 pub use index_rows::{
-    MAX_CONTENT_STEMS_SIZE, SearchIndexRowData, entity_row, observation_row, relation_row,
+    MAX_CONTENT_STEMS_SIZE, SearchIndexWriteRow, entity_row, observation_row, relation_row,
     text_variants,
 };
 pub use relaxation::{relaxed_query, relaxed_query_words};

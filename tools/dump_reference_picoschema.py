@@ -3,7 +3,7 @@
 
 Run with the *reference* interpreter:
 
-    /home/rg/.local/share/uv/tools/basic-memory/bin/python tools/dump_reference_picoschema.py
+    ~/.local/share/uv/tools/basic-memory/bin/python tools/dump_reference_picoschema.py
 
 `basic_memory.picoschema` is pure Python over plain dicts: the parser turns a
 frontmatter `schema` mapping into fields, the validator compares a note's

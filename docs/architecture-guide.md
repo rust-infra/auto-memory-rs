@@ -27,8 +27,8 @@ flowchart TB
 
     subgraph ADAPTERS["adapters —— 协议翻译"]
         CLI["cli<br/>main.rs 子命令 + Options 解析"]
-        MCPSRV["mcp<br/>JSON-RPC 2.0 / NDJSON over stdio"]
-        FSA["filesystem"]
+        MCPSRV["mcp<br/>JSON-RPC 2.0 / NDJSON over stdio<br/>+ Streamable HTTP"]
+        HOOKS["hooks<br/>harness 生命周期入口<br/>event / brief / checkpoint / settings"]
     end
 
     subgraph APP["application —— 用例编排"]
@@ -63,8 +63,10 @@ flowchart TB
     AGENT -->|"stdio"| MCPSRV
     HUMAN --> CLI
     CLI --> APP
+    CLI --> HOOKS
     MCPSRV --> APP
-    FSA --> VAULT
+    HOOKS --> STORE
+    HOOKS --> SEARCH
     NOTE --> MDP
     NOTE --> IDX
     STXT --> SEARCH
@@ -90,6 +92,12 @@ flowchart TB
   不需要外部再跑一次 `reindex`。
 - `indexing` 是唯一"读 vault"的路径（`markdown_files` + `load_indexed_document`）；
   `storage` 从不碰文件。
+- `hooks` 不经过 `application`：它直接读 `storage::Store` 和 `search::text` 拼 session brief
+  （`src/hooks/brief.rs`），由 CLI 的 `hook` 子命令派发。
+- `pycompat` 是跨层工具（`adapters`、`application`、`schema` 都在用），图上省略。
+- `adapters::cli` 和 `adapters::filesystem` 是**空占位，没有代码**：命令面在 `src/main.rs`，
+  vault 的读写归 `indexing`。所以图里没有 filesystem 节点——文件系统不是这一层的入口，
+  而是 `indexing` 消费的资源。
 
 ---
 
@@ -450,7 +458,7 @@ flowchart LR
 
 ### 4.5 上下文检索（图遍历）
 
-> 遍历的概念、depth 为什么 ×2、环检测和踩坑见 [knowledge-graph.md](knowledge-graph.md) §5–6；精确契约见 [context-spec.md](context-spec.md) §3。
+> 遍历的概念、depth 为什么 ×2、环检测和踩坑见 [knowledge-graph.md](knowledge-graph.md) §5–6；精确契约见 [context-spec.md](../specs/context-spec.md) §3。
 
 ```mermaid
 flowchart TB
@@ -503,8 +511,8 @@ flowchart TB
 |---|---|
 | 安装、索引、MCP 接入、排障 | [integration-guide.md](integration-guide.md)（中文）、[usage.md](usage.md) |
 | Markdown 格式契约（frontmatter / observation / permalink / FTS 行模型） | [data-format.md](data-format.md) |
-| 检索行为契约（FTS5、向量、融合、过滤、分页） | [search-spec.md](search-spec.md) |
-| `build_context` / `memory://` / `recent_activity` | [context-spec.md](context-spec.md) |
-| MCP 工具清单、参数、响应模型 | [mcp-spec.md](mcp-spec.md) |
+| 检索行为契约（FTS5、向量、融合、过滤、分页） | [search-spec.md](../specs/search-spec.md) |
+| `build_context` / `memory://` / `recent_activity` | [context-spec.md](../specs/context-spec.md) |
+| MCP 工具清单、参数、响应模型 | [mcp-spec.md](../specs/mcp-spec.md) |
 | 参考实现基线与逐条证据 | [reference.md](reference.md) |
 | 设计取舍与刻意不用的模式 | [patterns.md](patterns.md) |

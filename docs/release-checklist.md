@@ -118,7 +118,7 @@ docker run --rm -p 8765:8765 \
   FTS ordering and scores (1e-6), chunking (78-chunk corpus), vector/hybrid ranking (1e-4),
   `build_context` + traversal, note mutation, MCP surfaces, schema reports, and the ChatGPT
   adapters.
-- Every deliberate divergence is listed in `docs/mcp-spec.md` §1c or `docs/usage.md` §8, and each
+- Every deliberate divergence is listed in `specs/mcp-spec.md` §1c or `docs/usage.md` §8, and each
   one is pinned by a test rather than left implicit.
 - Robustness suites are in place: `tests/hardening.rs` (path containment, malformed UTF-8,
   write/parse round trip), `tests/properties.rs` (parser, permalink, and traversal invariants over
@@ -166,7 +166,41 @@ accepted internal difference, and each is recorded in the execution plan's `## 0
   `sqlite-vec` virtual table. Both paths do exact KNN and every semantic golden matches, so the
   only observable trace is the reference's `bm inspect`.
 - **Retrieval-inspection diagnostics** — the reference CLI's `bm inspect query` / `bm inspect
-  chunks` (and the `doctor`/`orphans` reports) are not ported; they render internal retrieval
-  stages that this port's golden replays already pin.
+  chunks` and its `orphans` report are not ported; they render internal retrieval stages that
+  this port's golden replays already pin. (`bm doctor` exists here too but does a different job —
+  see §6a.)
 - **Web/Cloud surfaces** — `list_workspaces` and everything else that needs a workspace or cloud
   route, which the project scoped out from the start (no Web UI, no cloud sync).
+
+### 6a. CLI surface against the reference
+
+The compatibility contract is pinned to the **MCP tool surface** and to observable
+search/parse/index behavior — the golden corpus — not to the reference's CLI verb list. The port
+therefore implements the verbs its own workflows need, and the rest are deliberately absent. This
+is the complete inventory, so "is it ported?" never has to be answered by diffing two `--help`
+outputs.
+
+| Reference verb | Port status | Note |
+|---|---|---|
+| `status` | different | Same name, different payload. The port prints index counts for one project; the reference reports the project-index observation (`--json`, `--verbose`, `--wait`, `--local`/`--cloud`). |
+| `reindex` | yes | Same verb. The port adds `--vault`/`--index` and keeps `--full`/`--embeddings`. |
+| `mcp` | yes | stdio and Streamable HTTP. The reference's third transport, `sse`, is not ported. |
+| `project` | partial | Port: `add`, `list`, `remove`. Reference also has `default`, `move`, `ls`, `info` and the cloud pair `set-cloud`/`set-local`. |
+| `schema` | yes | `validate`, `infer`, `diff` — all three. |
+| `hook` | partial | Port: `session-start`, `pre-compact`. The installer/inbox half (`install`, `remove`, `status`, `flush`, `stop`) is not ported; wiring is manual, see `docs/hooks.md`. |
+| `doctor` | different | Same name, different check. The port reports what is usable on this machine (index, model cache, ONNX Runtime); the reference checks file↔database consistency. |
+| `inspect` | no — parked | `query`/`chunks`; internal retrieval stages the golden replays already pin. |
+| `orphans` | no — parked | Entities with no relations; derivable from the relation table. |
+| `format` | no | Runs the configured formatter over `.md`/`.json`/`.canvas` in the vault. The only unported verb that writes user files. |
+| `import` | no | The `memory-json`, `chatgpt`, and `claude` importers. |
+| `reset` | no | Drops and recreates the tables. `reindex --full` covers the rebuild half; the drop is not exposed. |
+| `config` | no | `list`/`get`/`set`/`unset` over `config.json`. The port hardcodes the reference **defaults** — `src/config.rs` declares the key set but nothing reads it — so a user's non-default `config.json` is ignored. |
+| `tool` | no | Wraps the MCP tools as CLI verbs (`bm tool write-note` …). The port exposes the workflows it needs as first-class verbs instead. |
+| `man` | no | Man-page installation; tooling, no behavior. |
+| `update` | no | Self-update of the Python distribution; meaningless for a Rust binary. |
+| `workspace`, `cloud`, `ci` | no — out of scope | Cloud/Web surfaces, scoped out from the start. |
+
+Port-only verbs, with no reference counterpart: `parse` (dump the parse layer), `watch` (the OS
+watcher — the reference watches inside its server process), and `context` / `search` (native CLI
+spellings of the `build_context` and `search_notes` MCP tools, which the reference reaches only
+through `bm tool`).

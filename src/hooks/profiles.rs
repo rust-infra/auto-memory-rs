@@ -4,6 +4,11 @@
 //! `basic_memory.cli.commands.hook` (Basic Memory 0.23.2). Each harness ships a
 //! different hook stdin dialect and different recall defaults; the profile keeps
 //! the differences in data so the engine stays harness-agnostic.
+//!
+//! [`Harness::Tact`] is this port's own addition — the reference has no Tact
+//! entry. Tact's hook contract is Codex-compatible (`docs/hooks.md` §1), so the
+//! profile mirrors the Codex one and differs only in the identity it stamps, the
+//! config file it reads, and the phrasing it prints.
 
 /// A supported agent harness.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -14,6 +19,8 @@ pub enum Harness {
     Codex,
     /// Pi extension (`pi` source id).
     Pi,
+    /// Tact (`tact` source id). Not in the reference; see the module docs.
+    Tact,
 }
 
 impl Harness {
@@ -24,6 +31,7 @@ impl Harness {
             "claude" => Some(Self::Claude),
             "codex" => Some(Self::Codex),
             "pi" => Some(Self::Pi),
+            "tact" => Some(Self::Tact),
             _ => None,
         }
     }
@@ -34,6 +42,7 @@ impl Harness {
             Self::Claude => "claude",
             Self::Codex => "codex",
             Self::Pi => "pi",
+            Self::Tact => "tact",
         }
     }
 
@@ -43,6 +52,7 @@ impl Harness {
             Self::Claude => &CLAUDE,
             Self::Codex => &CODEX,
             Self::Pi => &PI,
+            Self::Tact => &TACT,
         }
     }
 }
@@ -124,6 +134,67 @@ const PI: HarnessProfile = HarnessProfile {
     pin_tip: "_Tip: set `project` or `projectId` in `.pi/basic-memory.json` to pin this workspace._",
     status_hint: "Run `/am-status` in Pi to check the Auto Memory project mapping.",
 };
+
+/// Tact's profile. Deliberately a near-copy of [`CODEX`]: Tact reports the same
+/// hook payload fields (including `source` and `turn_id`) and is used the same
+/// way — a coding agent working in a repository — so the recall window, the
+/// capture-folder namespacing and the "keep required rules in AGENTS.md"
+/// guidance all carry over. What differs is the identity stamped on events, the
+/// settings file (`.tact/auto-memory.json` under an `autoMemory` block — Tact's
+/// own file, since nothing else reads `.tact/`) and the phrasing shown to the
+/// reader.
+///
+/// `session_note_type` / `recall_session_types` are `tact_session`, matching the
+/// note type the Tact plugin package writes
+/// (`plugins/tact/skills/am-checkpoint/SKILL.md`). The profile and the package
+/// are a joint contract: a spelling here that the installed package does not
+/// write silently stops recall from finding its checkpoints.
+const TACT: HarnessProfile = HarnessProfile {
+    source: "tact",
+    default_recall_timeframe: "7d",
+    default_capture_folder: "tact",
+    session_note_type: "tact_session",
+    // Also recall Codex-written checkpoints. The vault is shared — the Tact
+    // package keeps `codex_session_id` as a legacy field precisely because a
+    // vault may already hold Codex-authored notes — so a brief that hides them
+    // would be worse than one that shows another host's. `session_note_type`
+    // stays `tact_session`: that one is what this harness *writes*.
+    recall_session_types: &["tact_session", "codex_session"],
+    coding_session_note_type: "coding_session",
+    default_recall_prompt: "Search Auto Memory before answering questions about prior decisions or \
+        status. Capture durable engineering decisions as typed decision notes. Use Auto Memory as \
+        durable context, but keep required repo rules in AGENTS.md or checked-in docs.",
+    setup_nudge: "_This repo is not configured for Auto Memory yet. Add `.tact/auto-memory.json` \
+        with an `autoMemory.primaryProject` naming the project permalink to turn on session \
+        briefings for this repo._",
+    pin_tip: "_Tip: set `autoMemory.primaryProject` in `.tact/auto-memory.json` to pin this \
+        project._",
+    status_hint: "Run `auto-memory project list` to check the Auto Memory project mapping.",
+};
+
+/// The checkpoint-on-compaction prompt for Tact, told to the resumed agent when
+/// a checkpoint is due. Same content as [`CODEX_CHECKPOINT_PROMPT`] with the
+/// harness named correctly, and the skill named in full: Tact namespaces a
+/// plugin's skills as `{plugin_id}:{skill}`, and the Codex package may be
+/// installed alongside this one.
+pub const TACT_CHECKPOINT_PROMPT: &str = "Auto Memory checkpoint required after compaction. Use the `auto-memory-tact:am-checkpoint` skill now to \
+     write one deliberate, durable handoff for the work completed in this turn. Capture the \
+     problem, approach, actual changes, verification, decisions, blockers, and next action from the \
+     compacted context. Do not write lifecycle telemetry or a transcript dump. Complete the \
+     checkpoint before ending the turn.";
+
+/// The metadata key the checkpoint prompt hands the agent for Codex's turn id.
+///
+/// The reference spells it `codex_turn_id`, and its injected text is pinned, so
+/// the name stays.
+pub const CODEX_TURN_ID_KEY: &str = "codex_turn_id";
+
+/// The metadata key the checkpoint prompt hands the agent for Tact's turn id.
+///
+/// These keys are the **plugin's** frontmatter vocabulary, not an engine choice
+/// — `am-checkpoint` copies the key verbatim into the note, so each key has to
+/// match the package that reads it (`plugins/agents` vs `plugins/tact`).
+pub const TACT_TURN_ID_KEY: &str = "turn_id";
 
 /// The reference checkpoint-on-compaction prompt, told to the resumed Codex
 /// agent when a checkpoint is due. Kept in sync with `CODEX_CHECKPOINT_PROMPT`.

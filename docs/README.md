@@ -3,25 +3,32 @@
 Project: Local-only Rust knowledge base, behavior-compatible with the
 reference implementation, idiomatic Rust internally, Obsidian as the manual management UI.
 
+Project specs and plans are stored outside the user-documentation tree in `../specs/` and
+`../plans/`; this index links to them from here.
+
 ## Documents
 
 | Doc | Purpose |
 |---|---|
-| [auto-memory-rs-spec.md](auto-memory-rs-spec.md) | High-level spec: scope, architecture, Rust organization, DoD |
-| [auto-memory-rs-execution-plan.md](auto-memory-rs-execution-plan.md) | Phased execution plan (Phase 0–15, milestones, risks) |
+| [auto-memory-rs-spec.md](../specs/auto-memory-rs-spec.md) | High-level spec: scope, architecture, Rust organization, DoD |
+| [auto-memory-rs-execution-plan.md](../plans/auto-memory-rs-execution-plan.md) | Phased execution plan (Phase 0–15, milestones, risks) |
 | [reference.md](reference.md) | **Pinned reference baseline** — 0.23.2, source paths, verified constants, corrections |
 | [data-format.md](data-format.md) | Markdown/knowledge format contract (frontmatter, observations, relations, permalinks, FTS row model) |
-| [search-spec.md](search-spec.md) | Search behavior contract (FTS5, vector, hybrid fusion, filters, pagination) |
-| [context-spec.md](context-spec.md) | `build_context` / memory:// / recent_activity contract |
-| [mcp-spec.md](mcp-spec.md) | MCP tool inventory, parameters, response models, behavior contracts |
+| [search-spec.md](../specs/search-spec.md) | Search behavior contract (FTS5, vector, hybrid fusion, filters, pagination) |
+| [context-spec.md](../specs/context-spec.md) | `build_context` / memory:// / recent_activity contract |
+| [mcp-spec.md](../specs/mcp-spec.md) | MCP tool inventory, parameters, response models, behavior contracts |
+| [config-discovery-spec.md](../specs/config-discovery-spec.md) | Design spec: how the CLI and `auto-memory hook` resolve index / project / vault — the user config file, precedence chains, and why environment variables are the wrong channel for a per-host setting |
 | [usage.md](usage.md) | Install, Obsidian setup, indexing, MCP setup, querying, recovery |
 | [integration-guide.md](integration-guide.md) | 中文接入指南：构建 → vault/index/project 约定 → 索引/检索/watch → MCP 客户端接入（Codex/Claude Code/通用）→ 工具速查 → 排障 |
 | [hooks.md](hooks.md) | 中文 hook 接入：四层触发点（watch / git hook / Codex·Tact 插件 hook / Tact 进程内）、命令 hook 契约、`tools/auto-memory-hook.py` 用法与实测 |
+| [tact-ui-integration.md](tact-ui-integration.md) | 中文集成分析：auto-memory 作为**独立产品**接进 tact-ui——两条进程边界（MCP 子进程 / 插件 command hook）、Tact 侧现状对照、产品侧要补的适配（`tact` harness、插件包、配置发现、分发），以及为什么不链接库 |
 | [architecture-guide.md](architecture-guide.md) | 中文架构与数据流：分层图、磁盘布局、SQLite 表关系（ER）、索引/写入流程、检索各路径流程（文本/向量/混合/重排/图遍历）、常量出处 |
 | [knowledge-graph.md](knowledge-graph.md) | 中文入门：实体/观察/关系三个概念、关系从 Markdown 怎么产生、数据库字段、目标解析、图遍历，以及新手常见误解 |
 | [glossary.md](glossary.md) | 术语表：entity / observation / relation / permalink / note_type / `memory://` 等正式名与中文对照，含易混对照表和"不是本项目术语"清单 |
 | [vector-pipeline-tutorial.md](vector-pipeline-tutorial.md) | 教学：向量化全流程逐步拆解（拆行 → 拼文本 → 切块 → 384 维 → BLOB 落库），全部用 golden 里的真实数据，附 fixture vault 的场景全集 |
+| [chunking-walkthrough.md](chunking-walkthrough.md) | 教学：用一份示例文档走完 `split_text_into_chunks`，附条件说明和 C01-C11 测试索引 |
 | [search-pipeline-tutorial.md](search-pipeline-tutorial.md) | 教学：检索三条通道（关键词 / 语义 / 混合 / 重排）逐步拆解，含同一查询的三路真实分数与融合算术、32 个 golden 用例场景 |
+| [search-retrieval-analysis.md](search-retrieval-analysis.md) | 深入分析：请求分派、FTS5 文本召回、BM25、向量筛选、Hybrid 归一化与融合、Rerank、分页和边界风险 |
 | [incremental-indexing-tutorial.md](incremental-indexing-tutorial.md) | 教学：增量索引——watch 与 reindex 两条路径、checksum 门控、重命名配对、时间戳语义、向量复用范围（全部附真跑报告） |
 | [graph-traversal-tutorial.md](graph-traversal-tutorial.md) | 教学：图遍历——memory:// 解析、一跳两层的递归 CTE、环检测、max_related 截断，含参考实现的三组真实遍历行 |
 | [schema-tutorial.md](schema-tutorial.md) | 教学：Picoschema——语法、validate / infer / diff 三个工具（真实 CLI 输出）、38 个捕获用例覆盖的场景全集 |
@@ -30,20 +37,21 @@ reference implementation, idiomatic Rust internally, Obsidian as the manual mana
 | [visuals/vector-pipeline.gif](visuals/vector-pipeline.gif) | 上面那页动画的 GIF 版（1120×1200，8.7 s，850 KB）：7 个步骤 + 交叉淡入，可直接贴进文档、PPT 或聊天 |
 | [visuals/vector-pipeline.mp4](visuals/vector-pipeline.mp4) | 同上的 MP4 版（H.264，1120×1200，30 fps，8.5 s，528 KB）——体积是 GIF 的六成，适合投屏 / 视频平台 |
 | [visuals/search-pipeline.html](visuals/search-pipeline.html) | 动画版检索全流程：查询 note 如何经关键词通道 / 语义通道召回、融合、排序，最终落到 simple——7 步自动播放，用真模型（ORT 1.29.0）数据 |
+| [visuals/search-retrieval-flow.html](visuals/search-retrieval-flow.html) | 交互式检索请求生命周期：策略分派、FTS5 / 向量召回、Hybrid 融合、Rerank 和分页输出 |
 | [visuals/search-pipeline.gif](visuals/search-pipeline.gif) | 上面那页动画的 GIF 版（1180×1420，8.7 s，705 KB） |
 | [visuals/search-pipeline.mp4](visuals/search-pipeline.mp4) | 同上的 MP4 版（H.264，1180×1420，30 fps，8.5 s，462 KB） |
 | [visuals/pipeline-tutorial.mp4](visuals/pipeline-tutorial.mp4) | **合并版**：封面 + 向量化 7 步 + 章节卡 + 检索 7 步，共 14 步连续播放（H.264，1180×1420，30 fps，21.3 s，1.07 MB，内嵌 16 个章节标记） |
 | [visuals/pipeline-tutorial-music.mp4](visuals/pipeline-tutorial-music.mp4) | 同上，但带一段极简和弦背景音（ffmpeg 合成，无版权素材；视频流与上面完全一致，AAC 128k，1.31 MB） |
 | [visuals/pipeline-tutorial-narrated.mp4](visuals/pipeline-tutorial-narrated.mp4) | **中文旁白版**：同样 14 步，但每步停留按讲解长度重排（2 分 35 秒），旁白用 edge-tts 神经语音 `zh-CN-XiaoxiaoNeural` 生成（2 分 29 秒），仍带 16 个章节标记；旁白稿与换音色方法见 [visuals/pipeline-tutorial-narration.md](visuals/pipeline-tutorial-narration.md) |
-| [release-checklist.md](release-checklist.md) | Quality gates, compatibility evidence, offline/perf smoke, parked work |
-| [compatibility-spec.md](compatibility-spec.md) | Golden-test strategy, canonicalization, oracle harness, open decisions |
+| [release-checklist.md](release-checklist.md) | Quality gates, compatibility evidence, offline/perf smoke, parked work, and the CLI surface inventory (§6a) |
+| [compatibility-spec.md](../specs/compatibility-spec.md) | Golden-test strategy, canonicalization, oracle harness, open decisions |
 | [licensing.md](licensing.md) | AGPL-3.0-or-later status, the derivative relationship to the upstream project, and which commercial models it permits |
 | [patterns.md](patterns.md) | Design patterns in use, ones deliberately avoided, and the trigger to revisit each |
 | [../tools/README.md](../tools/README.md) | Oracle harness usage (`tools/export_reference.py`) |
 | [../tests/golden/README.md](../tests/golden/README.md) | Golden corpus layout, canonicalization, verified behaviors |
 | [review-and-gaps-2026-09-09.md](review-and-gaps-2026-09-09.md) | Doc review + gap log (2026-09-09) |
 
-## Status (2026-09-10)
+## Status (through 2026-09-19)
 
 - Phase 0 (reference baseline + contract docs): **done** — reference.md + data/search/context/mcp/compatibility specs created from the installed 0.23.2 source.
 - Phase 1 (golden corpus + oracle harness): **done** — `tools/export_reference.py` + `tests/fixtures/vault` + golden artifacts (parse/index/search/context in JSON, plain text and markdown/cli/errors + 17 normalized vault files) + `tests/common/` (shared canonicalization + fixture/Session helpers). The harness now also dumps the reference graph rows and its `find_related` traversal (`tools/dump_reference_graph.py`) and replays the MCP markdown formatter (`tools/dump_reference_context_text.py`).
@@ -55,7 +63,7 @@ reference implementation, idiomatic Rust internally, Obsidian as the manual mana
 - Phase 6b (OS filesystem watcher): **done** — `src/indexing/watcher.rs` binds `notify` events to the existing debouncer and indexer: reference ignore rules (`DEFAULT_IGNORE_PATTERNS` + `.bmignore`), the 1000 ms `index_delay` window, delete/create pairing into a move (permalink preserved), and CLI `watch --vault … --index … [--window-ms N] [--once]`. `tests/watch_golden.rs` covers debouncing, ignores, moves, removals and a real `notify` loop; `tests/cli_golden.rs` covers `watch --once`.
 - Phase 7 (text search / FTS5): **done (first slice)** — search rows populated for entity/observation/relation, reference query shape and bm25 scores, filters/pagination, CLI `search`, `tests/search_golden.rs` green. The zero-result relaxation retry is a full port in `src/search/relaxation.rs` (quoted/boolean rejection, the three-token minimum, the numeric-token guard, the two-word CJK branch, stopword pruning, format/mark-aware tokenization, apostrophe-safe FTS rendering); the ChatGPT capture in Phase 11b is what exposed the missing guards.
 - Phase 8 (vector & hybrid search): **done for the local core** — reference chunking (78-chunk corpus parity), cosine/ranking (threshold 0.55, top-k 100), hybrid fusion `max + 0.3 * min`, the reference `matched_chunk` rule, the ONNX runtime (`src/runtime/embedding.rs`: `fastembed` + `ort` running the reference `model_optimized.onnx` offline), chunk/embedding storage with source-hash reuse, and CLI `reindex --embeddings` + `search --vector|--hybrid|--min-similarity`. End-to-end parity: `tests/vector_golden.rs` reproduces both `search/vector-local-index.json` and `search/hybrid-rust.json` through the stored index, `tests/cli_golden.rs` does the same through the CLI, and `tests/embedding_runtime.rs` checks the live runtime against the captured reference vectors. The default-off reranker and the vector-leg filter set are covered by Phase 8c and Phase 15b below.
-- Phase 9 (context / graph traversal): **done** — `Store::find_related` is a verbatim port of the reference recursive CTE (`ORDER BY depth, type, id LIMIT max_related`), `build_context` mirrors the API hydration layer (primary + observations + related summaries, metadata counts, `timeframe` filter, page semantics), `render_plain` matches the CLI `--plain` outline and `render_markdown` the MCP `output_format="text"` output, and CLI `context` exposes both. `tests/context_golden.rs` (12 tests incl. a row-for-row replay of the reference traversal) and `tests/cli_golden.rs` are green. Timestamp/indexing parity (frontmatter `created`/`modified`, relation insertion order) landed with it — see `reference.md` §6e.
+- Phase 9 (context / graph traversal): **done** — `Store::find_related` is a verbatim port of the reference recursive CTE (`ORDER BY depth, type, id LIMIT max_related`), `build_context` mirrors the API hydration layer (primary + observations + related summaries, metadata counts, `timeframe` filter, page semantics), `render_plain` matches the CLI `--plain` outline and `render_markdown` the MCP `output_format="text"` output, and CLI `context` exposes both. `tests/context_golden.rs` (12 tests incl. a row-for-row replay of the reference traversal) and `tests/cli_golden.rs` are green. Timestamp/indexing parity (frontmatter `created`/`modified`, relation insertion order) landed with it — see `docs/reference.md` §6e.
 - Phase 10 (note mutation): **done for the local core** — `src/markdown/serialize.rs` (reference frontmatter writer: order-preserving merge, PyYAML block style/quoting, `---\n<yaml>---\n\n<body.strip()>`, malformed frontmatter refused, atomic write) verified byte-for-byte against the reference-normalized vault; `src/markdown/edit.rs` ports every edit operation (`append`, `prepend`, `find_replace`, `replace_section`, `insert_before/after_section`, plus `_merge_metadata_into_markdown`), verified against a captured 22-case reference table including exact error messages; `src/application/note.rs` (`NoteService`) does read/write/edit/move/delete with overwrite protection and automatic reindexing. The CLI/MCP surfaces and the write-path goldens landed in Phase 11d below.
 - Phase 11 (stdio MCP server): **done for the local core** — `src/adapters/mcp/server.rs` speaks newline-delimited JSON-RPC 2.0 on stdout (`initialize`, `notifications/initialized`, `ping`, `tools/list`, `tools/call`) with diagnostics on stderr, and exposes 20 tools (15 note/search/graph/navigation/activity/project tools, the three schema tools, and the two ChatGPT adapters): the note family (`write_note`, `read_note`, `view_note`, `read_content`, `edit_note`, `move_note`, `delete_note`), search (`search_notes` plus the `search`/`fetch` ChatGPT adapters, gated on the `initialize` `clientInfo`), graph (`build_context`), navigation (`list_directory`), activity (`recent_activity`), projects (`list_memory_projects`, `create_memory_project`, `delete_project`), and `auto_memory_diagnostics`; CLI `mcp --vault … --index …`. `src/application/directory.rs` ports `DirectoryService.list_directory` (prefix query, tree build, depth/glob collection, the four sort orders, bounded pages with `children: []`), `src/application/activity.rs` ports `build_context` without a `memory_url` (recency search by `updated_at DESC`, shared traversal/hydration, guide-laden text output), and `read_note` follows the reference's text default plus its resolution → title → related-results → not-found chain. `tools/dump_reference_mcp.py` captures real reference responses into `tests/golden/mcp/responses.json` (25 frames); `tests/mcp_golden.rs` replays every text surface character-for-character and every JSON payload field-for-field. Every reference tool except `list_workspaces` is now exposed (Web/Cloud surfaces stay out of scope).
 - Phase 11e (Streamable HTTP MCP transport): **done** — `auto-memory mcp --http [--host HOST] [--port PORT] [--path PATH]` serves the same session over the spec's Streamable HTTP transport, built on the official `rmcp` SDK (`transport-streamable-http-server`) with `axum` as the listener — sessions, `Mcp-Session-Id`, SSE framing and content negotiation are the SDK's, not hand-rolled. The tool surface is the *same* `McpServer::call_tool` / `advertised_tools` the stdio transport uses (so the two cannot drift, `--read-only` included), one embedding/reranker runtime is shared by both transports, and `initialize` reports the same protocol version and server name over either. `tests/mcp_http.rs` drives a real session over a hand-written HTTP/1.1 client (session header, `tools/list`, `tools/call`, read-only refusal) and asserts the HTTP tool list equals the stdio one.
@@ -106,8 +114,8 @@ reference implementation, idiomatic Rust internally, Obsidian as the manual mana
 
 ## Errata
 
-- `auto-memory-rs-spec.md` §4 suggested `.basic-memory/index.sqlite3` inside the vault. The
+- `specs/auto-memory-rs-spec.md` §4 suggested `.basic-memory/index.sqlite3` inside the vault. The
   reference 0.23.2 stores the derived SQLite index in the **app config dir**
   (`~/.config/basic-memory/memory.db`); a vault only holds markdown + `.basic-memory/config.json`.
-  See `reference.md` §5. Whether `auto-memory-rs` mirrors this or deviates is open decision #1 in
-  `compatibility-spec.md` §7.
+  See `docs/reference.md` §5. Whether `auto-memory-rs` mirrors this or deviates is open decision #1 in
+  `specs/compatibility-spec.md` §7.

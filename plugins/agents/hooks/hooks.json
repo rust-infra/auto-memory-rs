@@ -9,7 +9,8 @@
             "type": "command",
             "command": "sh \"$CLAUDE_PLUGIN_ROOT/hooks/session_start.sh\"",
             "statusMessage": "Loading Auto Memory context",
-            "timeout": 30
+            "timeout": 30,
+            "additionalContextLimit": 4000
           }
         ]
       }

@@ -1,5 +1,6 @@
-//! Reserved for the CLI adapter.
+//! Declared placeholder for the CLI adapter — it holds no code.
 //!
-//! The `auto-memory` command surface lives in the binary (`src/main.rs`); this
-//! module is the placeholder the module tree in `docs/auto-memory-rs-spec.md`
-//! declares, alongside the filesystem adapter.
+//! The `auto-memory` command surface lives in the binary (`src/main.rs`), which
+//! owns the `clap` definitions and dispatches every verb. This directory exists
+//! because `specs/auto-memory-rs-spec.md` §6 declares it, alongside the
+//! filesystem placeholder.

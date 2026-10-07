@@ -3,7 +3,7 @@
 
 Run with the *reference* interpreter (it owns `fastembed`):
 
-    HF_HUB_OFFLINE=1 /home/rg/.local/share/uv/tools/basic-memory/bin/python \
+    HF_HUB_OFFLINE=1 ~/.local/share/uv/tools/basic-memory/bin/python \
         tools/dump_reference_embeddings.py
 
 The captured document is consumed by `FixtureEmbeddingProvider`

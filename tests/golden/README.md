@@ -78,7 +78,7 @@ ids (see `tests/context_golden.rs::find_related_replays_the_reference_traversal`
 ```bash
 python3 tools/export_reference.py       # requires reference CLI (+ model cache for vectors)
 python3 tools/dump_reference_mcp.py     # requires reference CLI; drives `basic-memory mcp`
-/home/rg/.local/share/uv/tools/basic-memory/bin/python tools/dump_reference_picoschema.py
+~/.local/share/uv/tools/basic-memory/bin/python tools/dump_reference_picoschema.py
 ```
 
 The harness also shells out to `tools/dump_reference_graph.py` and

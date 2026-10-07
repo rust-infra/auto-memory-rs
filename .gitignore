@@ -9,3 +9,9 @@ __pycache__/
 
 # tact agent runtime state: session db, transcripts, captured tool results.
 .tact/
+
+# macOS Finder metadata.
+.DS_Store
+
+# JetBrains IDE project state.
+.idea/

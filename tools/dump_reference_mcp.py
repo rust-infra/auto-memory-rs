@@ -2,7 +2,7 @@
 """Capture real MCP responses from the reference `basic-memory mcp` server.
 
 Phase 11 needs the reference's *actual* `tools/call` payloads, not hand-written
-expectations: `docs/mcp-spec.md` marks them as capture items `[G]`. This harness
+expectations: `specs/mcp-spec.md` marks them as capture items `[G]`. This harness
 sets up the same hermetic oracle environment as `export_reference.py` (temp HOME
 and `BASIC_MEMORY_CONFIG_DIR`, never the real `~/.config/basic-memory`), indexes
 the fixture vault, then drives the reference server over stdio and records every

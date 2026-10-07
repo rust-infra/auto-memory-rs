@@ -39,7 +39,7 @@ Options: `--fixtures`, `--out`, `--work-dir`, `--model-cache`, `--no-embeddings`
 *before* the indexer normalizes files. Run it with the reference interpreter:
 
 ```bash
-/home/rg/.local/share/uv/tools/basic-memory/bin/python tools/dump_reference_parse.py
+~/.local/share/uv/tools/basic-memory/bin/python tools/dump_reference_parse.py
 ```
 
 It writes `tests/golden/parse/reference-parse.json`, which `tests/parser_golden.rs` diffs the
@@ -51,7 +51,7 @@ Rust parser against. Parsing needs no database, so this script runs without sand
 the index is built:
 
 ```bash
-/home/rg/.local/share/uv/tools/basic-memory/bin/python tools/dump_reference_graph.py \
+~/.local/share/uv/tools/basic-memory/bin/python tools/dump_reference_graph.py \
     --db /tmp/basic-memory-oracle-XXXX/config/memory.db
 ```
 
@@ -100,7 +100,7 @@ follows `initialize`, which the driver sends for you.
 `tests/golden/schema/picoschema.json` (38 cases). It needs no database and no model cache:
 
 ```bash
-/home/rg/.local/share/uv/tools/basic-memory/bin/python tools/dump_reference_picoschema.py
+~/.local/share/uv/tools/basic-memory/bin/python tools/dump_reference_picoschema.py
 ```
 
 ## Schema tool capture
@@ -162,7 +162,8 @@ runs it with the repo as `cwd`), so that name is ignored by git.
 
 ## Not part of the harness
 
-`auto-memory-hook.py` is user-facing: an agent-lifecycle hook that briefs a Codex or
-Tact session from an existing index (see `docs/hooks.md`). It talks to the built
-binary, never to the reference implementation, and nothing in the test suite imports
-it.
+`auto-memory-hook.py` is user-facing: an agent-lifecycle hook that briefs a Codex
+session from an existing index — or a Tact session, if it is hung off
+`UserPromptSubmit` (`SessionStart` output is dropped by Tact; see `docs/hooks.md`
+§1). It talks to the built binary, never to the reference implementation, and
+nothing in the test suite imports it.

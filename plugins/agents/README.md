@@ -50,6 +50,36 @@ The `source.path` form must match the existing entries in that catalog (Codex
 resolves local paths against the marketplace root; the bundled entries use the
 `./.codex/plugins/<name>` shape).
 
+## Install into Tact
+
+Tact **auto-discovers** local marketplaces — `$HOME/.agents/plugins/marketplace.json`
+(personal) or, walking up from the cwd, the first `<root>/.agents/plugins/marketplace.json`.
+`tact-ui plugin marketplace add` does *not* take a `file://` path (`MarketplaceSource::parse`
+accepts only git/http/https/ssh or an `owner/repo` shorthand), so the discovered file is
+the only local route. This repo ships one, so from the repo root:
+
+```sh
+tact-ui plugin marketplace list            # auto-memory (discovered)
+tact-ui plugin install auto-memory-rs@auto-memory
+tact-ui plugin list
+tact-ui hooks list                         # the package's two hooks land under "Needs review"
+tact-ui hooks trust                        # unapproved hooks are never registered
+```
+
+The catalog entry's `name` must equal the manifest `name` (`auto-memory-rs` in
+`.codex-plugin/plugin.json`), and `source` is resolved relative to the marketplace root.
+
+**This package is the Codex one.** Tact has its own: [`plugins/tact`](../tact/README.md)
+(same skills and schemas, `.tact/` config paths, `--harness tact`, `tact_session`
+note type). Install one per host — Tact loads the skills of every installed
+plugin, so installing both gives you two near-identical skill sets and two
+`SessionStart` hooks, one of them reading `.codex/`.
+
+Installing *this* package into Tact still works, but only as the Codex
+configuration: the shims hardcode `--harness codex` and the skills read
+`.codex/basic-memory.json`, so a Tact session gets Codex-worded briefs and a
+`codex/<repo>` capture folder.
+
 ## What the hooks do
 
 | Event | Verb | Effect |
@@ -68,6 +98,14 @@ through the MCP `write_note` tool and links it to its predecessor with
 Both hooks are **fail-open**: `auto-memory` exits 0 on every error path (missing
 index, malformed stdin, unknown project), so a hook can never break a session.
 stdout carries the brief and nothing else; diagnostics go to stderr.
+
+On **Codex** this is what briefs a session. On **Tact** the `SessionStart` brief is
+applied too — Tact collects a hook's `additionalContext` and injects it as a
+`<hook-context>` message before the first turn (`crates/tact/src/plugin/hooks.rs`,
+`collect_session_start_output`). The shim still has to ask for the Tact harness
+(`--harness tact`) for the brief to be worded for Tact and to read
+`.tact/auto-memory.json`; see the packaging note above and `docs/hooks.md` §1 for the
+per-event table.
 
 ## Configure
 
@@ -93,11 +131,29 @@ The engine reads `primaryProject`, `captureFolder`, `recallTimeframe`,
 `checkpointOnCompact`, and `captureEvents`. A malformed file **fails closed**
 (capture and checkpointing disabled) rather than merging a partial route.
 
-### Environment
+### Where the index and project come from
 
-- `AUTO_MEMORY_BIN` — binary to invoke (default `auto-memory` from `PATH`).
-- `AUTO_MEMORY_INDEX` — index path (default `~/.local/share/auto-memory/memory.db`),
-  used when `--index` is not passed.
+The shims pass no `--index` and no `--project`, so the hook resolves them itself, from files —
+there is nothing to export in a shell profile. Highest precedence first:
+
+1. `--index` / `--project` (a flag, if you wire one up yourself)
+2. `$AUTO_MEMORY_INDEX` — still honoured, no longer the way to configure the tool
+3. the user config file, `~/.config/auto-memory/config.json`:
+
+   ```json
+   { "index": "~/.local/share/auto-memory/memory.db", "default_project": "my-project" }
+   ```
+
+4. the mapping file for the project (`.codex/basic-memory.json` → `primaryProject`), for the
+   project only; the index has no equivalent here
+5. the built-in default index (`~/.local/share/auto-memory/memory.db`); with no project at all the
+   hook prints the first-run nudge instead of guessing
+
+Keys in the config file are **snake_case** (`default_project`), unlike the mapping files'
+camelCase (`primaryProject`) — a camelCase key there is ignored as an unknown key.
+
+`AUTO_MEMORY_BIN` is separate: it selects the binary the shim invokes (default `auto-memory` from
+`PATH`).
 
 ### MCP server
 
@@ -109,16 +165,21 @@ and index paths are per-user, so declare the server in the user-level config
 instead:
 
 ```json
-// ~/.tact/mcp.json
+// ~/.tact/.mcp.json   <- note the leading dot
 {
   "mcpServers": {
     "auto-memory-rs": {
-      "command": "auto-memory",
+      "command": "/absolute/path/to/auto-memory",
       "args": ["mcp", "--vault", "/path/to/vault", "--index", "/path/to/memory.db", "--project", "my-project"]
     }
   }
 }
 ```
+
+Tact reads `~/.tact/.mcp.json` (user scope) and `<workdir>/.tact/.mcp.json` (project
+scope); a bare `~/.tact/mcp.json` is a legacy path and is **not** read. Because Tact
+does not expand environment variables in `args`, both paths must be absolute, and
+`command` must be absolute too unless `auto-memory` is on `PATH`.
 
 The server provides the `write_note`, `search`, `fetch`, and `build_context`
 tools the skills call. (For Codex, add the same entry under `mcpServers` in

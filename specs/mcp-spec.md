@@ -78,7 +78,7 @@ closing fence (so it keeps the blank separator line unless `include_frontmatter=
   `📄 Recent Notes & Documents (n):` heading with its two-space `•` rows, the
   `**Activity Summary:** Showing n items (page p). Use page=p+1 to see more.` footer, and the
   empty/next-page guidance branches (the binary's name inside that guidance is this port's —
-  see §4 of `compatibility-spec.md`).
+  see §4 of `specs/compatibility-spec.md`).
 - `list_memory_projects` in a `--project`-constrained server returns the pinned
   `Project: <name>` notice, and its JSON form matches field for field.
 - `create_memory_project` and `delete_project` keep the reference's constrained-server refusal
@@ -99,7 +99,7 @@ closing fence (so it keeps the blank separator line unless `include_frontmatter=
   and the CLI's `json.dumps(indent=2, ensure_ascii=True)` rendering. The one phrase exempted
   from the byte comparison is the CLI named in the guidance (`auto-memory status`,
   `auto-memory reindex` instead of the reference's `basic-memory …`) — see §4 of
-  `compatibility-spec.md`.
+  `specs/compatibility-spec.md`.
 - `tools/dump_reference_chatgpt_mcp.py` captures `search`/`fetch` twice — once from a neutral
   client and once from a client reporting `openai-mcp` — into `tests/golden/mcp/chatgpt.json`
   (9 calls). `tests/chatgpt_mcp_golden.rs` replays every frame byte for byte, including the
@@ -142,7 +142,7 @@ Known divergences, each with a reason:
 | `fetch` | search | ChatGPT adapter; returns the note as a document (`id`/`title`/`text`/`url`/`metadata`) |
 | `recent_activity` | search/activity | per-project or cross-project activity |
 | `list_directory` | navigation | vault directory listing |
-| `build_context` | graph | memory:// context (see `context-spec.md`) |
+| `build_context` | graph | memory:// context (see `specs/context-spec.md`) |
 | `list_memory_projects` | projects | merged local(+cloud) project list |
 | `create_memory_project` | projects | register project |
 | `delete_project` | projects | unregister; notes retained unless `delete_notes` |

@@ -549,7 +549,7 @@ fn mcp_read_content_and_view_note_replay_the_reference_payloads() {
     // Documented divergence: `memory://notes/frontmatter` resolves here but not in the
     // reference, because this port's `resolve_entity_path` also tries `<path>.md` while
     // the reference only accepts the permalink, an exact file path, a title, or an
-    // external id. `mcp-spec.md` §1c records the deviation; the captured frame stays in
+    // external id. `specs/mcp-spec.md` §1c records the deviation; the captured frame stays in
     // the golden as evidence.
     let (frames, _stderr, _dir, _vault) = run_session_in(
         &normalized,

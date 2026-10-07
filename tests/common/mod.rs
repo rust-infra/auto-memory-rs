@@ -234,7 +234,7 @@ pub fn load_golden_json(relative: &str) -> Value {
 pub struct SessionOutput {
     /// Parsed stdout frames, in request order.
     pub frames: Vec<Value>,
-    /// Raw stderr, which must never carry protocol frames (`docs/mcp-spec.md` §1).
+    /// Raw stderr, which must never carry protocol frames (`specs/mcp-spec.md` §1).
     pub stderr: String,
 }
 
