@@ -137,7 +137,7 @@ struct ReindexArgs {
     /// the standard path).
     #[arg(long, value_name = "DB")]
     index: Option<PathBuf>,
-    /// Project name (defaults to the vault directory name).
+    /// Project name (defaults to `default_project`, else the vault directory name).
     #[arg(long, value_name = "NAME")]
     project: Option<String>,
     /// Rebuild every note instead of reconciling.
@@ -160,7 +160,7 @@ struct WatchArgs {
     /// the standard path).
     #[arg(long, value_name = "DB")]
     index: Option<PathBuf>,
-    /// Project name (defaults to the vault directory name).
+    /// Project name (defaults to `default_project`, else the vault directory name).
     #[arg(long, value_name = "NAME")]
     project: Option<String>,
     /// Debounce window in milliseconds.
@@ -185,7 +185,7 @@ struct McpArgs {
     /// the standard path).
     #[arg(long, value_name = "DB")]
     index: Option<PathBuf>,
-    /// Project name (defaults to the vault directory name).
+    /// Project name (defaults to `default_project`, else the vault directory name).
     #[arg(long, value_name = "NAME")]
     project: Option<String>,
     /// Serve the Streamable HTTP transport instead of stdio.

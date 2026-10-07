@@ -37,7 +37,7 @@ check and could reconcile against a missing directory.
 1. **`src/config.rs` becomes live.** Add `index` and `default_project` to `Config`, plus
    `user_config_path()` (XDG) and `load_user_config()`, which never fails: it returns
    `Absent` / `Loaded` / `Malformed` so the caller picks the policy (hook: warn and continue;
-   CLI: error naming the file). Today the whole module is dead code — nothing reads it.
+   CLI: error naming the file). Before this slice the whole module was dead code — nothing read it.
 2. **One resolution family.** `resolve_index` / `resolve_project` as ordered, testable chains
    returning `Resolved { value, origin }` with `Origin::{Flag, Environment, Config, Default}`.
    Origin is not decoration: `doctor` must print it and the CLI's errors must name the step.
