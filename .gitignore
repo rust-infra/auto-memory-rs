@@ -12,3 +12,6 @@ __pycache__/
 
 # macOS Finder metadata.
 .DS_Store
+
+# JetBrains IDE project state.
+.idea/
