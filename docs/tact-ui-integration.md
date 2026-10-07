@@ -22,7 +22,7 @@ hook 前端 + `plugins/agents/` 包**大部分能直接跑**，缺的是"Tact �
 | stdin payload 字段 | `session_id`（真实会话 id）、`cwd`、`hook_event_name`、`source`、`model`、`permission_mode`、`turn_id`、`transcript_path: null` | Codex 分支读 `source`→trigger、`turn_id`、`model` | 字段已对齐，但见 §2.1 |
 | `--harness` | — | ✅ 已支持 `claude` / `codex` / `pi` / `tact` | 完成（§2.1） |
 | 项目映射配置 | — | ✅ 另读 `~/.tact/auto-memory.json` + `.tact/auto-memory.json`（`autoMemory` 块） | 完成（§2.1） |
-| 插件包 | 读 `.codex-plugin/plugin.json` + `hooks/hooks.json`，`${CLAUDE_PLUGIN_ROOT}` 会展开 | 整包是 Codex 的（wrapper 硬编码 `--harness codex`） | 出 Tact 版措辞/wrapper |
+| 插件包 | 读 `.codex-plugin/plugin.json` + `hooks/hooks.json`，`${CLAUDE_PLUGIN_ROOT}` 与 `${PLUGIN_ROOT}` 都会展开（`crates/tact/src/plugin/hooks.rs:886`） | 整包是 Codex 的（wrapper 硬编码 `--harness codex`） | 出 Tact 版措辞/wrapper |
 | `PreCompact` 的 stdout | **忽略**（只用 `control` 做 veto） | 自己也早退，不打印 | 无需改，见 §2.4 |
 | 市场来源 | `file://` 与裸本地路径都不接受；只认 `owner/repo` / git URL / 本地发现 | 仓库根有 `.agents/plugins/marketplace.json` | ✅ 已核对（§2.5）：**插件必须先 commit**，tact 从 HEAD 的 git tree 复制 |
 

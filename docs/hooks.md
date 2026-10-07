@@ -31,8 +31,9 @@ exit  : 永远 0 —— hook 失败绝不能弄坏会话
 实现细节（两边源码）：
 
 - Tact：`crates/tact/src/plugin/hooks.rs` —— 13 个事件，非零退出/超时/JSON 非法都只
-  记 warning 并继续；命令字符串里的 `${CLAUDE_PLUGIN_ROOT}` / `$CLAUDE_PLUGIN_ROOT`
-  会被展开，环境变量里也会带上 `CLAUDE_PLUGIN_ROOT`。
+  记 warning 并继续；命令里的 `${CLAUDE_PLUGIN_ROOT}` / `$CLAUDE_PLUGIN_ROOT` 与
+  `${PLUGIN_ROOT}` / `$PLUGIN_ROOT`（连同 `…_PLUGIN_DATA` 那一对）都会被展开，
+  环境变量里也会带上。
 - Codex：插件 `hooks/hooks.json`，每个命令拿到同样的 stdin JSON；参考实现的
   `session_start.py` 明确写着 fail-open（`except BaseException: pass; sys.exit(0)`）。
 
@@ -187,8 +188,13 @@ auto-memory-rs/
 `tact-ui hooks list` 会把它列在 "Needs review" 下，`tact-ui hooks trust`（或 `--all`）
 之后才会真的执行。
 
-注意：Tact 只展开 `${CLAUDE_PLUGIN_ROOT}`（不是 `${PLUGIN_ROOT}`），同时也会把它放进
-环境变量——上面用 `"$CLAUDE_PLUGIN_ROOT/…"` 交给 shell 展开，两种 harness 都成立。
+注意：Tact 会把**四个**占位符都展开（`crates/tact/src/plugin/hooks.rs:886`
+`expand_plugin_placeholders`），带括号和裸写两种形式都认：`CLAUDE_PLUGIN_ROOT` / `PLUGIN_ROOT`
+（= 插件缓存根目录）、`CLAUDE_PLUGIN_DATA` / `PLUGIN_DATA`（= 可写目录，跨升级保留）。
+"两个 ABI 的名字都接受"是**修过之后**的行为——源码注释点名了修之前的样子：
+*"Accepting only the Claude root spelling used to leave the Codex one to `sh`, where an unset
+`${PLUGIN_ROOT}` expands to the empty string and the hook silently addressed `/hooks/...`."*
+同一批名字也会作为环境变量导出，所以 `"$CLAUDE_PLUGIN_ROOT/…"` 和 `"${PLUGIN_ROOT}/…"` 都成立。
 脚本里的环境变量（`AUTO_MEMORY_*`）要在**宿主进程**里导出（hook 继承宿主环境）。
 
 ---
