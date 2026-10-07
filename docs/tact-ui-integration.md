@@ -245,9 +245,19 @@ auto-memory-tact`）。仍未 push——本地 catalog 走的是 HEAD 的 git tr
 2. **过信任检查**：`tact-ui hooks list` 会把它列在 "Needs review"，`tact-ui hooks trust`（或
    `--all`）之后才会执行；改过命令就要重新 review（`crates/tact/src/config/cli.rs:126-157`）。
 3. MCP 路线（想要 20 个工具而不只是 briefing）：
-   `tact-ui mcp add auto-memory-rs --command /abs/path/auto-memory --arg mcp --arg --vault --arg …`。
-   默认写项目文件 `<workdir>/.tact/.mcp.json`，加 `--user` 写 `$HOME/.tact/.mcp.json`；
-   用 `tact-ui mcp list` / `tact-ui mcp get auto-memory-rs` 核对。建议加 `--read-only`。
+
+   ```bash
+   tact-ui mcp add auto-memory --user \
+     --command /abs/path/auto-memory \
+     --arg mcp --arg=--vault --arg=/abs/vault
+   ```
+
+   **以 `--` 开头的参数值必须写成 `--arg=--vault`**：写成 `--arg --vault` 时 clap 会把
+   `--vault` 当成新参数，报 `unexpected argument '--vault' found`。默认写项目文件
+   `<workdir>/.tact/.mcp.json`，加 `--user` 写 `$HOME/.tact/.mcp.json`；用
+   `tact-ui mcp list` / `tact-ui mcp get auto-memory` 核对。只读写成 `--arg=--read-only`。
+   `--project` 可以省：`--vault` 指向**已注册**的目录时，`mcp` 会按路径认回那条项目行
+   （显式 `--project` 仍然优先）。
 4. **不需要**给 tact 加 `[memory]` 配置段——配置属于产品自己（这正是"独立产品"的直接推论）。
 
 ---

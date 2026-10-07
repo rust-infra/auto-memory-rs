@@ -457,3 +457,40 @@ fn doctor_fails_when_something_named_is_missing() {
         .expect("a project check");
     assert_eq!(project_check["status"], "fail");
 }
+
+/// `--vault` alone must not mint a second project for an already-registered vault.
+///
+/// It used to: with no `--project` and no `default_project`, the name came from the
+/// directory, so `reindex --vault <registered dir>` added a second row and indexed
+/// the same notes under a second project id — exactly the naming split that
+/// `--permalink` exists to avoid.
+#[test]
+fn a_vault_alone_reuses_the_project_that_registered_it() {
+    let (_dir, vault, index) = scratch();
+    let vault_arg = vault.to_string_lossy().into_owned();
+    let (_, ok) = run(&[
+        "project",
+        "add",
+        "1m",
+        &vault_arg,
+        "--index",
+        &index,
+        "--permalink",
+        "1m",
+    ]);
+    assert!(ok);
+
+    // Only `--vault`: the registry already knows this directory.
+    let (_, ok) = run(&["reindex", "--vault", &vault_arg, "--index", &index]);
+    assert!(ok);
+
+    let (payload, ok) = run_json(&["project", "list", "--index", &index, "--json"]);
+    assert!(ok);
+    let permalinks: Vec<&str> = payload["projects"]
+        .as_array()
+        .expect("projects")
+        .iter()
+        .filter_map(|row| row["permalink"].as_str())
+        .collect();
+    assert_eq!(permalinks, ["1m"], "a second project was minted");
+}

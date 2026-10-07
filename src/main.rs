@@ -568,12 +568,27 @@ async fn resolve_project_target(
             }
             None => match &vault {
                 Some(vault) => {
-                    let name = vault.file_name().map_or_else(
-                        || "default".to_owned(),
-                        |name| name.to_string_lossy().into_owned(),
-                    );
-                    let permalink = generate_permalink(&name);
-                    (name, permalink, None)
+                    // A vault that is already registered names its own project.
+                    // Minting a name from the directory instead would create a
+                    // *second* project row for the same vault and split the
+                    // permalinks — `--vault ~/agent-memory` would index the notes
+                    // again under `agent-memory` while `1m` already owned them.
+                    let existing = store
+                        .projects()
+                        .await
+                        .map_err(|error| format!("failed to read projects: {error}"))?
+                        .into_iter()
+                        .find(|row| same_path(&row.path, vault));
+                    if let Some(row) = existing {
+                        (row.name.clone(), row.permalink.clone(), Some(row))
+                    } else {
+                        let name = vault.file_name().map_or_else(
+                            || "default".to_owned(),
+                            |name| name.to_string_lossy().into_owned(),
+                        );
+                        let permalink = generate_permalink(&name);
+                        (name, permalink, None)
+                    }
                 }
                 None => {
                     return Err(
@@ -602,6 +617,23 @@ async fn resolve_project_target(
         return Err(format!("vault directory not found: {}", vault.display()));
     }
     Ok((name, permalink, vault))
+}
+
+/// Whether a registered vault path and a given directory name the same place.
+///
+/// The stored path is whatever the user typed at `project add` time, so a trailing
+/// slash or a symlinked home would miss an exact comparison; both sides fall back
+/// to `canonicalize` before giving up. A path that cannot be canonicalised (it does
+/// not exist yet) is simply not a match.
+fn same_path(registered: &str, vault: &Path) -> bool {
+    let registered = Path::new(registered);
+    if registered == vault {
+        return true;
+    }
+    match (registered.canonicalize(), vault.canonicalize()) {
+        (Ok(left), Ok(right)) => left == right,
+        _ => false,
+    }
 }
 
 /// Install the diagnostics subscriber.
