@@ -76,8 +76,9 @@ prefer the highest-signal checkpoint regardless of which producer wrote it.
 lifecycle trace: this port does not yet ship the lifecycle envelope/inbox, so
 there is no trace to promote into the graph.
 
-Query configured `secondaryProjects` read-only for open decisions. Do not write
-to shared projects during orientation.
+Shared/secondary projects are not shipped by this port — `secondaryProjects` is
+not read, so setting it changes nothing — and there is nothing to query across
+projects. Stay inside the pinned project.
 
 Read the highest-signal hits before summarizing. Prefer notes that match the
 current repository, branch, Git SHA, pull request, named route, issue, or file

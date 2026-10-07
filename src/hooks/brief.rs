@@ -101,15 +101,20 @@ pub async fn build_session_brief(
     }
     data_lines.push(header);
 
-    push_section(&mut data_lines, "Active tasks", &task_rows, |row| {
-        vec![label(row)]
-    });
-    push_section(&mut data_lines, "Open decisions", &decision_rows, |row| {
+    push_section(&mut data_lines, "Active tasks", "", &task_rows, |row| {
         vec![label(row)]
     });
     push_section(
         &mut data_lines,
-        "Recent sessions — where you left off",
+        "Open decisions",
+        "",
+        &decision_rows,
+        |row| vec![label(row)],
+    );
+    push_section(
+        &mut data_lines,
+        "Recent sessions",
+        " — where you left off",
         &session_rows,
         |row| session_label(row, profile.session_note_type == "pi_session"),
     );
@@ -292,6 +297,7 @@ fn rows(page: &Option<Vec<SearchResult>>) -> Vec<&SearchResult> {
 fn push_section(
     data_lines: &mut Vec<String>,
     heading: &str,
+    suffix: &str,
     rows: &[&SearchResult],
     render: impl Fn(&SearchResult) -> Vec<String>,
 ) {
@@ -299,7 +305,10 @@ fn push_section(
         return;
     }
     data_lines.push(String::new());
-    data_lines.push(format!("## {heading} ({})", rows.len()));
+    // The reference puts the count directly after the section name and any phrase
+    // after *that* (`## Recent sessions (2) — where you left off`), so the count
+    // cannot be appended to the whole heading.
+    data_lines.push(format!("## {heading} ({}){suffix}", rows.len()));
     for row in rows {
         data_lines.extend(render(row));
     }

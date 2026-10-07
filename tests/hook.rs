@@ -103,7 +103,13 @@ async fn brief_recalls_a_recent_session_through_the_relative_window() {
         None,
     )
     .await;
-    assert!(brief.contains("Recent sessions"), "{brief}");
+    // The reference's heading is `## Recent sessions ({count}) — where you left
+    // off`: the count sits directly after the name, and the phrase after that.
+    // Appending the count to the whole heading put it on the wrong side.
+    assert!(
+        brief.contains("## Recent sessions (1) — where you left off"),
+        "{brief}"
+    );
     assert!(brief.contains("Checkpoint probe"), "{brief}");
 }
 
