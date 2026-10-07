@@ -227,6 +227,7 @@ pub struct VaultWatcher<'a> {
     root: PathBuf,
     debouncer: Debouncer,
     ignore: IgnoreRules,
+    ready: Option<tokio::sync::oneshot::Sender<()>>,
 }
 
 impl<'a> VaultWatcher<'a> {
@@ -242,6 +243,27 @@ impl<'a> VaultWatcher<'a> {
             root,
             debouncer: Debouncer::new(DEFAULT_WATCH_WINDOW),
             ignore,
+            ready: None,
+        }
+    }
+
+    /// Notify `ready` once the OS watch is installed.
+    ///
+    /// The watch is installed inside [`watch_vault`], on the thread that drives it, so a
+    /// caller has no way to know when it is live. That matters because a file written
+    /// *before* installation produces no event at all — it is invisible to the watcher,
+    /// not merely late — which makes "write, then sleep long enough" an unreliable way
+    /// to drive a watch loop. This gives the caller something to wait on instead.
+    #[must_use]
+    pub fn with_ready_signal(mut self, ready: tokio::sync::oneshot::Sender<()>) -> Self {
+        self.ready = Some(ready);
+        self
+    }
+
+    /// Fire the readiness signal, if one was asked for. Idempotent.
+    fn signal_ready(&mut self) {
+        if let Some(ready) = self.ready.take() {
+            let _ = ready.send(());
         }
     }
 
@@ -469,6 +491,7 @@ pub async fn watch_vault(
     handle
         .watch(watcher.root.as_path(), RecursiveMode::Recursive)
         .map_err(|error| std::io::Error::other(error.to_string()))?;
+    watcher.signal_ready();
 
     let root = watcher.root.clone();
     tokio::pin!(shutdown);
@@ -569,6 +592,7 @@ pub async fn watch_once(mut watcher: VaultWatcher<'_>, window: Duration) -> Resu
     handle
         .watch(watcher.root.as_path(), RecursiveMode::Recursive)
         .map_err(|error| std::io::Error::other(error.to_string()))?;
+    watcher.signal_ready();
 
     let deadline = Instant::now() + window;
     loop {

@@ -184,6 +184,7 @@ async fn notify_loop_indexes_a_new_file() {
     let stop = std::sync::Arc::new(AtomicBool::new(false));
     let stop_for_thread = stop.clone();
     let index_for_thread = index_path.clone();
+    let (ready, watching) = tokio::sync::oneshot::channel::<()>();
     let handle = std::thread::spawn(move || {
         block_on(async move {
             let mut store = Store::open(&index_for_thread).await.expect("store");
@@ -198,7 +199,8 @@ async fn notify_loop_indexes_a_new_file() {
                 IndexOptions::new("oracle"),
             );
             let watcher = VaultWatcher::new(service, &vault_for_watcher)
-                .with_window(Duration::from_millis(50));
+                .with_window(Duration::from_millis(50))
+                .with_ready_signal(ready);
             watch_vault(
                 watcher,
                 shutdown_when(|| stop_for_thread.load(Ordering::Relaxed)),
@@ -208,7 +210,13 @@ async fn notify_loop_indexes_a_new_file() {
         })
     });
 
-    std::thread::sleep(Duration::from_millis(300));
+    // Wait for the loop to be watching rather than sleeping a guess at how long that
+    // takes: a write that lands before the OS watch is installed raises no event at all,
+    // so the note would be invisible to the watcher, not merely late.
+    tokio::time::timeout(Duration::from_secs(10), watching)
+        .await
+        .expect("the watch loop installs its OS watch")
+        .expect("the watch loop is still running");
     fs::write(
         vault.join("note.md"),
         "# Note\n\n- [fact] from the watcher\n",

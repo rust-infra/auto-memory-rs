@@ -178,6 +178,7 @@ async fn async_watch_loop_indexes_then_flushes_on_shutdown() {
     let vault_for_task = vault.clone();
     let index_for_task = index_path.clone();
     let (stop, stopped) = tokio::sync::oneshot::channel::<()>();
+    let (ready, watching) = tokio::sync::oneshot::channel::<()>();
     let handle = std::thread::spawn(move || {
         block_on(async move {
             let mut store = Store::open(&index_for_task).await.expect("store");
@@ -191,8 +192,11 @@ async fn async_watch_loop_indexes_then_flushes_on_shutdown() {
                 &vault_for_task,
                 IndexOptions::new("oracle"),
             );
-            let watcher =
-                VaultWatcher::new(service, &vault_for_task).with_window(Duration::from_millis(50));
+            let watcher = VaultWatcher::new(service, &vault_for_task)
+                // Long enough that the second write cannot be drained by a tick while the
+                // test is arranging it, so the flush is unambiguously what applies it.
+                .with_window(Duration::from_millis(1000))
+                .with_ready_signal(ready);
             watch_vault(watcher, async {
                 let _ = stopped.await;
             })
@@ -202,8 +206,14 @@ async fn async_watch_loop_indexes_then_flushes_on_shutdown() {
         .expect("watch loop")
     });
 
-    // Give the loop a moment to install the notify watch before writing.
-    std::thread::sleep(Duration::from_millis(300));
+    // Wait for the loop to install its OS watch instead of sleeping a guess at how long
+    // that takes. A write that lands before installation raises no event at all — the
+    // note is invisible to the watcher, not merely late — so a fixed sleep here is a bet
+    // on how loaded the machine is, and it loses that bet on a busy CI runner.
+    tokio::time::timeout(Duration::from_secs(10), watching)
+        .await
+        .expect("the watch loop installs its OS watch")
+        .expect("the watch loop is still running");
     fs::write(
         vault.join("watched.md"),
         "# Watched\n\n- [fact] the async loop saw this\n",
@@ -228,12 +238,17 @@ async fn async_watch_loop_indexes_then_flushes_on_shutdown() {
     );
 
     // A second write lands inside the window; the shutdown flush is what applies it.
+    // The wait has to clear OS event delivery (FSEvents reports through its own runloop,
+    // so the event arrives after the write returns) while staying inside the 1 s window,
+    // so the note is still pending — and therefore the flush's to apply — when `stop`
+    // is sent. It was 10 ms against a 50 ms window: a 40 ms target that a loaded machine
+    // misses, which made this test fail roughly one run in six.
     fs::write(
         vault.join("late.md"),
         "# Late\n\n- [fact] still debouncing\n",
     )
     .expect("write");
-    std::thread::sleep(Duration::from_millis(10));
+    std::thread::sleep(Duration::from_millis(300));
     let _ = stop.send(());
 
     let batches = handle.join().expect("watcher thread");
