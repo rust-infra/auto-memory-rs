@@ -31,7 +31,7 @@
 
 | 命令 | 作用 | `--project` 语义 |
 |---|---|---|
-| `auto-memory reindex` | 建/更新索引 | **项目名**（可省略，默认取 vault 目录名） |
+| `auto-memory reindex` | 建/更新索引 | **项目名**（可省略：配置 `default_project` → 按 `--vault` 认回已注册项目 → 目录名） |
 | `auto-memory watch` | 监听 vault 变化并增量索引 | **项目名** |
 | `auto-memory mcp` | stdio MCP 服务 | **项目名** |
 | `auto-memory status` | 打印索引计数 | **permalink** |
@@ -111,8 +111,10 @@ PROJECT=oracle                                     # 项目名（见 §2）
 
 这是最容易出问题的一处。规则：
 
-- `reindex` / `watch` / `mcp` 的 `--project` 是**项目名**；省略时默认取 vault 的目录名。
-  项目名会被规范化成 permalink（`generate_permalink`）：`My Vault` → `my-vault`。
+- `reindex` / `watch` / `mcp` 的 `--project` 是**项目名**。省略时按 ① 配置文件的
+  `default_project` → ② 用 `--vault` 按路径认回已注册的那条项目 → ③ 该 vault 从没注册过时才用
+  目录名 这个顺序解析（`resolve_project_target`，`src/main.rs`）。项目名会被规范化成 permalink
+  （`generate_permalink`）：`My Vault` → `my-vault`。
   用 `project add` 注册时可以显式指定 permalink，避免名字里带空格/中文时的歧义：
 
 ```bash
@@ -131,16 +133,22 @@ $BIN status --index /tmp/am-demo/memory2.db --project my-vault     # ✅ 正常�
 $BIN status --index /tmp/am-demo/memory2.db --project "My Vault"   # ❌ project not found: My Vault
 ```
 
-**坑：忘记 `--project` 会在同一个索引里注册出第二个项目。** 同一份 vault、同一个
-`memory.db`，先带 `--project demo` 索引一次、再不带 `--project` 索引一次，
-`list_memory_projects` 会列出两个项目（`demo` 和目录名 `vault`），都指向同一个路径：
+**忘记 `--project` 不会再悄悄多出一个项目。** 以前同一份 vault、同一个 `memory.db`，先带
+`--project demo` 索引一次、再不带 `--project` 索引一次，会注册出 `demo` 和"目录名"两条项目行、
+同一批笔记按两个 `project_id` 索引两遍。现在：
 
-```
-{"projects":[{"name":"demo", ...},{"name":"vault", ...}],"default_project":"demo", ...}
+- `--vault` 指向**已注册**的目录时会按路径认回那条项目（`demo`），不再铸新名字；
+- 既没有 `--project`、也没有配置里的 `default_project`、又没给 `--vault` 时**直接报错**，
+  不会替你猜一个目录名。
+
+```console
+$ auto-memory reindex --index "$INDEX"
+no project: pass `--project <name>`, or set `default_project` in ~/.config/auto-memory/config.json, or pass `--vault <dir>`
 ```
 
-索引文件可以承载多个项目（多 vault 用同一个 `--index` 是支持的），
-但**每条命令都显式写 `--project`**，否则读取侧会找不到你刚写的那个项目。
+索引文件仍可承载多个项目（一个 `--index` 服务多个 vault 是支持的）。只有当你给一个**从没注册过**
+的目录、又没带 `--project` 时，才会用目录名铸一条新的 permalink；读命令（`status` / `search` /
+`context` / `schema`）仍要写 **permalink**，拿不准就先 `project list`。
 
 ### 2.3 项目名与 permalink 混用时的行为
 
@@ -474,7 +482,7 @@ MCP 服务始终被约束在**一个项目**内，项目生命周期（建/删�
 |---|---|---|
 | `project not found: <name>` | 读命令用了项目名而不是 permalink | 用 `my-vault` 这种规范化形式；或先 `list_memory_projects` / `auto-memory project list` 看 permalink |
 | 不知道这台机器缺什么（尤其语义检索） | 运行时和模型缓存是运行期发现的，缺了只会在用到时报一行错 | 先跑 `auto-memory doctor`（`--json` 给脚本；退出码非 0 表示**指定了却不可用**，缺语义检索只是 warn） |
-| `vault directory not found` | `reindex` 的 `--vault` 不是目录 | 检查路径；`mcp` 不做此检查，别用它来验证 |
+| `vault directory not found` | `--vault` 不是目录（`reindex` / `watch` / `mcp` 都会在扫描前检查，见 §2.1） | 检查路径；已 `project add` 注册过的目录可以干脆省掉 `--vault`，让命令从项目注册表取 |
 | 客户端连上了但搜不到东西 | `--vault` 指向的目录里没有笔记（`mcp` 启动时会 reconcile，不是缺 `reindex`） | 跑 §7.1 的 `auto_memory_diagnostics` 看 Project/Vault/counts；路径写错还会 prune 该项目已有行，改对后用 `reindex --full` 恢复 |
 | 同一个 vault 出现两个项目 | 某次命令漏了 `--project`，注册出"目录名"项目 | 每条命令都显式 `--project`；用 `auto-memory project remove <name>` 删掉多余的那个（只删索引行，不动笔记） |
 | `--vector` 结果为空 | 没跑过 `reindex --embeddings` | 先建向量索引；MCP 侧还要 `--model-cache` 或 `--embedding-fixture` |

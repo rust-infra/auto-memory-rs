@@ -194,7 +194,7 @@ outputs.
 | `format` | no | Runs the configured formatter over `.md`/`.json`/`.canvas` in the vault. The only unported verb that writes user files. |
 | `import` | no | The `memory-json`, `chatgpt`, and `claude` importers. |
 | `reset` | no | Drops and recreates the tables. `reindex --full` covers the rebuild half; the drop is not exposed. |
-| `config` | no | `list`/`get`/`set`/`unset` over `config.json`. The port hardcodes the reference **defaults** — `src/config.rs` declares the key set but nothing reads it — so a user's non-default `config.json` is ignored. |
+| `config` | no | `list`/`get`/`set`/`unset` over the reference's `config.json`. The port does not read *that* file and hardcodes the reference **defaults**, so a behavior knob set there is ignored. It does read its own `~/.config/auto-memory/config.json` (`src/config.rs`, now live) — but only for the `index`/`default_project` routing keys, not for any behavior knob. |
 | `tool` | no | Wraps the MCP tools as CLI verbs (`bm tool write-note` …). The port exposes the workflows it needs as first-class verbs instead. |
 | `man` | no | Man-page installation; tooling, no behavior. |
 | `update` | no | Self-update of the Python distribution; meaningless for a Rust binary. |

@@ -111,11 +111,27 @@ Project specs and plans are stored outside the user-documentation tree in `../sp
   - `tests/cli_project.rs` covers the new CLI surface, and
     `src/runtime/embedding.rs`'s `runtime_discovery_tests` pin the discovery — including the
     glob regression that turned into a silently-skipped embedding test.
+- Integration pass (2026-10-02 … 2026-10-07) — the repo became *installable into an agent host*:
+  - **Config discovery** (`specs/config-discovery-spec.md`, `plans/config-discovery-plan.md`):
+    `src/config.rs` is live. `--index` is optional on every command that takes it and `--vault` is
+    optional on `reindex`/`watch`/`mcp`; both resolve through documented chains ending in
+    `~/.config/auto-memory/config.json`. `doctor` prints each value's origin; a malformed config is
+    an error for the CLI and a warning for the hook.
+  - **A `tact` harness** was added to the built-in hook front end (`claude`/`codex`/`pi`/`tact`).
+    Its mapping file is auto-memory's own `.tact/auto-memory.json` (`autoMemory` block), not the
+    reference's `.codex/basic-memory.json`.
+  - **Two plugin packages** over one skills/schemas set — `plugins/agents` (Codex) and
+    `plugins/tact` (Tact) — plus the repo-local Tact marketplace catalog in
+    `.agents/plugins/marketplace.json`. `docs/hooks.md` §4 and `docs/tact-ui-integration.md` §2.5/§3
+    document the install (including that the plugin must be committed before Tact can copy it).
+  - **CLI surface inventoried** against the reference's 19 verbs in
+    `docs/release-checklist.md` §6a.
 
 ## Errata
 
 - `specs/auto-memory-rs-spec.md` §4 suggested `.basic-memory/index.sqlite3` inside the vault. The
   reference 0.23.2 stores the derived SQLite index in the **app config dir**
   (`~/.config/basic-memory/memory.db`); a vault only holds markdown + `.basic-memory/config.json`.
-  See `docs/reference.md` §5. Whether `auto-memory-rs` mirrors this or deviates is open decision #1 in
-  `specs/compatibility-spec.md` §7.
+  See `docs/reference.md` §5. Open decision #1 in `specs/compatibility-spec.md` §7 was answered
+  2026-10-06 (`specs/config-discovery-spec.md`): the index stays where it is and becomes
+  discoverable through the user config file instead of being re-stated on every command line.

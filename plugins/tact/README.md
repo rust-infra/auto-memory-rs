@@ -100,21 +100,23 @@ The engine reads `primaryProject`, `captureFolder`, `recallTimeframe`,
 
 ### Where the index and project come from
 
-The shims pass no `--index` and no `--project`, so the hook resolves them itself, from files —
-there is nothing to export in a shell profile. Highest precedence first:
+The shims pass no `--index` and no `--project`, so the hook resolves both itself, from files —
+there is nothing to export in a shell profile. Two chains, each highest precedence first:
 
-1. `--index` / `--project` (a flag, if you wire one up yourself)
-2. `$AUTO_MEMORY_INDEX` — still honoured, no longer the way to configure the tool
-3. the user config file, `~/.config/auto-memory/config.json`:
+- **Index:** `--index` → `$AUTO_MEMORY_INDEX` (still honoured, no longer the way to configure the
+  tool) → the user config file → the built-in default
+  (`~/.local/share/auto-memory/memory.db`).
+- **Project:** `--project` → the mapping file's `primaryProject` (`.tact/auto-memory.json`, or the
+  nearest ancestor that has one) → `default_project` in the user config file. The mapping file is
+  the *more* specific source, so it wins over the config file.
+
+The user config file, `~/.config/auto-memory/config.json`:
 
    ```json
    { "index": "~/.local/share/auto-memory/memory.db", "default_project": "my-project" }
    ```
 
-4. the mapping file for the project (`.tact/auto-memory.json` → `primaryProject`), for the
-   project only; the index has no equivalent here
-5. the built-in default index (`~/.local/share/auto-memory/memory.db`); with no project at all the
-   hook prints the first-run nudge instead of guessing
+With no project named anywhere, the hook prints the first-run nudge instead of guessing.
 
 Keys in the config file are **snake_case** (`default_project`), unlike the mapping files'
 camelCase (`primaryProject`) — a camelCase key there is ignored as an unknown key.

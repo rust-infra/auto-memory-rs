@@ -313,11 +313,14 @@ link-before-target paths; `tests/incremental_golden.rs` pins incremental/full co
   transport. `status` shares the reference's name but prints index counts rather than the
   project-index observation. The verb-by-verb inventory is `docs/release-checklist.md` §6a.
 
-- **`config.json` is not read.** The reference's behavior knobs (`ensure_frontmatter_on_sync`,
+- **The reference's `config.json` is not read.** Its behavior knobs (`ensure_frontmatter_on_sync`,
   `permalinks_include_project`, `disable_permalinks`, `index_changes`,
   `update_permalinks_on_move`) are pinned to their reference defaults — that is the other half of
   the "the vault is never rewritten" bullet above — and per-run settings come from CLI flags and
-  the harness mapping. A `config.json` that changes one of those defaults is ignored.
+  the harness mapping. A `~/.config/basic-memory/config.json` that changes one of those defaults is
+  ignored. `auto-memory`'s **own** user config file, `~/.config/auto-memory/config.json`, *is* read
+  (§3), but only for the two routing keys `index` and `default_project` — it carries no behavior
+  knobs.
 
 Everything else is pinned against captured reference behavior; see `docs/reference.md` for the
 per-phase evidence and `tests/golden/README.md` for the corpus.

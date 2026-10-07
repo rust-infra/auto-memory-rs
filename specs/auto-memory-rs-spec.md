@@ -135,7 +135,7 @@ The codebase uses idiomatic Rust organization rather than mechanically copying a
 src/
 ├── lib.rs
 ├── main.rs
-├── config.rs          # the reference's config.json key set (declared, not loaded)
+├── config.rs          # user config file + the index/project resolution chains
 ├── error.rs
 ├── pycompat.rs        # ports of Python built-ins whose exact output a golden pins
 ├── domain/
@@ -154,13 +154,14 @@ src/
 └── runtime/
 ```
 
-Two of those entries hold no code at all, and a third is never reached. `adapters::cli` and
-`adapters::filesystem` are placeholders — the command surface lives in `src/main.rs`, and reading
-and writing the vault is `indexing`'s job (`indexing` is the only module that touches the
-filesystem). `config.rs` does have a body, but no caller constructs it: the struct mirrors the
-reference defaults and the port hardcodes them instead, so a user's non-default `config.json` is
-ignored (the CLI surface is inventoried in `docs/release-checklist.md` §6a). Adding code to any of
-the three means updating this tree in the same change.
+Two of those entries hold no code at all. `adapters::cli` and `adapters::filesystem` are
+placeholders — the command surface lives in `src/main.rs`, and reading and writing the vault is
+`indexing`'s job (`indexing` is the only module that touches the filesystem). `config.rs` **is**
+live: it loads the user config file (`~/.config/auto-memory/config.json`) and owns the
+`index`/`project` resolution chains (`specs/config-discovery-spec.md`) — until 2026-10-06 it was
+dead code and the reference defaults were hard-coded (the CLI surface is inventoried in
+`docs/release-checklist.md` §6a). Adding code to any of the three means updating this tree in the
+same change.
 
 Rules:
 

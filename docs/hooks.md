@@ -206,9 +206,10 @@ auto-memory-rs/
 区别只在"谁来装"：Codex 的插件从 marketplace 装，编辑已装的官方插件会在更新时被覆盖
 ——要改就跑自己的插件仓库（内容同上）。
 
-你现在的 `~/.codex/config.toml` 里那条 `[hooks.state."codex@basic-memory:hooks/hooks.json:…"]`
-就是 Codex 记录的、来自旧插件的 hook 信任哈希；换成自己的插件后，
-会多出对应你仓库的一条。
+Codex 会在 `~/.codex/config.toml` 里用一条 `[hooks.state."<plugin>:<hooks 文件>:<命令哈希>"]`
+记录每个**已信任**的命令 hook。本机现在**没有**这一条——Codex 侧的 memory 插件当前并没装，
+配置被重写过——所以别把"配置里有没有这条"当成 hook 是否生效的判据：装好插件后 Codex 才会写上
+对应的一条，而一旦改了 hook 命令，哈希就变，需要重新信任。
 
 ---
 

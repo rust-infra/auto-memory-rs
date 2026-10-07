@@ -105,11 +105,11 @@ harness mapping files of §3.2 are the ones that use camelCase (`primaryProject`
 follow their host's conventions — a camelCase key here is an *unknown* key and is ignored, which
 is exactly the silent failure the `Config` loader's leniency would otherwise hide. A test pins it.
 
-- The last five keys are the existing `Config` struct (`src/config.rs`) — **today it is dead code:
-  nothing in the repository reads it** (`docs/README.md`, productization pass; the reference
-  defaults are hard-coded instead). This spec is what makes it live: unknown keys stay ignored, so
-  a reference `config.json` can still be loaded, and the behavior knobs finally have an entry
-  point.
+- The last five keys are the existing `Config` struct (`src/config.rs`) — **at the time of writing it
+  was dead code: nothing in the repository read it** (Slice A made it live; see
+  [`plans/config-discovery-plan.md`](../plans/config-discovery-plan.md)). This spec is what makes it
+  live: unknown keys stay ignored, so a reference `config.json` can still be loaded, and the behavior
+  knobs finally have an entry point.
 - `index` and `default_project` are additions. Paths support a leading `~`.
 - Precedence is per-key, not per-file: a file that sets only `index` does not shadow
   `default_project` from anywhere else.
