@@ -16,13 +16,25 @@ Curated, long-lived notes. Daily logs live beside this file as `YYYY-MM-DD.md`.
   (opt in per clone: `git config core.hooksPath .githooks`).
 - The script exports `no_proxy=127.0.0.1,localhost` because the mock-HTTP tests otherwise leave
   through a proxy and never come back.
-- **Known environment failure:** 5 watcher tests fail in the sandbox (see the user-level
-  `MEMORY.md`) — `tests/async_transport.rs` (3), `tests/watch_golden.rs` (1),
-  `tests/obsidian_compatibility.rs` (1). Verified pre-existing by stashing the working tree.
-  Everything else in the suite is green (158 lib tests).
+- **The watcher tests used to be blamed on the environment — that was wrong.** 5 of them
+  (`tests/async_transport.rs` (3), `tests/watch_golden.rs` (1), `tests/obsidian_compatibility.rs` (1))
+  were failing on a pristine tree because FSEvents reports canonical paths while the watcher's root
+  was not canonical (`/var/…` vs `/private/var/…`), so `map_notify_event` dropped every event.
+  Fixed 2026-10-07 by canonicalizing the root once in `VaultWatcher::new` (`resolve_watch_root`).
+  **Lesson: a failing filesystem-watcher test is not automatically a sandbox limitation — probe the
+  event path against the root before writing it off.** See the user-level `MEMORY.md` for the probes.
+  Everything else in the suite is green (168 lib tests).
 
 ## Integration surface
 
+- **`watch` reconciles *before* installing the OS watch — a known, deliberately unfixed gap.**
+  A write that lands during the startup catch-up raises no event and the backend cannot replay
+  one it never saw, so it waits for the next start. Making it airtight means installing first
+  and moving the catch-up into `watch_vault`/`watch_once`; that was implemented 2026-10-07 and
+  **reverted the same day** on Rg's call — no test can pin the ordering (the install moment is
+  unobservable, the gap is a window rather than an event), so the change was not worth carrying.
+  Report it, don't re-implement it unless a pin appears. `VaultWatcher::with_ready_signal` means
+  "the OS watch is installed", nothing more.
 - `auto-memory` is a **standalone product**, like Basic Memory: agents consume it over MCP
   (`auto-memory mcp`) or via plugin command hooks. Do **not** link the `auto_memory` library into
   another workspace — AGPL + unconditional `fastembed`/`ort` + `&mut Store`-shaped services.
