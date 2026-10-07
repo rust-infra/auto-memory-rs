@@ -231,8 +231,11 @@ pub struct VaultWatcher<'a> {
 
 impl<'a> VaultWatcher<'a> {
     /// Wrap an indexing service for `root` with the reference debounce window.
+    ///
+    /// `root` is canonicalized first; the watcher compares every OS event against this
+    /// root, so it has to be the form the backend reports.
     pub fn new(service: IndexService<'a>, root: impl Into<PathBuf>) -> Self {
-        let root = root.into();
+        let root = resolve_watch_root(root.into());
         let ignore = IgnoreRules::load(&root, &[]);
         Self {
             service,
@@ -352,6 +355,39 @@ impl<'a> VaultWatcher<'a> {
     }
 }
 
+/// Resolve the root every OS event is measured against.
+///
+/// `map_notify_event` maps an event to a project-relative path with
+/// `path.strip_prefix(root)`, and drops the event when that fails — so the root and the
+/// paths the backend reports have to be the *same* spelling of the same directory.
+/// They are not, by default: FSEvents (macOS) reports the canonical path of every event,
+/// so a root that is itself non-canonical never matches. On macOS that is the common
+/// case rather than a corner — `/var` is a symlink to `/private/var`, so every vault
+/// under `TMPDIR` (`/var/folders/…`) sees `/private/var/folders/…` come back and indexes
+/// nothing at all. A relative root and a symlinked vault directory (`~/notes` →
+/// `/Volumes/notes`) break the same way.
+///
+/// Canonicalizing once, up front, makes the two agree: the same resolved path is handed
+/// to `handle.watch`, so inotify (Linux) — which echoes back the path it was registered
+/// with rather than a canonical one — agrees as well.
+///
+/// A root that cannot be resolved (it does not exist yet, or is not readable) is kept as
+/// given: `watch` fails on it a moment later with the real error, which beats failing
+/// here with a confusing one.
+fn resolve_watch_root(root: PathBuf) -> PathBuf {
+    match root.canonicalize() {
+        Ok(canonical) => canonical,
+        Err(error) => {
+            tracing::debug!(
+                root = %root.display(),
+                %error,
+                "watch: root is not resolvable, watching it as given"
+            );
+            root
+        }
+    }
+}
+
 /// Normalize a path into the project-relative slash form used by the index.
 pub fn normalize_relative(path: &str) -> String {
     path.trim_start_matches("./")
@@ -413,6 +449,10 @@ pub fn map_notify_event(root: &Path, event: &Event) -> Vec<(String, ChangeKind)>
 /// a timer arm instead of a `recv_timeout` poll, and the loop ends on a future rather
 /// than a polled flag — which is what makes a graceful stop (Ctrl-C, then flush the
 /// pending window) possible without racing the signal.
+///
+/// This installs the watch and runs the loop; the caller's own catch-up pass
+/// (`IndexService::reconcile`, as `watch` runs before calling in) is not this function's
+/// business, and the two are not ordered against each other here.
 ///
 /// Indexing and SQLite are awaited directly; CPU-heavy work inside the index path can
 /// still move to the blocking pool. The loop runs on the multi-thread runtime built by
@@ -616,6 +656,25 @@ mod tests {
         let mut access = Event::new(EventKind::Access(notify::event::AccessKind::Read));
         access.paths = vec![root.join("notes/new.md")];
         assert!(map_notify_event(&root, &access).is_empty());
+    }
+
+    /// The root has to be the spelling the backend reports events under, or
+    /// `map_notify_event` drops all of them (see [`resolve_watch_root`]).
+    #[test]
+    fn the_watch_root_is_resolved_before_events_are_measured_against_it() {
+        let dir = std::env::temp_dir().join(format!("am-watch-root-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("dir");
+        // Asserted against `canonicalize` rather than a literal, because whether this
+        // path has a non-canonical spelling is the platform's business: macOS answers
+        // `/private/var/…` for `/var/…`, Linux answers the same path it was given.
+        assert_eq!(
+            resolve_watch_root(dir.clone()),
+            dir.canonicalize().expect("canonicalize")
+        );
+        // An unresolvable root is kept as given, so `watch` reports the real error.
+        let missing = dir.join("does-not-exist");
+        assert_eq!(resolve_watch_root(missing.clone()), missing);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
