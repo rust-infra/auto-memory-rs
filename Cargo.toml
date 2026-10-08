@@ -27,6 +27,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
 sha2 = "0.10"
 serde_yaml_ng = "0.10"
+toml = "0.8"
 thiserror = "2"
 chrono = { version = "0.4.45", features = ["clock", "std", "serde"] }
 fastembed = { version = "6.0.3", default-features = false, features = [

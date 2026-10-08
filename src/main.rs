@@ -1358,6 +1358,25 @@ async fn doctor_command(args: DoctorArgs) -> ExitCode {
         }
     }
 
+    let suggested_project = if project.is_some() {
+        project.clone()
+    } else if let Some(resolved) = resolve_project(None, None, &user) {
+        Some(resolved.value)
+    } else if let Some(store) = &store {
+        match store.projects().await {
+            Ok(projects) if projects.len() == 1 => projects.first().map(|row| row.name.clone()),
+            _ => None,
+        }
+    } else {
+        None
+    };
+    checks.push(codex_mcp_check(
+        &index,
+        vault.as_deref(),
+        suggested_project.as_deref(),
+    ));
+    checks.push(codex_hooks_check());
+
     // --- vault and project (only when named) -----------------------------------
     if let Some(vault) = vault {
         if vault.is_dir() {
@@ -1509,6 +1528,276 @@ async fn doctor_command(args: DoctorArgs) -> ExitCode {
     } else {
         ExitCode::SUCCESS
     }
+}
+
+/// Report whether Codex has the Auto Memory MCP server registered.
+///
+/// This is advisory: Auto Memory can be used by other MCP clients, and doctor must
+/// never modify a user's Codex configuration. The executable is intentionally checked
+/// separately from the server name: `auto-memory-rs` is the server/project identity,
+/// while the installed executable is named `auto-memory`.
+fn codex_mcp_check(index: &Path, vault: Option<&Path>, project: Option<&str>) -> Check {
+    let config = codex_config_path();
+    if !config.is_file() {
+        return Check::warn(
+            "codex_mcp",
+            format!(
+                "not configured at {}; run `{}`",
+                config.display(),
+                codex_mcp_add_command(index, vault, project)
+            ),
+        );
+    }
+
+    let text = match std::fs::read_to_string(&config) {
+        Ok(text) => text,
+        Err(error) => {
+            return Check::warn(
+                "codex_mcp",
+                format!("cannot read {}: {error}", config.display()),
+            );
+        }
+    };
+    let document = match text.parse::<toml::Value>() {
+        Ok(document) => document,
+        Err(error) => {
+            return Check::warn(
+                "codex_mcp",
+                format!("cannot parse {}: {error}", config.display()),
+            );
+        }
+    };
+    let servers = document.get("mcp_servers").and_then(toml::Value::as_table);
+    let server = servers.and_then(|servers| servers.get("auto-memory-rs"));
+    let Some(server) = server.and_then(toml::Value::as_table) else {
+        let alternate = servers
+            .and_then(|servers| servers.get("auto-memory"))
+            .is_some();
+        let hint = if alternate {
+            "found `mcp_servers.auto-memory`; use the canonical server name `auto-memory-rs`"
+        } else {
+            "add `[mcp_servers.auto-memory-rs]`"
+        };
+        return Check::warn(
+            "codex_mcp",
+            format!(
+                "Auto Memory MCP is not registered in {}; {hint}. Run `{}`",
+                config.display(),
+                codex_mcp_add_command(index, vault, project)
+            ),
+        );
+    };
+
+    let Some(command) = server.get("command").and_then(toml::Value::as_str) else {
+        return Check::warn(
+            "codex_mcp",
+            format!(
+                "`mcp_servers.auto-memory-rs` has no command in {}",
+                config.display()
+            ),
+        );
+    };
+    let executable = Path::new(command)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or(command);
+    if executable != "auto-memory" {
+        return Check::warn(
+            "codex_mcp",
+            format!(
+                "`mcp_servers.auto-memory-rs.command` is `{command}`; use the `auto-memory` binary"
+            ),
+        );
+    }
+    Check::ok(
+        "codex_mcp",
+        format!(
+            "mcp_servers.auto-memory-rs in {} (command: {command})",
+            config.display()
+        ),
+    )
+}
+
+fn codex_config_path() -> PathBuf {
+    std::env::var_os("CODEX_HOME")
+        .map(PathBuf::from)
+        .filter(|path| path.is_absolute())
+        .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".codex")))
+        .unwrap_or_else(|| PathBuf::from(".codex"))
+        .join("config.toml")
+}
+
+fn codex_hooks_check() -> Check {
+    let codex_home = codex_config_path()
+        .parent()
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|| PathBuf::from(".codex"));
+    let config = codex_home.join("config.toml");
+    let plugin_entries = codex_plugin_entries(&config);
+    let mut configured = Vec::new();
+    let mut scopes = vec![codex_home.clone()];
+    if let Ok(cwd) = std::env::current_dir() {
+        scopes.extend(cwd.ancestors().map(|path| path.join(".codex")));
+    }
+    for scope in scopes {
+        for path in [scope.join("hooks.json"), scope.join("config.toml")] {
+            if file_configures_auto_memory_hook(&path) {
+                configured.push(path);
+            }
+        }
+    }
+
+    let mut plugin_hooks = Vec::new();
+    let cache = codex_home.join("plugins/cache");
+    for (entry_name, enabled) in &plugin_entries {
+        if !enabled {
+            continue;
+        }
+        let Some((plugin_name, marketplace_name)) = entry_name.split_once('@') else {
+            continue;
+        };
+        if plugin_name != "auto-memory-rs" {
+            continue;
+        }
+        let plugin_cache = cache.join(marketplace_name).join(plugin_name);
+        if let Ok(versions) = std::fs::read_dir(plugin_cache) {
+            for version in versions.flatten() {
+                let hooks = version.path().join("hooks/hooks.json");
+                if hooks.is_file() {
+                    plugin_hooks.push(hooks);
+                }
+            }
+        }
+    }
+
+    if !plugin_entries.is_empty() {
+        let enabled_entries = plugin_entries
+            .iter()
+            .filter(|(_, enabled)| *enabled)
+            .collect::<Vec<_>>();
+        let entry_details = plugin_entries
+            .iter()
+            .map(|(name, enabled)| format!("{name} (enabled = {enabled})"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        if enabled_entries.is_empty() && configured.is_empty() {
+            return Check::warn(
+                "codex_hooks",
+                format!(
+                    "Auto Memory Codex plugin is registered but disabled in {}: {entry_details}. Enable it from Codex `/plugins`, or set `[plugins.\"auto-memory-rs@auto-memory\"]` to `enabled = true`.",
+                    config.display()
+                ),
+            );
+        }
+        if !enabled_entries.is_empty() && plugin_hooks.is_empty() && configured.is_empty() {
+            return Check::warn(
+                "codex_hooks",
+                format!(
+                    "Auto Memory Codex plugin is enabled in {} ({entry_details}), but its installed hooks/hooks.json was not found under {}. Reinstall it with: {}",
+                    config.display(),
+                    cache.display(),
+                    codex_plugin_install_hint()
+                ),
+            );
+        }
+    } else if plugin_hooks.is_empty() && configured.is_empty() {
+        return Check::warn(
+            "codex_hooks",
+            format!(
+                "Auto Memory Codex plugin is not registered in {}; install it with: {}. Then enable `[plugins.\"auto-memory-rs@auto-memory\"]` with `enabled = true` (or install it from Codex `/plugins`). User/project hook files and plugin cache were also checked.",
+                config.display(),
+                codex_plugin_install_hint()
+            ),
+        );
+    }
+
+    if !configured.is_empty() || !plugin_hooks.is_empty() {
+        let paths = configured
+            .iter()
+            .chain(plugin_hooks.iter())
+            .map(|path| path.display().to_string())
+            .collect::<Vec<_>>()
+            .join(", ");
+        return Check::ok(
+            "codex_hooks",
+            format!(
+                "Auto Memory hook definitions found: {paths}. Plugin entry: {}. Declares SessionStart briefing/checkpoint prompt and PreCompact; Codex hook trust must still be approved.",
+                if plugin_entries.is_empty() {
+                    "not registered (hooks found from another source)".to_owned()
+                } else {
+                    plugin_entries
+                        .iter()
+                        .map(|(name, enabled)| format!("{name} enabled={enabled}"))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                }
+            ),
+        );
+    }
+
+    Check::warn(
+        "codex_hooks",
+        format!(
+            "no Auto Memory hooks found in user/project hooks.json or config.toml, or the installed plugin cache under {}. Install/enable the `auto-memory-rs` Codex plugin and review its hook trust; SessionStart supplies the brief/checkpoint prompt. Codex ignores PreCompact stdout.",
+            cache.display()
+        ),
+    )
+}
+
+fn codex_plugin_entries(config: &Path) -> Vec<(String, bool)> {
+    let Ok(contents) = std::fs::read_to_string(config) else {
+        return Vec::new();
+    };
+    let Ok(document) = contents.parse::<toml::Value>() else {
+        return Vec::new();
+    };
+    document
+        .get("plugins")
+        .and_then(toml::Value::as_table)
+        .into_iter()
+        .flat_map(|plugins| plugins.iter())
+        .filter(|(name, _)| name.split('@').next() == Some("auto-memory-rs"))
+        .map(|(name, config)| {
+            let enabled = config
+                .get("enabled")
+                .and_then(toml::Value::as_bool)
+                .unwrap_or(false);
+            (name.clone(), enabled)
+        })
+        .collect()
+}
+
+fn codex_plugin_install_hint() -> String {
+    let root = std::env::current_dir()
+        .ok()
+        .map(|path| path.display().to_string())
+        .unwrap_or_else(|| ".".to_owned());
+    format!(
+        "`codex plugin marketplace add {root}`; then run `/plugins` in Codex and install `auto-memory-rs` from the `auto-memory` marketplace"
+    )
+}
+
+fn file_configures_auto_memory_hook(path: &Path) -> bool {
+    let Ok(contents) = std::fs::read_to_string(path) else {
+        return false;
+    };
+    contents.contains("auto-memory hook")
+        || contents.contains("session_start.sh")
+        || contents.contains("pre_compact.sh")
+}
+
+fn codex_mcp_add_command(index: &Path, vault: Option<&Path>, project: Option<&str>) -> String {
+    let mut command = format!(
+        "codex mcp add auto-memory-rs -- auto-memory mcp --index {}",
+        index.display()
+    );
+    if let Some(vault) = vault {
+        command.push_str(&format!(" --vault {}", vault.display()));
+    }
+    if let Some(project) = project {
+        command.push_str(&format!(" --project {project}"));
+    }
+    command
 }
 
 /// Every file under `directory`, recursively.

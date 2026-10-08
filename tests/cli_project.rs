@@ -248,6 +248,8 @@ fn doctor_succeeds_with_an_index_and_no_named_vault() {
             "index",
             "schema",
             "projects",
+            "codex_mcp",
+            "codex_hooks",
             "onnx_runtime",
             "model_cache",
             "reranker_model"
@@ -277,6 +279,68 @@ fn doctor_succeeds_with_an_index_and_no_named_vault() {
             );
         }
     }
+}
+
+#[test]
+fn doctor_reports_codex_mcp_registration_and_binary_name() {
+    let home = tempfile::tempdir().expect("home");
+    let codex = home.path().join(".codex");
+    std::fs::create_dir_all(&codex).expect("codex dir");
+    std::fs::write(
+        codex.join("config.toml"),
+        "[mcp_servers.auto-memory-rs]\ncommand = \"auto-memory-rs\"\n",
+    )
+    .expect("config");
+
+    let (_dir, _vault, index) = scratch();
+    let (payload, ok) = run_json_with_home(&["doctor", "--index", &index, "--json"], home.path());
+    assert!(ok, "doctor reported a failure: {payload}");
+    let check = payload["checks"]
+        .as_array()
+        .expect("checks")
+        .iter()
+        .find(|check| check["name"] == "codex_mcp")
+        .expect("codex mcp check");
+    assert_eq!(check["status"], "warn");
+    assert!(
+        check["detail"]
+            .as_str()
+            .expect("detail")
+            .contains("auto-memory")
+    );
+}
+
+#[test]
+fn doctor_gives_a_copyable_codex_mcp_command_when_unregistered() {
+    let home = tempfile::tempdir().expect("home");
+    let codex = home.path().join(".codex");
+    std::fs::create_dir_all(&codex).expect("codex dir");
+    std::fs::write(codex.join("config.toml"), "").expect("config");
+
+    let (_dir, vault, index) = scratch();
+    let (stdout, added) = run(&[
+        "project",
+        "add",
+        "oracle",
+        &vault.to_string_lossy(),
+        "--index",
+        &index,
+        "--no-index",
+    ]);
+    assert!(added, "{stdout}");
+
+    let (payload, ok) = run_json_with_home(&["doctor", "--index", &index, "--json"], home.path());
+    assert!(ok, "doctor reported a failure: {payload}");
+    let detail = payload["checks"]
+        .as_array()
+        .expect("checks")
+        .iter()
+        .find(|check| check["name"] == "codex_mcp")
+        .and_then(|check| check["detail"].as_str())
+        .expect("codex mcp detail");
+    assert!(detail.contains("codex mcp add auto-memory-rs -- auto-memory mcp"));
+    assert!(detail.contains(&format!("--index {index}")));
+    assert!(detail.contains("--project oracle"));
 }
 
 /// Run the binary against a `HOME` of the caller's choosing, so a test can place a user

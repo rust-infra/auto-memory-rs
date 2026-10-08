@@ -149,7 +149,35 @@ an explicit model cache. `--json` gives the same
 report as `{ok, checks[{name, status, detail}]}`, and the exit code is non-zero when a check
 *failed* — an index or vault that was named and is unusable, or a named project that is not
 registered. Missing semantic search is a warning: text search, context, schema, and the MCP
-server do not need it.
+server do not need it. The report also checks the Codex MCP registration in
+`~/.codex/config.toml` (or `$CODEX_HOME/config.toml`). A missing registration or a
+`command` that uses `auto-memory-rs` instead of the executable name `auto-memory` is a
+warning with an actionable hint; this check never edits Codex configuration.
+The `codex_hooks` check reads the plugin entry from `config.toml` (for example,
+`[plugins."auto-memory-rs@auto-memory"] enabled = true`) to distinguish registered,
+enabled, and disabled states, then verifies `hooks/hooks.json` in that plugin's installed
+cache under `$CODEX_HOME/plugins/cache` (default `~/.codex/plugins/cache`). It also scans
+user and current-project `hooks.json` / `config.toml` for direct hook configuration.
+Marketplace source files under `.agents/plugins` only make a plugin discoverable; they do
+not mean it is installed or enabled. Finding hook definitions does not prove that Codex has
+trusted them. The Auto Memory package declares `SessionStart` for briefing and the
+post-compaction checkpoint prompt, plus `PreCompact` (Codex ignores its stdout).
+
+To install the Codex plugin from this checkout, add the repository marketplace and install the
+plugin from Codex's plugin browser:
+
+```sh
+codex plugin marketplace add /path/to/auto-memory-rs
+```
+
+Then run `/plugins` in Codex, choose the `auto-memory` marketplace, and install
+`auto-memory-rs`. Codex copies the installed package into
+`~/.codex/plugins/cache/auto-memory/auto-memory-rs/local/`; enable it for a project with:
+
+```toml
+[plugins."auto-memory-rs@auto-memory"]
+enabled = true
+```
 
 ## 4. Keep it current while Obsidian is open
 
