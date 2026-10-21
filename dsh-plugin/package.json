@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "description": "DeepSeek Harness bundle for auto-memory-rs: the am-* skills plus the local memory MCP server.",
   "license": "AGPL-3.0-or-later",
+  "author": "auto-memory-rs contributors",
   "type": "module",
   "main": "./lib/index.js",
   "exports": {
@@ -19,12 +20,27 @@
   "keywords": [
     "dsh-plugin",
     "deepseek-harness",
+    "deepseek",
     "agent-skill",
     "auto-memory",
-    "mcp"
+    "mcp",
+    "memory",
+    "knowledge-graph"
   ],
   "engines": {
     "node": "^22.19.0 || >=24.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rust-infra/auto-memory-rs.git",
+    "directory": "dsh-plugin"
+  },
+  "homepage": "https://github.com/rust-infra/auto-memory-rs/tree/main/dsh-plugin",
+  "bugs": {
+    "url": "https://github.com/rust-infra/auto-memory-rs/issues"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "dsh": {
     "bundle": {
