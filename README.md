@@ -45,6 +45,8 @@ It serves streamable HTTP MCP on `/mcp`; see [`docs/release-checklist.md`](docs/
 | `tools/` | the oracle harness that captures it (needs the reference CLI) |
 | `plugins/agents/` | the Codex plugin package (hooks, skills, schemas) |
 | `plugins/tact/` | the Tact plugin package (same skills/schemas, `.tact/` config, `--harness tact`) |
+| `plugins/deepseek/` | the DeepSeek Harness package (same skills/schemas, `$DSH_HOME`/`.dsh/` config, `--harness deepseek`) |
+| `dsh-plugin/` | the installable DSH **bundle** (`dsh plugin --profile desktop add …`): skills + MCP row |
 
 ## Development
 

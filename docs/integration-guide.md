@@ -414,6 +414,44 @@ $BIN mcp --vault "$VAULT" --index "$INDEX" --project "$PROJECT" --read-only
 被隐藏的是 `write_note`、`edit_note`、`move_note`、`delete_note`、
 `create_memory_project`、`delete_project`。
 
+### 7.4b DeepSeek Harness（`~/.dsh/profiles/<profile>/cordis.patch.yml`）
+
+DSH 没有 `mcpServers` 配置文件，MCP server 是 profile 里的一条插件行：
+
+```yaml
+- id: mcp-auto-memory
+  name: '@deepseek-ai/dsh-mcp-client'
+  config:
+    serverName: memory
+    transport: stdio
+    command: /Users/you/.cargo/bin/auto-memory
+    args: ['mcp', '--project', 'my-vault', '--read-only']
+    toolCallTimeoutMs: 60000
+```
+
+- 改 `cordis.patch.yml`（追加层），**不要**改 `cordis.yml`（空根，文件头写明了）；
+- 桌面 App 读 `~/.dsh/profiles/desktop/`，`dsh web` 读 `~/.dsh/profiles/web/`；
+- 存盘即热插拔（断开重连），不用重启；
+- 工具名带前缀：`mcp__memory__search_notes`、`mcp__memory__build_context`、…；
+- `failOnStartupError` 默认 `false`：连不上只是"没有工具"，不报错。第一次调试建议设 `true`；
+- 包内 row 不带 `--project`/`--vault`/`--index`，`auto-memory mcp` 自己从
+  `~/.config/auto-memory/config.json` 解析。要固定下来用
+  `auto-memory project default 1m`（`project list` 里默认项带 `*`）。
+  `default_project` 填 **permalink**
+  （`auto-memory project list` 的 `permalink` 列，不是 `name` 列）；列表为空说明还没索引过
+  任何 vault，先 `auto-memory project add "<名字>" <vault目录>`。这是第一次接入最常见的失败：
+  客户端连上了但没有工具。现在 `no project` 报错会直接把可用的 permalink 列出来；
+- DSH 的 skills 根是 `$DSH_HOME/skills`（默认 `~/.dsh/skills`）、`~/.agents/skills`，以及项目里的
+  `.dsh/skills` / `.agents/skills`。插件包 `plugins/deepseek` 的 skills 链进去即可：
+
+```bash
+ln -sfn "$PWD/plugins/deepseek/skills/"* ~/.dsh/skills/
+```
+
+DSH 目前**没有命令 hook 宿主**（`dsh-mcp-client` 只桥接 MCP tools），所以会话启动不会自动注入
+brief——用 `am-orient` 按需拉。详见 [hooks.md](hooks.md) §4b 与
+[`plugins/deepseek/README.md`](../plugins/deepseek/README.md)。
+
 ### 7.5 语义检索（可选）
 
 MCP 侧默认没有向量能力，`search_type="vector"|"semantic"|"hybrid"` 会返回
@@ -493,6 +531,8 @@ MCP 服务始终被约束在**一个项目**内，项目生命周期（建/删�
 | MCP 里语义检索被拒绝 | 未挂载 embedding runtime | 同上；这是刻意行为（不退化成文本检索） |
 | 索引写不进去 / 锁等待 | 多进程同时写 | WAL + `busy_timeout=10000`，短暂等待会自愈；避免长事务并发 |
 | 客户端拿不到输出 | 往 stdout 里混了日志 | 协议帧只走 stdout，诊断信息在 stderr |
+| DSH 里看不到 `mcp__memory__*` 工具 | 插件行没生效 / 子进程起不来，而 `failOnStartupError` 默认 `false` | 临时设 `failOnStartupError: true` 让它报错；或先手工跑 §7.1 的探测命令 |
+| DSH 会话没有自动 brief | DSH 没有命令 hook 宿主 | 不是配置问题；用 `am-orient` 技能按需拉（hooks.md §4b） |
 
 ---
 

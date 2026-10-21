@@ -124,6 +124,23 @@ Project specs and plans are stored outside the user-documentation tree in `../sp
     `plugins/tact` (Tact) — plus the repo-local Tact marketplace catalog in
     `.agents/plugins/marketplace.json`. `docs/hooks.md` §4 and `docs/tact-ui-integration.md` §2.5/§3
     document the install (including that the plugin must be committed before Tact can copy it).
+- DeepSeek Harness pass (2026-10-20) — a third, **isolated** harness:
+  - **`Harness::Deepseek`** (`--harness deepseek`, source id `deepseek`) with its own profile,
+    capture folder (`deepseek`), note type (`deepseek_session`), and checkpoint prompt naming
+    `auto-memory-deepseek:am-checkpoint`.
+  - Its mapping file is `$DSH_HOME/auto-memory.json` (default `~/.dsh/auto-memory.json`) and the
+    nearest `<root>/.dsh/auto-memory.json`, an `autoMemory` block. Neither Codex's `.codex/` nor
+    Tact's `.tact/` file is read, in either direction — tests pin both halves.
+  - **`plugins/deepseek/`** mirrors the Tact package (skills, schemas, hook shims) with DSH's own
+    identity, and is registered in `.agents/plugins/marketplace.json`.
+  - DSH is not a command-hook host: `dsh-mcp-client` bridges MCP tools only, so on DSH the skills
+    plus the MCP server carry the behavior and the brief is pulled on demand by `am-orient`.
+    `docs/hooks.md` §4b and `docs/integration-guide.md` §7.4b document the wiring.
+  - **`dsh-plugin/`** is the installable DSH **bundle** (npm package) — DSH's own plugin form,
+    the same shape as `@tt-a1i/archify-dsh`: a `cordis.patch.yml` inserting a
+    `dsh-skill-filesystem` provider for the packaged skills plus a `dsh-mcp-client` row.
+    Install with `dsh plugin --profile desktop add …`. `scripts/sync-dsh-plugin.sh` copies the
+    skills/schemas from `plugins/deepseek` (`--check` guards drift in CI).
   - **CLI surface inventoried** against the reference's 19 verbs in
     `docs/release-checklist.md` §6a.
 

@@ -8,7 +8,7 @@
 |---|---|---|---|
 | 文件系统 | `watch` 守护进程（notify + 1000 ms 去抖） | Obsidian/编辑器一改文件就更新索引 | 已经内建，无需配置 |
 | git | `post-commit` / `post-merge` / `post-checkout` | "提交即索引"，兜住 watch 没跑的场景 | 一行 shell，本地即用 |
-| agent 会话 | 内建 `auto-memory hook` + `plugins/agents`（Codex）/ Tact 插件的 command hook | 会话开始喂上下文（briefing）、压缩后 checkpoint | 插件目录；引擎已内建。Tact 的 `SessionStart` 现在会采纳 `additionalContext`（§1），挂 `SessionStart` 即可 |
+| agent 会话 | 内建 `auto-memory hook` + `plugins/agents`（Codex）/ `plugins/tact` / `plugins/deepseek` 的 command hook | 会话开始喂上下文（briefing）、压缩后 checkpoint | 插件目录；引擎已内建。Tact 的 `SessionStart` 现在会采纳 `additionalContext`（§1），挂 `SessionStart` 即可。DSH 还没有命令 hook 宿主，见 §4b |
 | agent 进程内 | Tact 的 `Hook` trait（Rust） | 同上，但同进程直调，无子进程 | 要改 Tact 代码；要共享句柄得自己捕获 `Arc<Mutex<Store>>`（§6） |
 
 三层可以并存：它们最终都只是"读 vault、写同一个 SQLite 索引"。索引的写由 SQLite
@@ -199,6 +199,90 @@ auto-memory-rs/
 
 ---
 
+## 4b. 接线：DeepSeek Harness（DSH）
+
+DSH 的插件模型和 Codex/Tact 不是一回事，接线前先认清这张表：
+
+| 能力 | Codex / Tact | DSH |
+|---|---|---|
+| MCP server | `config.toml` / `.mcp.json` | profile 的 `cordis.patch.yml` 里一条 `@deepseek-ai/dsh-mcp-client` |
+| 命令 hook（`SessionStart` / `PreCompact`） | `hooks/hooks.json` | **没有**——`dsh-mcp-client` 只桥接 MCP tools |
+| Skills | 插件 `skills/` 目录 | 扫 `<root>/.dsh/skills`、`<root>/.agents/skills`、`$DSH_HOME/skills`、`~/.agents/skills` |
+
+所以在 DSH 上真正生效的是 **skills + MCP server** 这两条；brief 靠 `am-orient` 按需拉，
+不是会话启动时注入。`plugins/deepseek/hooks/` 仍然随包提供（契约与 Codex 同源、零成本，
+将来 DSH 有了 hook 宿主可以直接用），但现在不会被执行。
+
+**推荐：装成 DSH 插件（bundle）**——DSH 的插件就是 npm 包，`dsh plugin` 转发给 pnpm：
+
+```bash
+dsh plugin --profile desktop add /Users/rg/Projects/auto-memory-rs/dsh-plugin
+```
+
+它会往 profile 的 `dsh.profile.bundles` 里追加 `auto-memory-dsh`，并由包自带的
+`cordis.patch.yml` 插入两条 row：一条把包内的 `skills/` 注册成 skill provider
+（`providerName: auto-memory`、`includeDefaultRoots: false`），一条挂 `auto-memory mcp`。
+skill 根目录用 `createRequire(baseUrl).resolve('auto-memory-dsh/package.json')` 解析——
+pnpm 的虚拟 store 布局下只有这种方式是对的。详见
+[`dsh-plugin/README.md`](../dsh-plugin/README.md)。
+
+包内的 row **不带** `--project` / `--vault` / `--index`，`auto-memory mcp` 会自己从
+`~/.config/auto-memory/config.json` 解析（`index` + `default_project`），所以装完只需一条配置：
+
+```bash
+auto-memory project default 1m     # 写 default_project；索引里没有这个 permalink 会拒绝
+auto-memory project list           # 默认项前面有 `*`
+```
+
+还没注册过 vault 的话一步到位：`auto-memory project add "<名字>" <目录> --default`。
+`index` 可选，默认 `~/.local/share/auto-memory/memory.db`。
+
+`default_project` 填 **permalink**（`auto-memory project list` 的 `permalink` 列），不是展示名。
+要改某个 profile 指向别的 vault/project，再按 id 覆盖：
+
+```yaml
+- id: auto-memory-mcp
+  config:
+    args: ["mcp", "--project", "other", "--vault", "/path/to/vault", "--read-only"]
+```
+
+**手工方式**（不装 npm 包时）——把 skills 链进用户级扫描根：
+
+```bash
+mkdir -p ~/.dsh/skills
+ln -sfn "$PWD/plugins/deepseek/skills/"* ~/.dsh/skills/
+```
+
+**MCP server**——加进 `~/.dsh/profiles/<profile>/cordis.patch.yml`（桌面 App 用 `desktop`，
+`dsh web` 用 `web`）：
+
+```yaml
+- id: mcp-auto-memory
+  name: '@deepseek-ai/dsh-mcp-client'
+  config:
+    serverName: memory
+    transport: stdio
+    command: /Users/you/.cargo/bin/auto-memory
+    args: ['mcp', '--project', '1m', '--read-only']
+    toolCallTimeoutMs: 60000
+```
+
+存盘即热插拔，模型侧的工具名是 `mcp__memory__search_notes` / `mcp__memory__write_note` / …。
+`--read-only` 会把 6 个写工具从 `tools/list` 里摘掉（20 → 14）。
+
+三个坑：
+
+- **`--project` 填 permalink，不是展示名**。先跑 `auto-memory project list`，取
+  `permalink` 那一列；列表为空说明还没索引过 vault，先
+  `auto-memory project add "<名字>" <vault目录>`。填错/没填的表现都是"客户端连上了但没有工具"。
+  现在 `no project` 报错会直接列出这个索引里可用的 permalink，并提示用第一列。
+- `failOnStartupError` 默认 `false`，连不上时**只是没有工具、不报错**。第一次调试建议临时设
+  `true`。
+- `mcp` 启动时会按 `--vault` 做一次 reconcile；vault 路径指错（存在但不对）会把该项目已有索引
+  行 prune 掉。接完先看 `auto_memory_diagnostics` 里的 vault 行。
+
+---
+
 ## 5. 接线：Codex 插件 hook
 
 与上面同构，`hooks/hooks.json` 的字段一样（Codex 的插件清单是
@@ -298,7 +382,7 @@ agent = agent.with_user_prompt_submit(move |_agent, prompt: &mut String| {
 `basic_memory.cli.commands.hook`：
 
 ```
-auto-memory hook <session-start|pre-compact> --harness <claude|codex|pi|tact> \
+auto-memory hook <session-start|pre-compact> --harness <claude|codex|pi|tact|deepseek> \
     [--index <db>] [--project <permalink>] [--project-dir <dir>]
 ```
 
@@ -309,33 +393,47 @@ auto-memory hook <session-start|pre-compact> --harness <claude|codex|pi|tact> \
 |---|---|
 | `src/hooks/profiles.rs` | 每 harness 的默认值/文案（recall 窗口、capture 目录、session note type、checkpoint 提示） |
 | `src/hooks/event.rs` | 把各 harness 的 stdin JSON 归一成 `NormalizedHookEvent` |
-| `src/hooks/settings.rs` | 合并 user / project 配置（`.codex/basic-memory.json` 的 `basicMemory` 块、`.tact/auto-memory.json` 的 `autoMemory` 块、`.claude/settings.json`、`.pi/basic-memory.json`）；坏文件 **fail-closed** |
+| `src/hooks/settings.rs` | 合并 user / project 配置（`.codex/basic-memory.json` 的 `basicMemory` 块、`.tact/auto-memory.json` 与 `$DSH_HOME/auto-memory.json` 的 `autoMemory` 块、`.claude/settings.json`、`.pi/basic-memory.json`）；坏文件 **fail-closed** |
 | `src/hooks/brief.rs` | 组装 SessionStart brief（fenced 数据 + 截断边界 + 写作指引） |
 | `src/hooks/checkpoint.rs` | 压缩后的 checkpoint 提示（附 host 元数据；按 harness 选提示文本，元数据键沿用 skill 的 `codex_turn_id`） |
 
-**`tact` 是 port 自己加的 harness**（参考实现没有）：Tact 的 hook 契约和 Codex 同源，
-stdin 字段也对得上（`session_id` / `cwd` / `source` / `turn_id` / `model`，只有
-`transcript_path` 恒为 `null`），所以它复用同一套引擎，差异只在三处——事件上盖的 identity
-（`tact`）、读的配置文件（`.tact/auto-memory.json` 的 `autoMemory` 块——**auto-memory 自己的
-文件**：参考实现从不读 `.tact/` 下的任何东西，所以名字不用跟它一致）、
-以及打印给用户的文案。验证不需要起 TUI：
+**`tact` 和 `deepseek` 是 port 自己加的 harness**（参考实现没有）：两者的 hook 契约都和
+Codex 同源，stdin 字段也对得上（`session_id` / `cwd` / `source` / `turn_id` / `model`，只有
+`transcript_path` 恒为 `null`），所以它们复用同一套引擎，差异只在三处——事件上盖的 identity
+（`tact` / `deepseek`）、读的配置文件（`.tact/auto-memory.json` 与
+`$DSH_HOME/auto-memory.json`，都是 `autoMemory` 块——**auto-memory 自己的文件**：参考实现
+从不读 `.tact/` 或 `.dsh/` 下的任何东西，所以名字不用跟它一致）、
+以及打印给用户的文案。
+
+`deepseek` 与 `tact` 刻意不共用配置：两者的目录（`.tact/` vs `.dsh/`）、source id、以及
+recall 的 note type 都不同。Tact 会额外 recall `codex_session`（共享 vault 里已有 Codex
+笔记），DeepSeek **只** recall 自己写的 `deepseek_session`——"这条上下文是哪个 host 产出的"
+必须能从 brief 本身回答。这条隔离由测试双向钉住：
+`deepseek_ignores_the_codex_and_tact_mapping_files` /
+`codex_and_tact_ignore_the_deepseek_mapping_file`，以及 `tests/hook.rs` 的
+`cli_deepseek_does_not_inherit_a_codex_mapping`。
+
+验证不需要起 TUI：
 
 ```bash
 echo '{"hook_event_name":"SessionStart","cwd":"/abs/repo","source":"startup"}' \
     | auto-memory hook session-start --harness tact --index "$INDEX" --project oracle
+
+echo '{"hook_event_name":"SessionStart","cwd":"/abs/repo","source":"startup"}' \
+    | auto-memory hook session-start --harness deepseek --index "$INDEX" --project oracle
 ```
 
-`plugins/` 下是配套的插件包，**每个 host 一个**：`plugins/agents`（Codex）和
-`plugins/tact`（Tact）。两者是同一套 skills/schemas 的两个版本，差异只在 harness identity
-（薄壳的 `--harness`、skill 读的配置路径、note type、标题前缀），详见
-[tact-ui-integration.md](tact-ui-integration.md) §2.2 和各自的 README。
-**两个 host 都忽略 PreCompact 的 stdout**，所以 checkpoint 请求由压缩后那次 `SessionStart`
-（`trigger: compact`）带出；`am-checkpoint` skill 再用 MCP `write_note` 写一条不可变的
-`codex_session` / `tact_session` / `coding_session` 笔记。
+`plugins/` 下是配套的插件包，**每个 host 一个**：`plugins/agents`（Codex）、
+`plugins/tact`（Tact）、`plugins/deepseek`（DeepSeek Harness）。三者是同一套
+skills/schemas 的三个版本，差异只在 harness identity（薄壳的 `--harness`、skill 读的配置路径、
+note type、标题前缀），详见 [tact-ui-integration.md](tact-ui-integration.md) §2.2 和各自的
+README。**三个 host 都忽略 PreCompact 的 stdout**，所以 checkpoint 请求由压缩后那次
+`SessionStart`（`trigger: compact`）带出；`am-checkpoint` skill 再用 MCP `write_note` 写一条
+不可变的 `codex_session` / `tact_session` / `deepseek_session` / `coding_session` 笔记。
 
-⚠️ **每个 host 只装自己那一个包**：Tact 会加载所有已安装插件的 skills 和 hooks，两个都装就会
-一次会话收到两份 brief、skill 列表里出现两套 `am-*`（`auto-memory-rs:am-checkpoint` 和
-`auto-memory-tact:am-checkpoint`）。
+⚠️ **每个 host 只装自己那一个包**：Tact 和 DSH 都会加载所有可见根下的 skills，装两个就会
+一次会话看到两套 `am-*`（`auto-memory-rs:am-checkpoint` 和
+`auto-memory-tact:am-checkpoint`），模型可能挑错。
 
 已实现的两个 verb 之外，参考实现还有 `hook stop|flush|status|install|remove`、SPEC-55
 envelope/inbox WAL、transcript 抽取与自动 capture 笔记、以及 claude-code / pi 插件包，
