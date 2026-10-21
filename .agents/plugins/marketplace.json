@@ -8,6 +8,10 @@
     {
       "name": "auto-memory-tact",
       "source": "./plugins/tact"
+    },
+    {
+      "name": "auto-memory-deepseek",
+      "source": "./plugins/deepseek"
     }
   ]
 }

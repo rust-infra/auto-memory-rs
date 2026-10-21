@@ -1,0 +1,36 @@
+{
+  "name": "auto-memory-deepseek",
+  "version": "0.1.0",
+  "description": "A DeepSeek Harness-native bridge to a local auto-memory-rs index for durable engineering context and resumable checkpoints.",
+  "author": {
+    "name": "auto-memory-rs"
+  },
+  "license": "AGPL-3.0-or-later",
+  "keywords": [
+    "auto-memory",
+    "deepseek",
+    "memory",
+    "knowledge-graph",
+    "mcp",
+    "checkpoints"
+  ],
+  "skills": "./skills/",
+  "hooks": "./hooks/hooks.json",
+  "interface": {
+    "displayName": "Auto Memory for DeepSeek Harness",
+    "shortDescription": "Carry decisions and handoffs across DSH sessions",
+    "longDescription": "Brief each DeepSeek Harness session from a local auto-memory-rs index, capture engineering decisions, and checkpoint long-running work so a later session can resume with repo-backed context.",
+    "developerName": "auto-memory-rs",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Use Auto Memory to orient before changing this repo.",
+      "Checkpoint this DeepSeek Harness session into Auto Memory.",
+      "Capture the decision we just made."
+    ]
+  }
+}
