@@ -15,9 +15,19 @@ cargo check --offline --all-targets
 cargo clippy --offline --all-targets -- -D warnings
 cargo test --offline
 cargo doc --offline --no-deps
+sh scripts/check-dsh-plugin.sh
 ```
 
-All five must be clean, and `cargo test` must report no failures. Ignored tests are the opt-in
+All six must be clean, and `cargo test` must report no failures.
+
+The last one covers the DSH bundle in `dsh-plugin/`, which cargo never sees. It
+checks that the packaged `skills/` and `schemas/` still match `plugins/deepseek`
+(fix drift with `sh scripts/sync-dsh-plugin.sh`), that `package.json` still
+declares `dsh.bundle.patch` with a complete `files[]`, and that every row the
+bundle contributes is under `- insert:` — a bare `- id:` row is rejected at load
+with `entry "…" not found`. CI additionally runs `dsh-bundle`, which packs the
+tarball, installs it into a throwaway profile with the published DSH CLI, and
+resolves the skill root the way the Loader does. Ignored tests are the opt-in
 benchmarks (`tests/benchmarks.rs`) only; any other `#[ignore]` needs a written reason in
 `reference.md` or the test itself.
 
