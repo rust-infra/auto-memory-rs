@@ -1,0 +1,135 @@
+name: Auto tag
+
+# Every push to `main` that lands new commits gets the next patch tag, which in
+# turn triggers `Release` (its `on: push: tags` trigger). The chain is:
+#
+#   merge to main → this workflow → vX.Y.Z tag → Release builds and publishes
+#
+# The version scheme is "one patch per merge": the tag is `v<major>.<minor>.<patch+1>`
+# of the highest existing tag, with major/minor taken from it. That keeps the
+# binary's `--version` and the tag in step only if `Cargo.toml` is bumped by hand —
+# see the note on `Cargo.toml` below.
+#
+# A merge that changed nothing is not a release: the workflow exits early when the
+# newest tag already points at the pushed commit, so re-running CI, or a push that
+# only updates a tag, does not mint a duplicate.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  # Two merges in quick succession must not race for the same tag: the second run
+  # would compute the same "next" version and fail on an existing ref.
+  group: auto-tag-main
+  cancel-in-progress: false
+
+jobs:
+  tag:
+    name: Tag the merge
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history and tags: the next version is derived from the newest tag,
+          # and a shallow clone would see none.
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Work out the next version
+        id: next
+        run: |
+          set -euo pipefail
+
+          # The newest tag by version order, not by creation date — a hotfix on an
+          # older line should not become the base.
+          latest="$(git tag --list 'v*' --sort=-v:refname | head -1)"
+
+          if [ -z "$latest" ]; then
+            next="v0.1.0"
+            echo "no existing tag; starting at $next"
+          else
+            echo "latest tag: $latest"
+            # `v1.2.3` → 1 2 3. A pre-release suffix (`-rc.1`) is dropped: this
+            # workflow only ever mints plain patch releases.
+            core="${latest#v}"
+            core="${core%%-*}"
+            major="${core%%.*}"
+            rest="${core#*.}"
+            minor="${rest%%.*}"
+            patch="${rest##*.}"
+            case "$major$minor$patch" in
+              ''|*[!0-9]*) echo "error: cannot parse '$latest' as vMAJOR.MINOR.PATCH" >&2; exit 1 ;;
+            esac
+            next="v${major}.${minor}.$((patch + 1))"
+            echo "$latest → $next"
+          fi
+
+          echo "version=$next" >> "$GITHUB_OUTPUT"
+
+          # Skip when the newest tag already points at this commit: the merge added
+          # nothing to release, and minting another tag would publish an identical
+          # build under a new number.
+          if [ -n "$latest" ] && [ "$(git rev-list -n1 "$latest")" = "$GITHUB_SHA" ]; then
+            echo "already tagged at $GITHUB_SHA; nothing to do"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check the tag is free
+        if: steps.next.outputs.skip == 'false'
+        run: |
+          set -euo pipefail
+          version="${{ steps.next.outputs.version }}"
+          # A tag can exist without a release (a hand-made tag, or a failed Release
+          # run). Re-tagging would move a published ref, so stop and let a human
+          # decide: bumping `Cargo.toml` is the usual answer.
+          if git rev-parse -q --verify "refs/tags/$version" >/dev/null; then
+            echo "error: tag $version already exists but does not point at $GITHUB_SHA" >&2
+            echo "bump the version in Cargo.toml, or delete the stale tag" >&2
+            exit 1
+          fi
+          echo "$version is free"
+
+      # The tag and the binary's `--version` are two independent numbers: the tag
+      # comes from the previous tag, the binary from `Cargo.toml`. `v1.0.0` shipped
+      # reporting `0.1.0` because nothing compared them. Warn rather than fail —
+      # the release is still buildable, and failing here would block every merge
+      # until someone edits `Cargo.toml`, including doc-only ones.
+      - name: Report a tag/Cargo.toml mismatch
+        if: steps.next.outputs.skip == 'false'
+        run: |
+          set -euo pipefail
+          version="${{ steps.next.outputs.version }}"
+          cargo_version="$(sed -n 's/^version *= *"\(.*\)"/\1/p' Cargo.toml | head -1)"
+          echo "tag: $version, Cargo.toml: $cargo_version"
+          if [ "${version#v}" != "$cargo_version" ]; then
+            echo "::warning title=Version mismatch::tag $version but Cargo.toml says $cargo_version — the binary will report $cargo_version"
+            {
+              echo "### Version mismatch"
+              echo "Tagging $version but Cargo.toml says $cargo_version."
+              echo "The released binary will report $cargo_version from --version."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Create and push the tag
+        if: steps.next.outputs.skip == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          version="${{ steps.next.outputs.version }}"
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$version" -m "Release $version" "$GITHUB_SHA"
+          git push origin "refs/tags/$version"
+          echo "pushed $version at $GITHUB_SHA"
+          echo "### Tagged \`$version\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "The Release workflow picks this up from its \`push: tags\` trigger." \
+            >> "$GITHUB_STEP_SUMMARY"
