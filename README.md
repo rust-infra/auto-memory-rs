@@ -62,11 +62,17 @@ Work lands on a branch and merges, so a commit on `main` skips review and cannot
 request without rewriting history. The hook prints the two ways forward (create a branch, or
 `git commit --no-verify`).
 
-Git only reads hooks from `.git/hooks` by default, so opt in once per clone — this enables both:
+Install them once per clone:
 
 ```bash
-git config core.hooksPath .githooks
+./scripts/install-git-hooks.sh
 ```
+
+The script copies `.githooks/*` into `.git/hooks`, which is outside the working tree and so
+survives every checkout. **Do not use `git config core.hooksPath .githooks` instead**: that
+points git at the working tree, so the hooks vanish the moment you switch to a branch that
+predates them — including `main` before this landed, which is precisely when the branch guard
+needs to be present. Re-run the script after editing a hook.
 
 The same gates run as `pre-push`, so a push runs them before anything leaves the machine.
 `git push --no-verify` skips that; `git commit --no-verify` skips the branch guard.
