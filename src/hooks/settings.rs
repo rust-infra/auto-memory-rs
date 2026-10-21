@@ -9,10 +9,11 @@
 //!
 //! Harnesses the reference product also serves (Codex, Pi, Claude) keep the
 //! reference's own file names — its hook reads the same files, so the name is a
-//! shared contract. Tact is this port's addition and nothing else reads
-//! `.tact/`, so its mapping file is `auto-memory.json` under an `autoMemory`
-//! block: auto-memory's settings should not have to masquerade as another
-//! product's.
+//! shared contract. Tact and DeepSeek are this port's additions: nothing outside
+//! this repository reads `.tact/` or `.dsh/`, so each gets its own mapping file
+//! (`auto-memory.json`, an `autoMemory` block) instead of masquerading as another
+//! product's. The three mapping files never overlap, which is what keeps one
+//! host's settings from steering another host's session.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -91,6 +92,7 @@ pub fn load_harness_settings(harness: Harness, directory: &Path) -> (Settings, b
         Harness::Codex => load_codex_settings(directory, home.as_deref()),
         Harness::Pi => load_pi_settings(directory),
         Harness::Tact => load_tact_settings(directory, home.as_deref()),
+        Harness::Deepseek => load_deepseek_settings(directory, home.as_deref()),
     }
 }
 
@@ -106,6 +108,7 @@ fn load_codex_settings(directory: &Path, home: Option<&Path>) -> (Settings, bool
         "basicMemory",
         directory,
         home,
+        false,
     )
 }
 
@@ -126,15 +129,59 @@ fn load_tact_settings(directory: &Path, home: Option<&Path>) -> (Settings, bool)
         "autoMemory",
         directory,
         home,
+        false,
+    )
+}
+
+/// DeepSeek Harness keeps its configuration in a `.dsh/` directory — per project
+/// under the checkout, and at user level in `$DSH_HOME` (default `~/.dsh`). The
+/// file is `auto-memory.json` under an `autoMemory` block — the same shape Tact
+/// uses, but a different directory, so the two never read each other's mapping.
+///
+/// `$DSH_HOME` is honoured when it is set, because that is where the harness
+/// itself resolves its home (`@deepseek-ai/dsh-home-paths`); a user who moved it
+/// would otherwise get a brief from settings this hook could not find.
+///
+/// Note the asymmetry the two roots need: `$DSH_HOME` **is** the `.dsh`
+/// directory (it already ends in `.dsh`), while the project root is the
+/// checkout and the `.dsh` segment has to be appended. Handing `$DSH_HOME` to
+/// the shared loader would look for `~/.dsh/.dsh/auto-memory.json`.
+fn load_deepseek_settings(directory: &Path, home: Option<&Path>) -> (Settings, bool) {
+    let dsh_home = std::env::var_os("DSH_HOME")
+        .map(PathBuf::from)
+        .filter(|path| !path.as_os_str().is_empty());
+    load_deepseek_settings_at(directory, dsh_home.as_deref().or(home), dsh_home.is_some())
+}
+
+/// [`load_deepseek_settings`] with the user-level root supplied instead of
+/// resolved from `$DSH_HOME`, plus whether that root already *is* the `.dsh`
+/// directory.
+///
+/// The split exists so a test can name the root it means: `$DSH_HOME` is process
+/// state, and a test that mutated it would race every other test in the binary.
+fn load_deepseek_settings_at(
+    directory: &Path,
+    home: Option<&Path>,
+    home_is_dsh: bool,
+) -> (Settings, bool) {
+    load_agent_dir_settings(
+        Harness::Deepseek.profile(),
+        ".dsh",
+        "auto-memory.json",
+        "autoMemory",
+        directory,
+        home,
+        home_is_dsh,
     )
 }
 
 /// Load settings from a `<dir>/<file_name>` pair: a user-level file under
 /// `home` and the nearest ancestor's project file.
 ///
-/// Codex (`.codex/basic-memory.json`) and Tact (`.tact/auto-memory.json`) share
-/// this layout, so they share the loader — only the directory, the file name,
-/// the block key and the profile's defaults differ.
+/// Codex (`.codex/basic-memory.json`), Tact (`.tact/auto-memory.json`) and
+/// DeepSeek (`.dsh/auto-memory.json`) share this layout, so they share the
+/// loader — only the directory, the file name, the block key and the profile's
+/// defaults differ.
 fn load_agent_dir_settings(
     profile: &HarnessProfile,
     dir_name: &str,
@@ -142,19 +189,32 @@ fn load_agent_dir_settings(
     block_key: &str,
     directory: &Path,
     home: Option<&Path>,
+    home_is_dir: bool,
 ) -> (Settings, bool) {
     let mut settings = Settings::defaults(profile, repo_scoped_capture_folder(profile, directory));
     // Lifecycle capture and checkpoint prompting are enabled when omitted.
     settings.checkpoint_on_compact = true;
     settings.capture_events = true;
 
-    let file = |root: &Path| root.join(dir_name).join(file_name);
+    // `home_is_dir` distinguishes a home that *contains* the harness directory
+    // (`~` → `~/.codex/…`) from one that already *is* it (`$DSH_HOME` →
+    // `$DSH_HOME/auto-memory.json`). It applies to the **user level only**: a
+    // project root is always a checkout, so the harness directory is appended
+    // there regardless of where the user level lives.
+    let user_file = |root: &Path| {
+        if home_is_dir {
+            root.join(file_name)
+        } else {
+            root.join(dir_name).join(file_name)
+        }
+    };
+    let project_file = |root: &Path| root.join(dir_name).join(file_name);
     let mut sources: Vec<PathBuf> = Vec::new();
     if let Some(home) = home {
-        sources.push(file(home));
+        sources.push(user_file(home));
     }
-    let project = project_dir(directory, |dir| file(dir).is_file());
-    let project_path = file(&project);
+    let project = project_dir(directory, |dir| project_file(dir).is_file());
+    let project_path = project_file(&project);
     if sources.first() != Some(&project_path) {
         sources.push(project_path);
     }
@@ -183,10 +243,11 @@ fn load_agent_dir_settings(
 /// Reads the harness's block key when present, else the whole document; a
 /// non-object block is malformed and disables recall.
 ///
-/// The key is per-harness (`basicMemory` for Codex, `autoMemory` for Tact) so a
-/// file never has to carry another product's vocabulary. A block written under
-/// the wrong key is not an error: it reads as an unknown setting, which lands
-/// on the same "configured, but no project pinned" path as any other typo.
+/// The key is per-harness (`basicMemory` for Codex, `autoMemory` for Tact and
+/// DeepSeek) so a file never has to carry another product's vocabulary. A block
+/// written under the wrong key is not an error: it reads as an unknown setting,
+/// which lands on the same "configured, but no project pinned" path as any other
+/// typo.
 fn settings_block<'a>(
     data: &'a serde_json::Map<String, Value>,
     key: &str,
@@ -591,6 +652,169 @@ mod tests {
             r#"{"permissions": {}}"#,
         );
         let (settings, found) = load_claude_settings(other.path(), Some(home.path()), &user_dir);
+        assert!(!found);
+        assert_eq!(settings.primary_project, None);
+    }
+
+    #[test]
+    fn deepseek_defaults_enable_capture_and_checkpointing() {
+        let home = tempfile::tempdir().expect("home");
+        let project = tempfile::tempdir().expect("project");
+        let (settings, found) = load_deepseek_settings_at(project.path(), Some(home.path()), false);
+        assert!(!found);
+        assert!(settings.checkpoint_on_compact);
+        assert!(settings.capture_events);
+        assert_eq!(settings.capture_folder, "deepseek");
+        assert_eq!(settings.recall_timeframe, "7d");
+        assert_eq!(settings.primary_project, None);
+    }
+
+    #[test]
+    fn deepseek_project_file_overrides_user_file() {
+        let home = tempfile::tempdir().expect("home");
+        let project = tempfile::tempdir().expect("project");
+        write(
+            &home.path().join(".dsh/auto-memory.json"),
+            r#"{"primaryProject": "user", "checkpointOnCompact": false}"#,
+        );
+        write(
+            &project.path().join(".dsh/auto-memory.json"),
+            r#"{"autoMemory": {"primaryProject": "project", "captureFolder": "handoffs"}}"#,
+        );
+        let (settings, found) = load_deepseek_settings_at(project.path(), Some(home.path()), false);
+        assert!(found);
+        assert_eq!(settings.primary_project.as_deref(), Some("project"));
+        assert_eq!(settings.capture_folder, "handoffs");
+        // The project file did not mention it, so the user value survives.
+        assert!(!settings.checkpoint_on_compact);
+    }
+
+    #[test]
+    fn deepseek_malformed_source_fails_closed() {
+        let home = tempfile::tempdir().expect("home");
+        let project = tempfile::tempdir().expect("project");
+        write(&project.path().join(".dsh/auto-memory.json"), "{ not json");
+        let (settings, found) = load_deepseek_settings_at(project.path(), Some(home.path()), false);
+        assert!(found);
+        assert!(!settings.capture_events);
+        assert!(!settings.checkpoint_on_compact);
+    }
+
+    /// The isolation contract, from the DeepSeek side: a repo that carries a
+    /// Codex or Tact mapping but no `.dsh/auto-memory.json` is **unconfigured**
+    /// for this harness. Installing the DeepSeek package must not make a session
+    /// inherit a neighbouring host's project, capture folder, or phrasing.
+    #[test]
+    fn deepseek_ignores_the_codex_and_tact_mapping_files() {
+        let home = tempfile::tempdir().expect("home");
+        let project = tempfile::tempdir().expect("project");
+        write(
+            &project.path().join(".codex/basic-memory.json"),
+            r#"{"basicMemory": {"primaryProject": "codex-project"}}"#,
+        );
+        write(
+            &project.path().join(".tact/auto-memory.json"),
+            r#"{"autoMemory": {"primaryProject": "tact-project"}}"#,
+        );
+        let (settings, found) = load_deepseek_settings_at(project.path(), Some(home.path()), false);
+        assert!(
+            !found,
+            "a foreign mapping file must not count as configured"
+        );
+        assert_eq!(settings.primary_project, None);
+        assert_eq!(settings.capture_folder, "deepseek");
+    }
+
+    /// The same contract from the other side: a `.dsh/auto-memory.json` is
+    /// invisible to the Codex and Tact loaders, so adding the DeepSeek package
+    /// cannot change what those hosts recall.
+    #[test]
+    fn codex_and_tact_ignore_the_deepseek_mapping_file() {
+        let home = tempfile::tempdir().expect("home");
+        let project = tempfile::tempdir().expect("project");
+        write(
+            &project.path().join(".dsh/auto-memory.json"),
+            r#"{"autoMemory": {"primaryProject": "deepseek-project"}}"#,
+        );
+        for (label, (settings, found)) in [
+            (
+                "codex",
+                load_codex_settings(project.path(), Some(home.path())),
+            ),
+            (
+                "tact",
+                load_tact_settings(project.path(), Some(home.path())),
+            ),
+        ] {
+            assert!(!found, "{label} treated .dsh/ as configured");
+            assert_eq!(settings.primary_project, None, "{label} read .dsh/");
+        }
+    }
+
+    /// `$DSH_HOME` replaces the user-level root, matching where the harness
+    /// itself looks. `HOME` is the fallback when it is unset or empty.
+    ///
+    /// The two roots are not the same shape: `$DSH_HOME` already **is** the
+    /// `.dsh` directory (`~/.dsh`), while `HOME` contains it. Regression: the
+    /// first cut appended `.dsh` to both, so a real `$DSH_HOME` was looked up as
+    /// `~/.dsh/.dsh/auto-memory.json` and silently found nothing.
+    #[test]
+    fn deepseek_user_root_prefers_dsh_home() {
+        let home = tempfile::tempdir().expect("home");
+        let dsh_home = tempfile::tempdir().expect("dsh home");
+        let project = tempfile::tempdir().expect("project");
+        write(
+            &home.path().join(".dsh/auto-memory.json"),
+            r#"{"autoMemory": {"primaryProject": "from-home"}}"#,
+        );
+        write(
+            &dsh_home.path().join("auto-memory.json"),
+            r#"{"autoMemory": {"primaryProject": "from-dsh-home"}}"#,
+        );
+        // `$DSH_HOME` set: it is the `.dsh` directory itself.
+        let (settings, _) = load_deepseek_settings_at(project.path(), Some(dsh_home.path()), true);
+        assert_eq!(
+            settings.primary_project.as_deref(),
+            Some("from-dsh-home"),
+            "the DSH home wins over HOME, without a second `.dsh` segment"
+        );
+        // `$DSH_HOME` unset: fall back to HOME, which does contain `.dsh`.
+        let (settings, _) = load_deepseek_settings_at(project.path(), Some(home.path()), false);
+        assert_eq!(settings.primary_project.as_deref(), Some("from-home"));
+    }
+
+    /// The project-level file is `.dsh/auto-memory.json` under the checkout, for
+    /// both root shapes — only the user level differs.
+    #[test]
+    fn deepseek_project_file_is_found_under_either_root_shape() {
+        for dsh_home_set in [false, true] {
+            let home = tempfile::tempdir().expect("home");
+            let project = tempfile::tempdir().expect("project");
+            write(
+                &project.path().join(".dsh/auto-memory.json"),
+                r#"{"autoMemory": {"primaryProject": "from-project"}}"#,
+            );
+            let (settings, found) =
+                load_deepseek_settings_at(project.path(), Some(home.path()), dsh_home_set);
+            assert!(found, "dsh_home_set={dsh_home_set}");
+            assert_eq!(
+                settings.primary_project.as_deref(),
+                Some("from-project"),
+                "dsh_home_set={dsh_home_set}"
+            );
+        }
+    }
+
+    /// A `.dsh/` directory without a mapping file is not a project root. The
+    /// harness writes sessions, logs, and storages under `~/.dsh`, so a project
+    /// `.dsh/` holding anything else must not re-anchor the search.
+    #[test]
+    fn deepseek_ignores_a_dsh_directory_without_a_mapping_file() {
+        let home = tempfile::tempdir().expect("home");
+        let project = tempfile::tempdir().expect("project");
+        std::fs::create_dir_all(project.path().join(".dsh")).expect("mkdir");
+        std::fs::write(project.path().join(".dsh/sessions.json"), b"{}").expect("write");
+        let (settings, found) = load_deepseek_settings_at(project.path(), Some(home.path()), false);
         assert!(!found);
         assert_eq!(settings.primary_project, None);
     }

@@ -202,6 +202,9 @@ fn run_hook(args: &[&str], stdin: &str, home: &Path) -> (i32, String, String) {
         .args(args)
         .env("HOME", home)
         .env("XDG_CONFIG_HOME", home.join(".config"))
+        // `DSH_HOME` would otherwise point the DeepSeek loader at the developer's
+        // real `~/.dsh`, the same leak the `HOME` redirect exists to prevent.
+        .env("DSH_HOME", home.join(".dsh"))
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -337,6 +340,97 @@ fn cli_pre_compact_prints_nothing_for_tact() {
     assert!(
         stdout.is_empty(),
         "Tact keeps only the hook's control, not its stdout: {stdout}"
+    );
+}
+
+/// The DeepSeek Harness gets the same CLI contract as the other hosts: a brief
+/// on stdout for the pinned project, exit 0, and its **own** profile's phrasing.
+#[test]
+fn cli_session_start_prints_a_brief_for_a_deepseek_project() {
+    let (scratch, index) = file_index("hook-cli-deepseek");
+    let home = scratch.join("home");
+    std::fs::create_dir_all(&home).expect("home");
+    let stdin = format!(
+        r#"{{"hook_event_name":"SessionStart","cwd":"{}","session_id":"d1","source":"startup","turn_id":"0","model":"deepseek-v4.1-flash"}}"#,
+        scratch.path().display()
+    );
+    let (code, stdout, stderr) = run_hook(
+        &[
+            "hook",
+            "session-start",
+            "--harness",
+            "deepseek",
+            "--index",
+            index.to_str().expect("utf8"),
+            "--project",
+            "oracle",
+        ],
+        &stdin,
+        &home,
+    );
+    assert_eq!(code, 0, "{stderr}");
+    assert!(stdout.contains("**Project:** oracle"), "{stdout}");
+    assert!(stdout.contains("Auto Memory — session context"), "{stdout}");
+    assert!(
+        stdout.contains("keep required repo rules in AGENTS.md"),
+        "{stdout}"
+    );
+    assert!(!stdout.contains(".codex/"), "{stdout}");
+    assert!(!stdout.contains(".tact/"), "{stdout}");
+}
+
+/// The isolation contract at the CLI boundary: with a Codex mapping present but
+/// no `.dsh/auto-memory.json`, a DeepSeek hook is unconfigured and must print
+/// the DeepSeek first-run nudge — never Codex's project.
+#[test]
+fn cli_deepseek_does_not_inherit_a_codex_mapping() {
+    let (scratch, index) = file_index("hook-cli-deepseek-isolation");
+    let home = scratch.join("home");
+    std::fs::create_dir_all(home.join(".codex")).expect("codex dir");
+    std::fs::write(
+        home.join(".codex/basic-memory.json"),
+        r#"{"basicMemory": {"primaryProject": "codex-only"}}"#,
+    )
+    .expect("write mapping");
+    let stdin = format!(
+        r#"{{"hook_event_name":"SessionStart","cwd":"{}","session_id":"d2","source":"startup"}}"#,
+        scratch.path().display()
+    );
+    let (code, stdout, _stderr) = run_hook(
+        &[
+            "hook",
+            "session-start",
+            "--harness",
+            "deepseek",
+            "--index",
+            index.to_str().expect("utf8"),
+        ],
+        &stdin,
+        &home,
+    );
+    assert_eq!(code, 0);
+    assert!(
+        stdout.contains(".dsh/auto-memory.json"),
+        "the nudge names the DeepSeek mapping file: {stdout}"
+    );
+    assert!(
+        !stdout.contains("codex-only"),
+        "a Codex mapping must not steer a DeepSeek session: {stdout}"
+    );
+}
+
+#[test]
+fn cli_pre_compact_prints_nothing_for_deepseek() {
+    let home = tempfile::tempdir().expect("home");
+    let (code, stdout, _stderr) = run_hook(
+        &["hook", "pre-compact", "--harness", "deepseek"],
+        r#"{"hook_event_name":"PreCompact","cwd":"/tmp","trigger":"auto"}"#,
+        home.path(),
+    );
+    assert_eq!(code, 0);
+    assert!(
+        stdout.is_empty(),
+        "DeepSeek keeps only the hook's control, not its stdout: {stdout}"
     );
 }
 

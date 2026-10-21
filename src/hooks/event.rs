@@ -32,11 +32,11 @@ impl HookEvent {
     }
 }
 
-/// One harness lifecycle event, normalized across Claude Code, Codex, Pi, and
-/// Tact.
+/// One harness lifecycle event, normalized across Claude Code, Codex, Pi,
+/// Tact, and the DeepSeek Harness.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NormalizedHookEvent {
-    /// SPEC-55 source id (`claude-code`, `codex`, `pi`, `tact`).
+    /// SPEC-55 source id (`claude-code`, `codex`, `pi`, `tact`, `deepseek`).
     pub source: &'static str,
     /// The normalized event.
     pub event: HookEvent,
@@ -77,14 +77,20 @@ pub fn normalize(harness: Harness, event: HookEvent, payload: &Value) -> Normali
     // `crates/tact/src/plugin/hooks.rs` reports `turn_id` as the turn counter
     // and `model`), with one deliberate difference: `transcript_path` is
     // `null` rather than a path, which `field` already normalizes to empty.
+    //
+    // The DeepSeek Harness speaks the same dialect: its hook payload carries
+    // `session_id`, `cwd`, `trigger`, `turn_id` and `model`, and no
+    // `transcript_path`. It stays a separate branch from Tact's on purpose —
+    // sharing a match arm is how the two identities would later get merged by
+    // accident.
     let turn_id = match harness {
         Harness::Claude => None,
-        Harness::Codex | Harness::Tact => field("turn_id"),
+        Harness::Codex | Harness::Tact | Harness::Deepseek => field("turn_id"),
         Harness::Pi => field("turn_id").or_else(|| field("branch_id")),
     };
     let model = match harness {
         Harness::Claude => None,
-        Harness::Codex | Harness::Pi | Harness::Tact => field("model"),
+        Harness::Codex | Harness::Pi | Harness::Tact | Harness::Deepseek => field("model"),
     };
 
     NormalizedHookEvent {
@@ -198,5 +204,87 @@ mod tests {
         assert_eq!(event.transcript_path, "");
         assert_eq!(event.trigger, None);
         assert_eq!(event.turn_id, None);
+    }
+
+    /// The DeepSeek Harness payload: the same dialect Tact reports
+    /// (`turn_id`/`model`, no `transcript_path`), but it must normalize under
+    /// its **own** source id — the source is what the checkpoint note records as
+    /// `agent`, so sharing Tact's would make the two indistinguishable.
+    #[test]
+    fn deepseek_reads_its_payload_under_its_own_source_id() {
+        let payload = json!({
+            "session_id": "dsh-session-1",
+            "cwd": "/Users/me/repo",
+            "hook_event_name": "SessionStart",
+            "model": "deepseek-v4.1-flash",
+            "turn_id": "4",
+            "source": "startup",
+        });
+        let event = normalize(Harness::Deepseek, HookEvent::SessionStarted, &payload);
+        assert_eq!(event.source, "deepseek");
+        assert_eq!(event.session_id, "dsh-session-1");
+        assert_eq!(event.cwd, "/Users/me/repo");
+        assert_eq!(event.trigger.as_deref(), Some("startup"));
+        assert_eq!(event.turn_id.as_deref(), Some("4"));
+        assert_eq!(event.model.as_deref(), Some("deepseek-v4.1-flash"));
+    }
+
+    #[test]
+    fn deepseek_reports_the_compact_trigger_after_compaction() {
+        let event = normalize(
+            Harness::Deepseek,
+            HookEvent::SessionStarted,
+            &json!({"hook_event_name": "SessionStart", "source": "compact"}),
+        );
+        assert_eq!(event.trigger.as_deref(), Some("compact"));
+    }
+
+    /// Every harness parses from its `--harness` spelling and back, so the CLI
+    /// surface and the profile table cannot drift.
+    #[test]
+    fn every_harness_round_trips_its_spelling() {
+        for harness in [
+            Harness::Claude,
+            Harness::Codex,
+            Harness::Pi,
+            Harness::Tact,
+            Harness::Deepseek,
+        ] {
+            assert_eq!(Harness::parse(harness.as_str()), Some(harness));
+        }
+        assert_eq!(Harness::parse("deepseek-harness"), None);
+    }
+
+    /// Source ids are what a checkpoint note records as `agent`; two harnesses
+    /// sharing one would make "which host wrote this" unanswerable.
+    #[test]
+    fn source_ids_are_distinct() {
+        let sources = [
+            Harness::Claude,
+            Harness::Codex,
+            Harness::Pi,
+            Harness::Tact,
+            Harness::Deepseek,
+        ]
+        .map(|harness| harness.profile().source);
+        let mut unique = sources.to_vec();
+        unique.sort_unstable();
+        unique.dedup();
+        assert_eq!(
+            unique.len(),
+            sources.len(),
+            "duplicate source id: {sources:?}"
+        );
+    }
+
+    /// Only the harnesses that drop `PreCompact` stdout ask for the checkpoint
+    /// after compaction. Claude and Pi have no checkpoint path at all.
+    #[test]
+    fn only_post_compaction_harnesses_request_a_checkpoint() {
+        assert!(Harness::Codex.checkpoint_after_compaction());
+        assert!(Harness::Tact.checkpoint_after_compaction());
+        assert!(Harness::Deepseek.checkpoint_after_compaction());
+        assert!(!Harness::Claude.checkpoint_after_compaction());
+        assert!(!Harness::Pi.checkpoint_after_compaction());
     }
 }

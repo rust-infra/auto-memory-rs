@@ -5,10 +5,17 @@
 //! different hook stdin dialect and different recall defaults; the profile keeps
 //! the differences in data so the engine stays harness-agnostic.
 //!
-//! [`Harness::Tact`] is this port's own addition — the reference has no Tact
-//! entry. Tact's hook contract is Codex-compatible (`docs/hooks.md` §1), so the
-//! profile mirrors the Codex one and differs only in the identity it stamps, the
-//! config file it reads, and the phrasing it prints.
+//! [`Harness::Tact`] and [`Harness::Deepseek`] are this port's own additions —
+//! the reference has neither entry. Both speak a Codex-compatible hook contract
+//! (`docs/hooks.md` §1), so each profile mirrors the Codex one and differs in the
+//! identity it stamps, the config file it reads, and the phrasing it prints.
+//!
+//! DeepSeek Harness is deliberately a *separate* harness rather than another
+//! spelling of Codex: it reads its own mapping file (`~/.dsh/auto-memory.json`
+//! and the nearest `<root>/.dsh/auto-memory.json`, under an `autoMemory` block),
+//! stamps its own source id and writes its own note type. Installing the
+//! DeepSeek package must not change what a Codex or Tact session recalls, and
+//! vice versa — see `settings.rs` for the file-isolation tests.
 
 /// A supported agent harness.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -21,6 +28,9 @@ pub enum Harness {
     Pi,
     /// Tact (`tact` source id). Not in the reference; see the module docs.
     Tact,
+    /// DeepSeek Harness (`deepseek` source id). Not in the reference; see the
+    /// module docs.
+    Deepseek,
 }
 
 impl Harness {
@@ -32,6 +42,7 @@ impl Harness {
             "codex" => Some(Self::Codex),
             "pi" => Some(Self::Pi),
             "tact" => Some(Self::Tact),
+            "deepseek" => Some(Self::Deepseek),
             _ => None,
         }
     }
@@ -43,6 +54,7 @@ impl Harness {
             Self::Codex => "codex",
             Self::Pi => "pi",
             Self::Tact => "tact",
+            Self::Deepseek => "deepseek",
         }
     }
 
@@ -53,7 +65,17 @@ impl Harness {
             Self::Codex => &CODEX,
             Self::Pi => &PI,
             Self::Tact => &TACT,
+            Self::Deepseek => &DEEPSEEK,
         }
+    }
+
+    /// Whether the harness delivers its checkpoint request from the
+    /// post-compaction `SessionStart` instead of `PreCompact` stdout.
+    ///
+    /// Codex, Tact, and DeepSeek keep only the hook's `control` on `PreCompact`,
+    /// so the request has to ride the `compact`-triggered session start.
+    pub fn checkpoint_after_compaction(self) -> bool {
+        matches!(self, Self::Codex | Self::Tact | Self::Deepseek)
     }
 }
 
@@ -183,6 +205,51 @@ pub const TACT_CHECKPOINT_PROMPT: &str = "Auto Memory checkpoint required after 
      compacted context. Do not write lifecycle telemetry or a transcript dump. Complete the \
      checkpoint before ending the turn.";
 
+/// DeepSeek's profile. Like [`TACT`], a near-copy of [`CODEX`]: the DeepSeek
+/// Harness reports a Codex-shaped payload and is used the same way — a coding
+/// agent working in a repository — so the recall window, the capture-folder
+/// namespacing and the "keep required rules in AGENTS.md" guidance carry over.
+///
+/// What differs is what makes it a separate harness rather than an alias:
+///
+/// - the source id is `deepseek`, so a checkpoint note can be told apart from a
+///   Codex or Tact one in a shared vault;
+/// - the mapping file is `.dsh/auto-memory.json` (user level under `$DSH_HOME`,
+///   default `~/.dsh`), an `autoMemory` block — auto-memory's own file, since
+///   nothing else reads `.dsh/`;
+/// - the note type is `deepseek_session`, so `recall_session_types` stays within
+///   what this harness writes. It does **not** pull in `codex_session` the way
+///   Tact does: isolation is the point here, and a DeepSeek brief that silently
+///   surfaced Codex checkpoints would make "which harness wrote this" unanswerable
+///   from the brief alone.
+const DEEPSEEK: HarnessProfile = HarnessProfile {
+    source: "deepseek",
+    default_recall_timeframe: "7d",
+    default_capture_folder: "deepseek",
+    session_note_type: "deepseek_session",
+    recall_session_types: &["deepseek_session"],
+    coding_session_note_type: "coding_session",
+    default_recall_prompt: "Search Auto Memory before answering questions about prior decisions or \
+        status. Capture durable engineering decisions as typed decision notes. Use Auto Memory as \
+        durable context, but keep required repo rules in AGENTS.md or checked-in docs.",
+    setup_nudge: "_This repo is not configured for Auto Memory yet. Add `.dsh/auto-memory.json` \
+        with an `autoMemory.primaryProject` naming the project permalink to turn on session \
+        briefings for this repo._",
+    pin_tip: "_Tip: set `autoMemory.primaryProject` in `.dsh/auto-memory.json` to pin this \
+        project._",
+    status_hint: "Run `auto-memory project list` to check the Auto Memory project mapping.",
+};
+
+/// The checkpoint-on-compaction prompt for the DeepSeek Harness. Same request as
+/// [`CODEX_CHECKPOINT_PROMPT`] with the harness named correctly, and the skill
+/// named in full because the Codex and Tact packages may be installed alongside
+/// this one.
+pub const DEEPSEEK_CHECKPOINT_PROMPT: &str = "Auto Memory checkpoint required after compaction. Use the `auto-memory-deepseek:am-checkpoint` skill now to \
+     write one deliberate, durable handoff for the work completed in this turn. Capture the \
+     problem, approach, actual changes, verification, decisions, blockers, and next action from the \
+     compacted context. Do not write lifecycle telemetry or a transcript dump. Complete the \
+     checkpoint before ending the turn.";
+
 /// The metadata key the checkpoint prompt hands the agent for Codex's turn id.
 ///
 /// The reference spells it `codex_turn_id`, and its injected text is pinned, so
@@ -195,6 +262,12 @@ pub const CODEX_TURN_ID_KEY: &str = "codex_turn_id";
 /// — `am-checkpoint` copies the key verbatim into the note, so each key has to
 /// match the package that reads it (`plugins/agents` vs `plugins/tact`).
 pub const TACT_TURN_ID_KEY: &str = "turn_id";
+
+/// The metadata key the checkpoint prompt hands the agent for the DeepSeek
+/// Harness's turn id. Same spelling as Tact's — it is this package's frontmatter
+/// vocabulary (`plugins/deepseek`), and keeping it identical means one schema
+/// shape serves both while `agent: deepseek` still tells the notes apart.
+pub const DEEPSEEK_TURN_ID_KEY: &str = "turn_id";
 
 /// The reference checkpoint-on-compaction prompt, told to the resumed Codex
 /// agent when a checkpoint is due. Kept in sync with `CODEX_CHECKPOINT_PROMPT`.
