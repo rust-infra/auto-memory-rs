@@ -24,16 +24,54 @@ onto `baseUrl` would point into the virtual store's symlink farm.
 
 ## Install
 
-Two commands. Nothing to edit by hand.
+Two commands. Nothing to edit by hand, and **no npm publish required** — the
+bundle installs straight from this repository.
 
 ```bash
 # 1. install the bundle
-dsh plugin --profile desktop add /absolute/path/to/auto-memory-rs/dsh-plugin
+dsh plugin --profile desktop add "github:rust-infra/auto-memory-rs#path:/dsh-plugin"
 
 # 2. tell auto-memory which project to serve
 auto-memory project default 1m
 auto-memory project list         # the default is marked with `*`
 ```
+
+### Why `#path:/dsh-plugin`
+
+`dsh plugin` forwards to pnpm, and pnpm reads a git dependency as an npm package
+**at the repository root**. This repository is a Rust crate, so its root has no
+`package.json`; without the fragment pnpm fails trying to treat the whole repo as
+a package. `#path:/dsh-plugin` points it at the subdirectory that *is* one.
+
+Pin a release instead of tracking `main` by putting the ref **before** the
+`path:` fragment:
+
+```bash
+dsh plugin --profile desktop add "github:rust-infra/auto-memory-rs#v1.0.0&path:/dsh-plugin"
+```
+
+(The order matters: `#path:/dsh-plugin&tag=v1.0.0` fails with `Could not resolve
+tag=v1.0.0` — pnpm reads everything after `#` up to the first `&` as the ref, so
+`path:` must come second.) Verified: the pinned form resolves to the tag's commit
+(`2c93db5`) rather than the branch head.
+
+From a local checkout (for development), the path form still works:
+
+```bash
+dsh plugin --profile desktop add /absolute/path/to/auto-memory-rs/dsh-plugin
+```
+
+### Trade-offs against an npm release
+
+Measured on this machine: the git install took ~25 s and downloads the repository
+tarball; the packed bundle is 13 kB. npm would also give semantic versioning and
+discoverability. Neither is required — the git form is the supported path, and
+the npm form is a convenience if the package is ever published.
+
+The install may print `Agent skills awaiting approval: … Run "pnpm approve" to
+review them`. It comes from pnpm noticing the packaged `skills/` directory; the
+package declares **no install scripts**, nothing is blocked, and the bundle
+composes and loads regardless.
 
 `project default` writes `default_project` into `~/.config/auto-memory/config.json`
 for you, and refuses a permalink the index does not have (so a typo fails here
