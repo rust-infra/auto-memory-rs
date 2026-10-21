@@ -130,6 +130,17 @@ jobs:
           git tag -a "$version" -m "Release $version" "$GITHUB_SHA"
           git push origin "refs/tags/$version"
           echo "pushed $version at $GITHUB_SHA"
-          echo "### Tagged \`$version\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "The Release workflow picks this up from its \`push: tags\` trigger." \
-            >> "$GITHUB_STEP_SUMMARY"
+
+          # A tag pushed with `GITHUB_TOKEN` does NOT trigger another workflow —
+          # GitHub suppresses recursive runs so a workflow cannot loop on its own
+          # writes. Measured: v1.0.1 was pushed and no Release run appeared.
+          # `Release` already accepts `workflow_dispatch` with a `tag` input, so
+          # dispatch it explicitly. This needs `actions: write`, which is why the
+          # workflow declares it.
+          gh workflow run release.yml --ref main -f "tag=$version"
+          echo "dispatched Release for $version"
+
+          {
+            echo "### Tagged $version"
+            echo "Dispatched the Release workflow for it."
+          } >> "$GITHUB_STEP_SUMMARY"
