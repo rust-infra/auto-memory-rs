@@ -282,6 +282,51 @@ fn shutdown_when_resolves_once_the_flag_flips() {
 /// `auto-memory watch` stops on Ctrl-C and flushes the window it was holding.
 ///
 /// This is the user-visible payoff of the async loop. The blocking version could only
+/// Drain a child's stderr until `needle` appears, returning everything read.
+///
+/// The daemon has no "ready" stdout signal, and a fixed sleep is what made the
+/// watch tests flaky on CI: the runner can take seconds to schedule the watcher,
+/// so a 800 ms sleep sometimes signalled before any event was queued and the
+/// flush had nothing to apply (`batches: 0`). Polling the log the daemon actually
+/// writes is the only machine-speed-independent way to wait.
+///
+/// The pipe is set `O_NONBLOCK` so a read on an empty pipe returns `WouldBlock`
+/// instead of blocking. Unix only; these tests already shell out to `kill`.
+fn wait_for_stderr(child: &mut std::process::Child, needle: &str, timeout: Duration) -> String {
+    use std::io::Read;
+    let mut seen = String::new();
+    let Some(pipe) = child.stderr.as_mut() else {
+        return seen;
+    };
+    #[cfg(unix)]
+    {
+        use std::os::unix::io::AsRawFd;
+        let fd = pipe.as_raw_fd();
+        let flags = unsafe { libc::fcntl(fd, libc::F_GETFL) };
+        assert!(flags >= 0, "F_GETFL on the stderr pipe");
+        let set = unsafe { libc::fcntl(fd, libc::F_SETFL, flags | libc::O_NONBLOCK) };
+        assert!(set >= 0, "F_SETFL O_NONBLOCK on the stderr pipe");
+    }
+    let deadline = Instant::now() + timeout;
+    let mut probe = [0u8; 4096];
+    while Instant::now() < deadline {
+        match pipe.read(&mut probe) {
+            Ok(0) => break,
+            Ok(read) => {
+                seen.push_str(&String::from_utf8_lossy(&probe[..read]));
+                if seen.contains(needle) {
+                    break;
+                }
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                std::thread::sleep(Duration::from_millis(25));
+            }
+            Err(_) => break,
+        }
+    }
+    seen
+}
+
 /// be killed, so a note edited in the last second before Ctrl-C stayed out of the index
 /// until the next start's reconcile. The debounce window here is deliberately much
 /// longer than the test's patience, so the only way the note can reach the index is the
@@ -300,21 +345,43 @@ fn watch_cli_flushes_the_pending_window_on_sigint() {
         .arg("--index")
         .arg(&index)
         .args(["--project", "oracle", "--window-ms", "3000"])
-        // Pin the filter: a developer's own RUST_LOG must not decide this test.
-        .env("RUST_LOG", "auto_memory=info")
+        // `debug` because the only per-event line (`filesystem event`) is a debug
+        // one; the test needs to observe that the write reached the queue, not just
+        // that the watcher started. Pinned so a developer's own RUST_LOG cannot
+        // decide this test.
+        .env("RUST_LOG", "auto_memory=debug")
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .spawn()
         .expect("spawn auto-memory watch");
 
-    // Let the initial reconcile finish and the notify watch install.
-    std::thread::sleep(Duration::from_millis(800));
+    // Let the initial reconcile finish and the notify watch install. The note must
+    // be written only after the watch is live, or the event is never delivered and
+    // the pending window stays empty — which is the failure this test hit on CI:
+    // `batches: 0`, because the 800 ms sleep was not always enough for the watcher
+    // to attach on a loaded runner.
+    let watch_ready = wait_for_stderr(&mut child, "watching the vault", Duration::from_secs(20));
+    assert!(
+        watch_ready.contains("watching the vault"),
+        "the watcher never reported that it started: {watch_ready:?}"
+    );
+
     fs::write(
         vault.join("late.md"),
         "# Late\n\n- [fact] written just before Ctrl-C\n",
     )
     .expect("write");
-    std::thread::sleep(Duration::from_millis(200));
+
+    // The event has to reach the queue before the signal, or the flush has nothing
+    // to apply. The debounce window is 3000 ms, so the batch cannot be applied yet —
+    // only queued. `filesystem event` is the debug line the watcher emits per
+    // recorded path, so waiting for it makes the assertion below about the flush
+    // rather than about timing.
+    let queued = wait_for_stderr(&mut child, "filesystem event", Duration::from_secs(20));
+    assert!(
+        queued.contains("filesystem event"),
+        "the write was never queued by the watcher: {queued:?}"
+    );
 
     let signalled = std::process::Command::new("kill")
         .args(["-INT", &child.id().to_string()])
@@ -338,7 +405,10 @@ fn watch_cli_flushes_the_pending_window_on_sigint() {
         panic!("auto-memory watch kept running after SIGINT");
     };
     let mut stdout = String::new();
-    let mut stderr = String::new();
+    // `wait_for_stderr` already consumed the head of the stream, so the final
+    // assertions have to see it too — otherwise "watching the vault" reads as
+    // missing even though it was observed.
+    let mut stderr = watch_ready + &queued;
     use std::io::Read;
     let _ = child
         .stdout
@@ -415,55 +485,29 @@ fn watch_cli_stops_on_sigterm_and_logs_its_batches() {
         .spawn()
         .expect("spawn auto-memory watch");
 
-    std::thread::sleep(Duration::from_millis(800));
+    // The note must be written *after* the initial reconcile, or it is swept into
+    // that reconcile instead of arriving as a watch event — the log then shows
+    // `initial reconcile finished added=2` and no batch is ever applied, so waiting
+    // for one times out. A fixed 800 ms sleep made that a race on a loaded runner;
+    // wait for the line the daemon prints when the reconcile is done.
+    let reconciled = wait_for_stderr(
+        &mut child,
+        "initial reconcile finished",
+        Duration::from_secs(30),
+    );
+    assert!(
+        reconciled.contains("initial reconcile finished"),
+        "the initial reconcile never finished: {reconciled:?}"
+    );
+
     fs::write(vault.join("during.md"), "# During\n\n- [fact] watched\n").expect("write");
 
-    // Wait for the batch to be *applied*, not for a fixed duration. The debounce
-    // window is 300ms, but a loaded machine (the full `--all-targets` run starts
+    // Wait for the batch to be *applied*, not for a fixed duration: the debounce
+    // window is 300 ms, but a loaded machine (the full `--all-targets` run starts
     // dozens of test binaries at once) can take seconds to schedule the watcher and
-    // the blocking-pool work that follows it. A fixed sleep here made this test
-    // flaky: it passed alone and failed roughly one run in twenty under load.
-    //
-    // The daemon logs one `watch batch applied` line per batch on stderr, so watch
-    // stderr for it. The pipe is drained incrementally; the remainder is read after
-    // exit, and `stderr_seen` is prepended to the final assertions.
-    let mut stderr_seen = String::new();
-    {
-        use std::io::Read;
-        let stderr_pipe = child.stderr.as_mut().expect("stderr pipe");
-        // Non-blocking: a plain `read` on a pipe with no data blocks until the child
-        // writes or exits, which would turn the poll below into a hang. `O_NONBLOCK`
-        // makes it return `WouldBlock` instead, so the loop can sleep and retry.
-        //
-        // Unix only: this test already shells out to `kill`, so it does not run on
-        // Windows either way.
-        #[cfg(unix)]
-        {
-            use std::os::unix::io::AsRawFd;
-            let fd = stderr_pipe.as_raw_fd();
-            let flags = unsafe { libc::fcntl(fd, libc::F_GETFL) };
-            assert!(flags >= 0, "F_GETFL on the stderr pipe");
-            let set = unsafe { libc::fcntl(fd, libc::F_SETFL, flags | libc::O_NONBLOCK) };
-            assert!(set >= 0, "F_SETFL O_NONBLOCK on the stderr pipe");
-        }
-        let deadline = Instant::now() + Duration::from_secs(20);
-        let mut probe = [0u8; 1024];
-        while Instant::now() < deadline {
-            match stderr_pipe.read(&mut probe) {
-                Ok(0) => break,
-                Ok(read) => {
-                    stderr_seen.push_str(&String::from_utf8_lossy(&probe[..read]));
-                    if stderr_seen.contains("watch batch applied") {
-                        break;
-                    }
-                }
-                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
-                    std::thread::sleep(Duration::from_millis(50));
-                }
-                Err(_) => break,
-            }
-        }
-    }
+    // the blocking-pool work that follows it.
+    let applied = wait_for_stderr(&mut child, "watch batch applied", Duration::from_secs(30));
+    let stderr_seen = reconciled + &applied;
     assert!(
         stderr_seen.contains("watch batch applied"),
         "the edit made while watching was applied before the signal: {stderr_seen:?}"
