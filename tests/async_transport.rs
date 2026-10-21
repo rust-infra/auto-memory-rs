@@ -417,9 +417,57 @@ fn watch_cli_stops_on_sigterm_and_logs_its_batches() {
 
     std::thread::sleep(Duration::from_millis(800));
     fs::write(vault.join("during.md"), "# During\n\n- [fact] watched\n").expect("write");
-    // Longer than the debounce window, so the batch is applied and logged while the
-    // daemon is still running (that is the point of the test).
-    std::thread::sleep(Duration::from_millis(1200));
+
+    // Wait for the batch to be *applied*, not for a fixed duration. The debounce
+    // window is 300ms, but a loaded machine (the full `--all-targets` run starts
+    // dozens of test binaries at once) can take seconds to schedule the watcher and
+    // the blocking-pool work that follows it. A fixed sleep here made this test
+    // flaky: it passed alone and failed roughly one run in twenty under load.
+    //
+    // The daemon logs one `watch batch applied` line per batch on stderr, so watch
+    // stderr for it. The pipe is drained incrementally; the remainder is read after
+    // exit, and `stderr_seen` is prepended to the final assertions.
+    let mut stderr_seen = String::new();
+    {
+        use std::io::Read;
+        let stderr_pipe = child.stderr.as_mut().expect("stderr pipe");
+        // Non-blocking: a plain `read` on a pipe with no data blocks until the child
+        // writes or exits, which would turn the poll below into a hang. `O_NONBLOCK`
+        // makes it return `WouldBlock` instead, so the loop can sleep and retry.
+        //
+        // Unix only: this test already shells out to `kill`, so it does not run on
+        // Windows either way.
+        #[cfg(unix)]
+        {
+            use std::os::unix::io::AsRawFd;
+            let fd = stderr_pipe.as_raw_fd();
+            let flags = unsafe { libc::fcntl(fd, libc::F_GETFL) };
+            assert!(flags >= 0, "F_GETFL on the stderr pipe");
+            let set = unsafe { libc::fcntl(fd, libc::F_SETFL, flags | libc::O_NONBLOCK) };
+            assert!(set >= 0, "F_SETFL O_NONBLOCK on the stderr pipe");
+        }
+        let deadline = Instant::now() + Duration::from_secs(20);
+        let mut probe = [0u8; 1024];
+        while Instant::now() < deadline {
+            match stderr_pipe.read(&mut probe) {
+                Ok(0) => break,
+                Ok(read) => {
+                    stderr_seen.push_str(&String::from_utf8_lossy(&probe[..read]));
+                    if stderr_seen.contains("watch batch applied") {
+                        break;
+                    }
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                    std::thread::sleep(Duration::from_millis(50));
+                }
+                Err(_) => break,
+            }
+        }
+    }
+    assert!(
+        stderr_seen.contains("watch batch applied"),
+        "the edit made while watching was applied before the signal: {stderr_seen:?}"
+    );
 
     let signalled = std::process::Command::new("kill")
         .args(["-TERM", &child.id().to_string()])
@@ -442,7 +490,7 @@ fn watch_cli_stops_on_sigterm_and_logs_its_batches() {
         panic!("auto-memory watch kept running after SIGTERM");
     };
     let mut stdout = String::new();
-    let mut stderr = String::new();
+    let mut stderr = stderr_seen;
     use std::io::Read;
     let _ = child
         .stdout
