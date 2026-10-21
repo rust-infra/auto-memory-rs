@@ -1,0 +1,50 @@
+# auto-memory-dsh — a DeepSeek Harness bundle for auto-memory-rs.
+#
+# Two rows, both `insert` (this package is not part of any bundle, so its rows
+# do not exist yet and a bare `- id:` row would be rejected with
+# `entry "…" not found`).
+#
+# 1. `auto-memory-skill-filesystem` publishes this package's `skills/` through
+#    the shared skill registry. `includeDefaultRoots: false` keeps the built-in
+#    project/user roots out of *this* provider's roots — the host's own
+#    `skill-filesystem` row already serves them, and a second provider claiming
+#    the same paths would double every skill.
+#
+# 2. `auto-memory-mcp` mounts the local `auto-memory mcp` server over stdio.
+#
+#    Deliberately argument-free: the server resolves the index and the project
+#    from `~/.config/auto-memory/config.json` (`index`, `default_project`), so a
+#    fresh install needs no per-machine editing here. `command: auto-memory`
+#    resolves through PATH, which `dsh-subprocess`'s env scrub preserves.
+#
+#    A deployment that wants a different vault/index/project overrides this row
+#    by id in the profile's own `cordis.patch.yml`:
+#
+#      - id: auto-memory-mcp
+#        config:
+#          args: ["mcp", "--project", "1m", "--vault", "/path/to/vault", "--read-only"]
+#
+#    `--project` takes a permalink (the `permalink` column of
+#    `auto-memory project list`), not the display name.
+#
+# `!!js` expressions are evaluated by the Loader; `baseUrl` is the profile's.
+- insert:
+    - id: auto-memory-skill-filesystem
+      name: '@deepseek-ai/dsh-skill-filesystem'
+      config:
+        providerName: auto-memory
+        includeDefaultRoots: false
+        bundledSkillDir: !!js process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:path').dirname(process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('auto-memory-dsh/package.json')), 'skills')
+
+    - id: auto-memory-mcp
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: memory
+        transport: stdio
+        command: auto-memory
+        args: ["mcp", "--read-only"]
+        toolCallTimeoutMs: 60000
+        # A missing binary or an unindexed vault shows up as "no tools" with the
+        # default `false`, which reads as a broken install. Fail loudly instead;
+        # a deployment that prefers silence can override this row.
+        failOnStartupError: true
