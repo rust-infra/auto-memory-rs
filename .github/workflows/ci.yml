@@ -74,18 +74,27 @@ jobs:
           npm pack
           mv auto-memory-dsh-*.tgz "$RUNNER_TEMP/"
 
+      # `dsh plugin` forwards to pnpm, and the published CLI does not bundle one:
+      # a global `npm install -g @deepseek-ai/dsh` left `pnpm` unresolved here and
+      # the step failed with no useful output. Install pnpm explicitly, and invoke
+      # the CLI through npx at a pinned version so the job does not drift with
+      # whatever `latest` happens to be.
       - name: Install into a throwaway profile
         run: |
-          npm install --global @deepseek-ai/dsh
+          set -euo pipefail
+          npm install --global pnpm@10
           mkdir -p "$RUNNER_TEMP/dshhome/profiles/probe"
           cat > "$RUNNER_TEMP/dshhome/profiles/probe/package.json" <<'JSON'
           {"name":"probe","private":true,"dsh":{"profile":{"bundles":["@deepseek-ai/dsh-base"]}}}
           JSON
           printf 'packages:\n  - .\n' > "$RUNNER_TEMP/dshhome/profiles/probe/pnpm-workspace.yaml"
-          DSH_HOME="$RUNNER_TEMP/dshhome" dsh plugin --profile probe add "$RUNNER_TEMP"/auto-memory-dsh-*.tgz
+          DSH_HOME="$RUNNER_TEMP/dshhome" \
+            npx --yes @deepseek-ai/dsh@0.2.1-rc.2 plugin --profile probe add "$RUNNER_TEMP"/auto-memory-dsh-*.tgz
 
       - name: The bundle is in the profile's bundle list
         run: |
+          set -euo pipefail
+          cat "$RUNNER_TEMP/dshhome/profiles/probe/package.json"
           grep -q 'auto-memory-dsh' "$RUNNER_TEMP/dshhome/profiles/probe/package.json"
 
       - name: Skill root resolves through the profile
