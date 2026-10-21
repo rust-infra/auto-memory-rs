@@ -116,6 +116,7 @@ dependencies = [
  "chrono",
  "clap",
  "fastembed",
+ "libc",
  "notify",
  "ort",
  "rmcp",

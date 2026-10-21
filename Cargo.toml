@@ -85,3 +85,7 @@ tempfile = "3.27.0"
 # captured traversal, the mtimes `updated_at` is derived from) to instants recorded in
 # the corpus instead of the machine clock, so the assertions do not expire.
 chrono = { version = "0.4.45", features = ["clock", "std"] }
+# `tests/async_transport.rs` polls a child's stderr for the batch-applied line
+# instead of sleeping a fixed duration, which needs `O_NONBLOCK` on the pipe.
+# Already in the tree via tokio; this only makes it nameable in a test.
+libc = "0.2"
