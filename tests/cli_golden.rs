@@ -48,6 +48,25 @@ fn run(index: &Path, args: &[&str]) -> std::process::Output {
         .expect("run auto-memory")
 }
 
+/// Run `auto-memory` with `HOME` and `XDG_CONFIG_HOME` pointed at a scratch dir.
+///
+/// Any test that asserts on the *absence* of a setting must use this: `run_cli`
+/// inherits the developer's environment, and a real
+/// `~/.config/auto-memory/config.json` (a `default_project`, say) silently
+/// changes what the command reports. That is exactly how the first-run
+/// diagnostics tests failed on a machine that had already configured a default.
+fn run_cli_isolated(home: &Path, args: &[&str]) -> std::process::Output {
+    Command::new(env!("CARGO_BIN_EXE_auto-memory"))
+        .args(args)
+        .env("HOME", home)
+        .env("XDG_CONFIG_HOME", home.join(".config"))
+        // `DSH_HOME` would point the DeepSeek loader at the real `~/.dsh`.
+        .env("DSH_HOME", home.join(".dsh"))
+        .env("RUST_LOG", "auto_memory=info")
+        .output()
+        .expect("run auto-memory")
+}
+
 /// Run `auto-memory` with a full argument list.
 fn run_cli(args: &[&str]) -> std::process::Output {
     Command::new(env!("CARGO_BIN_EXE_auto-memory"))
@@ -364,4 +383,273 @@ fn context_reports_reference_arguments_errors() {
         assert!(output.stdout.is_empty(), "flags: {flags:?}");
     }
     let _ = fs::remove_file(&index);
+}
+
+/// First-run dead end: `no project` used to say "pass `--project <name>`" without
+/// ever saying where `<name>` comes from, so a new user had to discover
+/// `project list` — and that read commands take a *permalink*, not the display
+/// name — before they could start. The diagnostic now names the candidates.
+#[test]
+fn no_project_lists_the_registered_permalinks() {
+    let (vault, _index_dir, index) = fixture_index();
+    let vault_arg = vault.path().to_string_lossy().into_owned();
+    // Isolated: a real `~/.config/auto-memory/config.json` with a
+    // `default_project` would satisfy the lookup this test is asserting fails.
+    let home = tempfile::tempdir().expect("home");
+
+    // No --project, no default_project, no --vault: the documented dead end.
+    let output = run_cli_isolated(
+        home.path(),
+        &["mcp", "--index", &index.to_string_lossy(), "--read-only"],
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(!output.status.success(), "expected a failure: {stderr}");
+    assert!(stderr.contains("no project"), "stderr: {stderr}");
+    // The actionable half: the permalink to pass, and that it *is* the permalink.
+    assert!(
+        stderr.contains("--project oracle"),
+        "the diagnostic names a usable value: {stderr}"
+    );
+    assert!(stderr.contains("permalink"), "stderr: {stderr}");
+
+    // A registered vault resolves without --project, so the same invocation with
+    // --vault must get past the project check.
+    let output = run_cli_isolated(
+        home.path(),
+        &[
+            "mcp",
+            "--index",
+            &index.to_string_lossy(),
+            "--vault",
+            &vault_arg,
+            "--read-only",
+        ],
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        !stderr.contains("no project"),
+        "--vault should resolve the project: {stderr}"
+    );
+}
+
+/// The other first run: an index with no projects at all. The message has to say
+/// how to create one rather than list nothing.
+#[test]
+fn no_project_on_an_empty_index_says_how_to_create_one() {
+    let scratch = tempfile::tempdir().expect("scratch");
+    let home = tempfile::tempdir().expect("home");
+    let index = scratch.path().join("empty.db");
+    let output = run_cli_isolated(
+        home.path(),
+        &["mcp", "--index", &index.to_string_lossy(), "--read-only"],
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(!output.status.success(), "expected a failure: {stderr}");
+    assert!(
+        stderr.contains("project add"),
+        "an empty index points at the creating command: {stderr}"
+    );
+}
+
+/// `config set` / `unset` are the only writers of the user config file, and the
+/// file they write must be the *minimal* shape: only the keys the user chose, so
+/// the behavior defaults stay implicit (and stay upgradeable).
+#[test]
+fn config_set_writes_only_the_keys_that_were_set() {
+    let home = tempfile::tempdir().expect("home");
+    let config_dir = home.path().join(".config");
+    let run = |args: &[&str]| {
+        Command::new(env!("CARGO_BIN_EXE_auto-memory"))
+            .args(args)
+            .env("HOME", home.path())
+            .env("XDG_CONFIG_HOME", &config_dir)
+            .output()
+            .expect("run auto-memory")
+    };
+
+    assert!(
+        run(&["config", "set", "default_project", "oracle"])
+            .status
+            .success()
+    );
+    assert!(
+        run(&["config", "set", "index", "/tmp/x/memory.db"])
+            .status
+            .success()
+    );
+
+    let path = config_dir.join("auto-memory/config.json");
+    let text = fs::read_to_string(&path).expect("config written");
+    let parsed: serde_json::Value = serde_json::from_str(&text).expect("valid json");
+    assert_eq!(parsed["default_project"], "oracle");
+    assert_eq!(parsed["index"], "/tmp/x/memory.db");
+    // The five behavior defaults must not be frozen into the user's file.
+    for absent in [
+        "permalinks_include_project",
+        "ensure_frontmatter_on_sync",
+        "disable_permalinks",
+        "index_changes",
+        "update_permalinks_on_move",
+    ] {
+        assert!(
+            parsed.get(absent).is_none(),
+            "{absent} should stay implicit: {text}"
+        );
+    }
+
+    // Unset removes the key rather than nulling it.
+    assert!(
+        run(&["config", "unset", "default_project"])
+            .status
+            .success()
+    );
+    let text = fs::read_to_string(&path).expect("config rewritten");
+    let parsed: serde_json::Value = serde_json::from_str(&text).expect("valid json");
+    assert!(
+        parsed.get("default_project").is_none(),
+        "unset must drop the key: {text}"
+    );
+    assert_eq!(parsed["index"], "/tmp/x/memory.db");
+}
+
+/// An unknown key is a usage error, not a silent no-op: the file is a shared
+/// contract that drops keys this build does not know, so accepting a typo would
+/// look like it worked and vanish on the next write.
+#[test]
+fn config_set_rejects_an_unknown_key() {
+    let home = tempfile::tempdir().expect("home");
+    let output = Command::new(env!("CARGO_BIN_EXE_auto-memory"))
+        .args(["config", "set", "defualt_project", "typo"])
+        .env("HOME", home.path())
+        .env("XDG_CONFIG_HOME", home.path().join(".config"))
+        .output()
+        .expect("run auto-memory");
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("unknown config key"), "stderr: {stderr}");
+    assert!(
+        !home.path().join(".config/auto-memory/config.json").exists(),
+        "a rejected key must not write a file"
+    );
+}
+
+/// `project default <permalink>` is the supported way to set the default, and it
+/// refuses a permalink the index does not have: writing it anyway would move the
+/// failure to every later command, far from the typo.
+#[test]
+fn project_default_sets_and_rejects() {
+    let home = tempfile::tempdir().expect("home");
+    let scratch = tempfile::tempdir().expect("scratch");
+    let vault = scratch.path().join("vault");
+    fs::create_dir_all(&vault).expect("vault");
+    fs::write(
+        vault.join("a.md"),
+        "---\ntitle: A\ntype: note\n---\n\n- [fact] x\n",
+    )
+    .expect("note");
+    let index = scratch.path().join("memory.db");
+    let index_arg = index.to_string_lossy().into_owned();
+    let config_dir = home.path().join(".config");
+    let run = |args: &[&str]| {
+        Command::new(env!("CARGO_BIN_EXE_auto-memory"))
+            .args(args)
+            .env("HOME", home.path())
+            .env("XDG_CONFIG_HOME", &config_dir)
+            .output()
+            .expect("run auto-memory")
+    };
+
+    // Nothing set yet.
+    let output = run(&["project", "default", "--index", &index_arg]);
+    assert!(String::from_utf8_lossy(&output.stdout).contains("no default project set"));
+
+    // Register, then set the default explicitly.
+    assert!(
+        run(&[
+            "project",
+            "add",
+            "oracle",
+            &vault.to_string_lossy(),
+            "--index",
+            &index_arg
+        ])
+        .status
+        .success()
+    );
+    assert!(
+        run(&["project", "default", "oracle", "--index", &index_arg])
+            .status
+            .success()
+    );
+    let output = run(&["project", "default", "--index", &index_arg]);
+    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "oracle");
+
+    // A permalink this index does not have is refused, and the old default stays.
+    let output = run(&["project", "default", "nope", "--index", &index_arg]);
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("project not found"), "stderr: {stderr}");
+    assert!(stderr.contains("project list"), "stderr: {stderr}");
+    let output = run(&["project", "default", "--index", &index_arg]);
+    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "oracle");
+}
+
+/// `project add --default` sets the default as part of registration, and a later
+/// add without the flag leaves it alone.
+#[test]
+fn project_add_default_flag() {
+    let home = tempfile::tempdir().expect("home");
+    let scratch = tempfile::tempdir().expect("scratch");
+    let config_dir = home.path().join(".config");
+    let index = scratch.path().join("memory.db");
+    let index_arg = index.to_string_lossy().into_owned();
+    let run = |args: &[&str]| {
+        Command::new(env!("CARGO_BIN_EXE_auto-memory"))
+            .args(args)
+            .env("HOME", home.path())
+            .env("XDG_CONFIG_HOME", &config_dir)
+            .output()
+            .expect("run auto-memory")
+    };
+    let make_vault = |name: &str| {
+        let vault = scratch.path().join(name);
+        fs::create_dir_all(&vault).expect("vault");
+        fs::write(vault.join("n.md"), "---\ntitle: N\ntype: note\n---\n").expect("note");
+        vault
+    };
+
+    let first = make_vault("first");
+    let output = run(&[
+        "project",
+        "add",
+        "one",
+        &first.to_string_lossy(),
+        "--index",
+        &index_arg,
+        "--default",
+    ]);
+    assert!(output.status.success());
+    assert!(
+        String::from_utf8_lossy(&output.stdout).contains("default project is now one"),
+        "stdout: {}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+
+    // A second registration without --default must not steal the default.
+    let second = make_vault("second");
+    assert!(
+        run(&[
+            "project",
+            "add",
+            "two",
+            &second.to_string_lossy(),
+            "--index",
+            &index_arg,
+            "--no-index",
+        ])
+        .status
+        .success()
+    );
+    let output = run(&["project", "default", "--index", &index_arg]);
+    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "one");
 }
