@@ -158,10 +158,39 @@ workdir="$(mktemp -d)"
 trap 'rm -rf "$workdir"' EXIT
 
 echo "downloading…"
-download "$(asset_url "$ASSET")" "$workdir/$ASSET" "application/octet-stream" ||
-    die "could not download $ASSET (404 — for a private repository, set GITHUB_TOKEN)"
-download "$(asset_url SHA256SUMS)" "$workdir/SHA256SUMS" "application/octet-stream" ||
-    die "could not download SHA256SUMS"
+# A 404 here has three causes that need different answers, and "could not download"
+# covers none of them: the release may exist with no assets yet (a tag pushed before
+# the workflow finished, or a release created by hand), the tag may not exist at all,
+# or the repository may be private. Ask the API which one it is before dying.
+download_asset() {
+    local asset="$1" out="$2"
+    if download "$(asset_url "$asset")" "$out" "application/octet-stream" 2>/dev/null; then
+        return 0
+    fi
+    local count
+    count="$(release_asset_count)"
+    case "$count" in
+        '') die "could not download $asset: $REPO has no release tagged $VERSION (pass --version, or check the tag)" ;;
+        0)  die "release $VERSION of $REPO exists but publishes no assets — the release workflow has not run or failed. Build from source: cargo install --path . (or --git)" ;;
+        *)  die "could not download $asset from release $VERSION ($count assets present; for a private repository, set GITHUB_TOKEN)" ;;
+    esac
+}
+
+# Number of assets on the named release, or empty when the release itself is missing.
+# Best-effort: any API failure yields empty, which the caller reads as "unknown".
+release_asset_count() {
+    if [ -n "${TOKEN:-}" ]; then
+        curl -fsSL -H "Authorization: Bearer $TOKEN" \
+            "https://api.github.com/repos/$REPO/releases/tags/$VERSION" 2>/dev/null |
+            python3 -c 'import json,sys; print(len(json.load(sys.stdin).get("assets", [])))' 2>/dev/null
+    else
+        curl -fsSL "https://api.github.com/repos/$REPO/releases/tags/$VERSION" 2>/dev/null |
+            python3 -c 'import json,sys; print(len(json.load(sys.stdin).get("assets", [])))' 2>/dev/null
+    fi
+}
+
+download_asset "$ASSET" "$workdir/$ASSET"
+download_asset SHA256SUMS "$workdir/SHA256SUMS"
 
 # Verify before anything is unpacked or installed.
 #

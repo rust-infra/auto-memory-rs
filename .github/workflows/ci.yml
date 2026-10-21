@@ -74,18 +74,34 @@ jobs:
           npm pack
           mv auto-memory-dsh-*.tgz "$RUNNER_TEMP/"
 
+      # `dsh plugin` shells out to `pnpm` with a bare `spawn("pnpm")`, so pnpm has
+      # to be on PATH when the process starts. The published CLI does not bundle
+      # one: without this step the command dies with
+      #   dsh: pnpm was not found; install pnpm and make it available on PATH
+      # and exits 127. Reproduced locally with the npm-published CLI before and
+      # after installing pnpm@10.
+      - name: Install pnpm (dsh shells out to it)
+        run: |
+          npm install --global pnpm@10
+          pnpm --version
+
       - name: Install into a throwaway profile
         run: |
-          npm install --global @deepseek-ai/dsh
+          set -euo pipefail
           mkdir -p "$RUNNER_TEMP/dshhome/profiles/probe"
           cat > "$RUNNER_TEMP/dshhome/profiles/probe/package.json" <<'JSON'
           {"name":"probe","private":true,"dsh":{"profile":{"bundles":["@deepseek-ai/dsh-base"]}}}
           JSON
           printf 'packages:\n  - .\n' > "$RUNNER_TEMP/dshhome/profiles/probe/pnpm-workspace.yaml"
-          DSH_HOME="$RUNNER_TEMP/dshhome" dsh plugin --profile probe add "$RUNNER_TEMP"/auto-memory-dsh-*.tgz
+          # The CLI is pinned so the job does not drift with `latest`; `npx` is used
+          # rather than a global install so this step cannot shadow the pnpm above.
+          DSH_HOME="$RUNNER_TEMP/dshhome" \
+            npx --yes @deepseek-ai/dsh@0.2.1-rc.2 plugin --profile probe add "$RUNNER_TEMP"/auto-memory-dsh-*.tgz
 
       - name: The bundle is in the profile's bundle list
         run: |
+          set -euo pipefail
+          cat "$RUNNER_TEMP/dshhome/profiles/probe/package.json"
           grep -q 'auto-memory-dsh' "$RUNNER_TEMP/dshhome/profiles/probe/package.json"
 
       - name: Skill root resolves through the profile
