@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# Refuse direct commits to `main`.
+#
+# This repository lands work on a branch and merges it, so a commit made straight
+# onto `main` is almost always a mistake: it skips review and cannot be opened as
+# a pull request without rewriting history. The check runs before the commit is
+# created, so nothing has to be undone.
+#
+# Enabled per clone with `git config core.hooksPath .githooks`. `git commit
+# --no-verify` skips it — that is the deliberate escape hatch, not the workflow.
+set -euo pipefail
+
+# A detached HEAD (rebase, bisect, checkout of a commit) has no branch to
+# protect; only a named `main` is refused.
+branch=$(git symbolic-ref --quiet --short HEAD || true)
+if [ "$branch" = "main" ]; then
+  cat >&2 <<'EOF'
+error: refusing to commit directly to `main`.
+
+Create a branch first:
+
+    git switch -c feat/<short-topic>
+
+then commit there. To land it:
+
+    git push -u origin HEAD        # open a pull request
+    # or, locally, after review:
+    git switch main && git merge --ff-only feat/<short-topic>
+
+`git commit --no-verify` bypasses this check; use it only when you mean to.
+EOF
+  exit 1
+fi
+
+exit 0
