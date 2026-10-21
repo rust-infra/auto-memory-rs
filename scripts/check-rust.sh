@@ -37,4 +37,11 @@ cargo test --all-targets --locked
 echo "==> cargo doc --no-deps --locked"
 cargo doc --no-deps --locked
 
+# The DSH bundle is a separate npm artifact, so cargo never sees it. It has its
+# own contract: the packaged skills must match `plugins/deepseek`, and every row
+# it contributes must be an `insert:` (a bare `- id:` row is rejected at load
+# with `entry "…" not found`). Needs no node/npm — see the script.
+echo "==> scripts/check-dsh-plugin.sh"
+sh scripts/check-dsh-plugin.sh
+
 echo "All checks passed."

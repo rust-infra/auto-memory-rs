@@ -43,3 +43,66 @@ jobs:
 
       - name: Documentation
         run: cargo doc --no-deps --locked
+
+      # The DSH bundle is an npm artifact; cargo never sees it. The check is
+      # pure shell + node (already on the runner) and needs no network.
+      - name: DSH bundle
+        run: sh scripts/check-dsh-plugin.sh
+
+  # The bundle's real contract is "DSH can install and resolve it", which the
+  # shell check above can only approximate. This job proves it end to end: pack
+  # the tarball, install it into a throwaway profile with the published DSH CLI,
+  # and resolve the skill root the same way the Loader does.
+  #
+  # It installs DSH from npm, so it is a separate job rather than a step: a
+  # registry outage should not redden the Rust gates, and the reverse.
+  dsh-bundle:
+    name: DSH bundle packs and resolves
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Skills match the source package
+        run: sh scripts/check-dsh-plugin.sh
+
+      - name: Pack
+        working-directory: dsh-plugin
+        run: |
+          npm pack
+          mv auto-memory-dsh-*.tgz "$RUNNER_TEMP/"
+
+      - name: Install into a throwaway profile
+        run: |
+          npm install --global @deepseek-ai/dsh
+          mkdir -p "$RUNNER_TEMP/dshhome/profiles/probe"
+          cat > "$RUNNER_TEMP/dshhome/profiles/probe/package.json" <<'JSON'
+          {"name":"probe","private":true,"dsh":{"profile":{"bundles":["@deepseek-ai/dsh-base"]}}}
+          JSON
+          printf 'packages:\n  - .\n' > "$RUNNER_TEMP/dshhome/profiles/probe/pnpm-workspace.yaml"
+          DSH_HOME="$RUNNER_TEMP/dshhome" dsh plugin --profile probe add "$RUNNER_TEMP"/auto-memory-dsh-*.tgz
+
+      - name: The bundle is in the profile's bundle list
+        run: |
+          grep -q 'auto-memory-dsh' "$RUNNER_TEMP/dshhome/profiles/probe/package.json"
+
+      - name: Skill root resolves through the profile
+        run: |
+          node -e '
+            const { createRequire } = require("node:module");
+            const { dirname, join } = require("node:path");
+            const fs = require("node:fs");
+            const base = process.env.RUNNER_TEMP + "/dshhome/profiles/probe";
+            const manifest = createRequire("file://" + base + "/package.json")
+              .resolve("auto-memory-dsh/package.json");
+            const skills = join(dirname(manifest), "skills");
+            const names = fs.readdirSync(skills).sort();
+            console.log(skills, names.join(","));
+            const want = ["am-checkpoint","am-decide","am-orient","am-remember","am-share","am-writing"];
+            if (JSON.stringify(names) !== JSON.stringify(want)) {
+              console.error("unexpected skills:", names.join(","));
+              process.exit(1);
+            }
+          '
