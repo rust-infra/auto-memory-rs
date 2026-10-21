@@ -400,7 +400,8 @@ struct SchemaInferArgs {
 struct HookArgs {
     /// Hook verb: `session-start` or `pre-compact`.
     verb: String,
-    /// Harness emitting the hook (`claude`, `codex`, `pi`, or `tact`).
+    /// Harness emitting the hook (`claude`, `codex`, `pi`, `tact`, or
+    /// `deepseek`).
     #[arg(long, value_name = "NAME")]
     harness: Option<String>,
     /// Index database (defaults to `AUTO_MEMORY_INDEX`, the user config file, then
@@ -835,7 +836,8 @@ async fn hook_command(args: HookArgs) -> ExitCode {
                 // (see `init_tracing`), so an extra `eprintln!` would print the
                 // same sentence twice.
                 tracing::warn!(
-                    "hook {}: unknown harness: {value} (expected claude, codex, pi, or tact)",
+                    "hook {}: unknown harness: {value} (expected claude, codex, pi, tact, or \
+                     deepseek)",
                     args.verb
                 );
                 return ExitCode::SUCCESS;
@@ -864,9 +866,9 @@ async fn run_hook(verb: &str, harness: Harness, args: &HookArgs) -> Result<(), S
     let mapping = mapping_dir(args.project_dir.as_deref(), &event.cwd);
     let (settings, configured) = load_harness_settings(harness, &mapping);
 
-    // Codex and Tact both ignore PreCompact stdout and ask for the checkpoint
-    // from the post-compaction SessionStart instead, so there is nothing to
-    // print here.
+    // Codex, Tact, and the DeepSeek Harness ignore PreCompact stdout and ask for
+    // the checkpoint from the post-compaction SessionStart instead, so there is
+    // nothing to print here.
     if matches!(hook_event, HookEvent::CompactionImminent) {
         return Ok(());
     }
@@ -920,9 +922,9 @@ async fn run_hook(verb: &str, harness: Harness, args: &HookArgs) -> Result<(), S
         return Err(format!("project not found: {permalink}"));
     };
 
-    // Both harnesses deliver the checkpoint request from the post-compaction
-    // SessionStart; Claude and Pi have no checkpoint path.
-    let checkpoint = if matches!(harness, Harness::Codex | Harness::Tact)
+    // Codex, Tact, and DeepSeek deliver the checkpoint request from the
+    // post-compaction SessionStart; Claude and Pi have no checkpoint path.
+    let checkpoint = if harness.checkpoint_after_compaction()
         && event.trigger.as_deref() == Some("compact")
         && settings.checkpoint_on_compact
     {

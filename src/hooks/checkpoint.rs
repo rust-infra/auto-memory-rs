@@ -2,34 +2,43 @@
 //!
 //! Codex **ignores PreCompact stdout**: the checkpoint request is delivered by
 //! the SessionStart hook that runs *after* compaction with the `compact`
-//! trigger. Tact behaves the same way (`crates/tact/src/plugin/hooks.rs` keeps
-//! only the hook's `control`), so both harnesses read their request from the
-//! post-compaction event. This module builds that request, attaching the
-//! host-provided session metadata so the agent-authored checkpoint note can be
-//! related without guessing (`am-checkpoint` copies the exact values into
-//! frontmatter).
+//! trigger. Tact and the DeepSeek Harness behave the same way
+//! (`crates/tact/src/plugin/hooks.rs` keeps only the hook's `control`), so all
+//! three harnesses read their request from the post-compaction event. This
+//! module builds that request, attaching the host-provided session metadata so
+//! the agent-authored checkpoint note can be related without guessing
+//! (`am-checkpoint` copies the exact values into frontmatter).
 
 use std::collections::BTreeMap;
 
 use super::event::NormalizedHookEvent;
 use super::profiles::{
-    CODEX_CHECKPOINT_PROMPT, CODEX_TURN_ID_KEY, Harness, TACT_CHECKPOINT_PROMPT, TACT_TURN_ID_KEY,
+    CODEX_CHECKPOINT_PROMPT, CODEX_TURN_ID_KEY, DEEPSEEK_CHECKPOINT_PROMPT, DEEPSEEK_TURN_ID_KEY,
+    Harness, TACT_CHECKPOINT_PROMPT, TACT_TURN_ID_KEY,
 };
 
 /// Build the checkpoint prompt with the host metadata this event carries.
 ///
 /// The prompt text, the host noun and the turn-id key are all selected by the
-/// event's harness source. Codex's output is pinned to the reference; Tact gets
-/// the same request with the harness named correctly. The turn-id key is
-/// per-harness because it is the **plugin's** frontmatter field — the two plugin
-/// packages spell it differently, and `am-checkpoint` copies the key verbatim.
+/// event's harness source. Codex's output is pinned to the reference; Tact and
+/// DeepSeek get the same request with their own harness named correctly. The
+/// turn-id key is per-harness because it is the **plugin's** frontmatter field,
+/// and `am-checkpoint` copies the key verbatim.
 ///
 /// The metadata map is serialized with sorted keys, matching the reference's
 /// `json.dumps(..., sort_keys=True)` so the injected text is byte-stable.
 pub fn checkpoint_prompt(event: &NormalizedHookEvent) -> String {
     let (prompt, turn_key, host) = if event.source == Harness::Tact.profile().source {
         (TACT_CHECKPOINT_PROMPT, TACT_TURN_ID_KEY, "Tact session")
+    } else if event.source == Harness::Deepseek.profile().source {
+        (
+            DEEPSEEK_CHECKPOINT_PROMPT,
+            DEEPSEEK_TURN_ID_KEY,
+            "DeepSeek Harness session",
+        )
     } else {
+        // Claude and Pi never reach here (`Harness::checkpoint_after_compaction`
+        // is false for them); Codex is the reference spelling and the fallback.
         (CODEX_CHECKPOINT_PROMPT, CODEX_TURN_ID_KEY, "Codex chat")
     };
 
@@ -114,6 +123,43 @@ mod tests {
         assert!(
             prompt.contains("auto-memory-tact:am-checkpoint"),
             "the qualified skill name keeps it apart from the Codex package: {prompt}"
+        );
+    }
+
+    /// DeepSeek gets the Tact shape (its own prompt, the shared `turn_id` key)
+    /// with its own source and a skill name that points at its own package —
+    /// three packages may be installed at once, so a bare `am-checkpoint` would
+    /// be ambiguous and could load the wrong host's instructions.
+    #[test]
+    fn deepseek_gets_its_own_prompt_and_turn_key() {
+        let payload = serde_json::json!({
+            "session_id": "s7",
+            "source": "compact",
+            "turn_id": "12",
+            "model": "deepseek-v4.1-flash",
+        });
+        let event = normalize(Harness::Deepseek, HookEvent::SessionStarted, &payload);
+        let prompt = checkpoint_prompt(&event);
+        assert!(prompt.starts_with(DEEPSEEK_CHECKPOINT_PROMPT), "{prompt}");
+        assert!(
+            prompt.contains(
+                "{\"agent\":\"deepseek\",\"model\":\"deepseek-v4.1-flash\",\"session_id\":\"s7\",\
+                 \"trigger\":\"compact\",\"turn_id\":\"12\"}"
+            ),
+            "{prompt}"
+        );
+        assert!(
+            prompt.contains("from this DeepSeek Harness session"),
+            "{prompt}"
+        );
+        assert!(
+            prompt.contains("auto-memory-deepseek:am-checkpoint"),
+            "{prompt}"
+        );
+        assert!(!prompt.contains("codex_turn_id"), "{prompt}");
+        assert!(
+            !prompt.contains("auto-memory-tact:"),
+            "a DeepSeek checkpoint must not route through Tact's package: {prompt}"
         );
     }
 }
