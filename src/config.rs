@@ -12,6 +12,7 @@
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use crate::error::Result;
 
@@ -64,6 +65,35 @@ impl Config {
     /// Parse configuration from JSON, ignoring unknown reference keys.
     pub fn from_json_str(json: &str) -> Result<Self> {
         Ok(serde_json::from_str(json)?)
+    }
+
+    /// Serialize only the *locations* the user set, for the writer.
+    ///
+    /// Deliberately not `serde_json::to_string(self)`: that emits every field,
+    /// including the five behavior defaults, which turns a two-line config into a
+    /// wall of values the user never chose — and freezes today's defaults into
+    /// their file. The reference implementation's `config.json` holds only what
+    /// was set, and `#[serde(default)]` supplies the rest on load, so writing the
+    /// same shape keeps the two files interchangeable.
+    ///
+    /// Unknown keys are still lost (they are dropped on load, by design: the same
+    /// file must serve the reference implementation). That is why `set`/`unset`
+    /// read, mutate, and write in one call.
+    pub fn to_json_string(&self) -> Result<String> {
+        let mut object = serde_json::Map::new();
+        if let Some(index) = &self.index {
+            object.insert(
+                "index".to_owned(),
+                Value::String(index.to_string_lossy().into_owned()),
+            );
+        }
+        if let Some(project) = &self.default_project {
+            object.insert("default_project".to_owned(), Value::String(project.clone()));
+        }
+        Ok(format!(
+            "{}\n",
+            serde_json::to_string_pretty(&Value::Object(object))?
+        ))
     }
 }
 
@@ -178,6 +208,26 @@ pub fn load_user_config_at(path: &Path) -> UserConfig {
             error: error.to_string(),
         },
     }
+}
+
+/// Write the user config file, creating its directory.
+///
+/// `config set` is the only writer. It goes through a temporary file and a
+/// rename so a crash mid-write cannot leave a half-written config that the next
+/// command would reject as malformed (the load path fails closed).
+pub fn save_user_config(config: &Config) -> Result<PathBuf> {
+    save_user_config_at(&user_config_path(), config)
+}
+
+/// [`save_user_config`] against an explicit path, so tests do not touch `$HOME`.
+pub fn save_user_config_at(path: &Path, config: &Config) -> Result<PathBuf> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let temporary = path.with_extension("json.tmp");
+    std::fs::write(&temporary, config.to_json_string()?)?;
+    std::fs::rename(&temporary, path)?;
+    Ok(path.to_path_buf())
 }
 
 // --- Resolution chains ---

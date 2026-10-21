@@ -94,6 +94,50 @@ enum Command {
     Hook(HookArgs),
     /// Search the index (text, `--vector`, or `--hybrid`).
     Search(SearchArgs),
+    /// Read or write the user configuration file.
+    #[command(subcommand)]
+    Config(ConfigCommand),
+}
+
+/// `auto-memory config <show|set|unset>`.
+///
+/// The user config file is the only place `default_project` and `index` can be
+/// set, and before this command existed the only way to write it was by hand —
+/// which made the documented first run ("set `default_project` in
+/// `~/.config/auto-memory/config.json`") a manual JSON edit with no way to check
+/// the result.
+#[derive(Subcommand)]
+enum ConfigCommand {
+    /// Print the resolved configuration and where each value came from.
+    Show(ConfigShowArgs),
+    /// Set one key in the user config file.
+    Set(ConfigSetArgs),
+    /// Remove one key from the user config file.
+    Unset(ConfigUnsetArgs),
+}
+
+/// `config show`.
+#[derive(Args)]
+struct ConfigShowArgs {
+    /// Emit JSON instead of the table.
+    #[arg(long)]
+    json: bool,
+}
+
+/// `config set <key> <value>`.
+#[derive(Args)]
+struct ConfigSetArgs {
+    /// Key: `index` or `default_project`.
+    key: String,
+    /// Value. For `index`, a path (a leading `~` is expanded when used).
+    value: String,
+}
+
+/// `config unset <key>`.
+#[derive(Args)]
+struct ConfigUnsetArgs {
+    /// Key: `index` or `default_project`.
+    key: String,
 }
 
 /// Flags selecting the embedding runtime: fixture, model cache, ONNX library.
@@ -254,6 +298,27 @@ enum ProjectCommand {
     List(ProjectListArgs),
     /// Unregister a project; the vault is left alone.
     Remove(ProjectRemoveArgs),
+    /// Show or set the default project.
+    Default(ProjectDefaultArgs),
+}
+
+/// `project default [<permalink>]`.
+///
+/// With no argument it prints the current default; with one it writes
+/// `default_project` into the user config file. `default_project` is a property
+/// of the *project set*, not a loose config key, so the verb lives here — the
+/// same reason `git branch` owns its own upstream rather than `git config`.
+#[derive(Args)]
+struct ProjectDefaultArgs {
+    /// Permalink to make the default. Omit to print the current one.
+    #[arg(value_name = "PERMALINK")]
+    permalink: Option<String>,
+    /// Index to check the permalink against (defaults to the standard chain).
+    #[arg(long, value_name = "DB")]
+    index: Option<PathBuf>,
+    /// Emit JSON.
+    #[arg(long)]
+    json: bool,
 }
 
 /// `project add <name> <path>`.
@@ -273,6 +338,9 @@ struct ProjectAddArgs {
     /// Register without indexing.
     #[arg(long)]
     no_index: bool,
+    /// Make this project the default (writes `default_project` to the user config).
+    #[arg(long)]
+    default: bool,
     /// Emit the result as JSON.
     #[arg(long)]
     json: bool,
@@ -496,6 +564,7 @@ fn main() -> ExitCode {
         Command::Hook(args) => async_command(hook_command(args)),
         Command::Watch(args) => async_command(watch_command(args)),
         Command::Mcp(args) => async_command(mcp_command(args)),
+        Command::Config(command) => config_command(command),
     }
 }
 
@@ -542,6 +611,52 @@ fn cli_index(explicit: Option<PathBuf>) -> Option<(PathBuf, UserConfig)> {
 /// `mcp`/`watch` reconcile at the wrong directory, which prunes that project's index rows
 /// (`docs/integration-guide.md` §2.1). Either way the directory is checked before any
 /// scan, because a missing vault otherwise looks exactly like an empty one.
+/// The "which project?" diagnostic, naming the projects this index actually has.
+///
+/// The first-run failure was a dead end: `pass --project <name>` never said where
+/// `<name>` comes from, so a new user had to discover `project list` (and that
+/// read commands take a *permalink*, not the display name) before they could get
+/// anywhere. Naming the candidates turns the error into the next step.
+///
+/// Deliberately still an error rather than a guess: a brief from the wrong
+/// knowledge graph is worse than no brief, and picking "the only project" would
+/// silently bind a multi-project index to whichever row sorted first.
+async fn no_project_message(store: &Store) -> String {
+    const MAX_LISTED: usize = 10;
+    let mut message = String::from(
+        "no project: pass `--project <name>`, or set `default_project` in \
+         ~/.config/auto-memory/config.json, or pass `--vault <dir>`",
+    );
+    let projects = match store.projects().await {
+        Ok(projects) => projects,
+        Err(_) => return message,
+    };
+    if projects.is_empty() {
+        message.push_str(
+            "\n\nThis index has no projects yet. Create one with:\n  \
+             auto-memory project add \"<name>\" <vault-dir>",
+        );
+        return message;
+    }
+    message.push_str("\n\nRegistered projects in this index:");
+    for row in projects.iter().take(MAX_LISTED) {
+        message.push_str(&format!(
+            "\n  --project {permalink}    ({name})  {path}",
+            permalink = row.permalink,
+            name = row.name,
+            path = row.path,
+        ));
+    }
+    if projects.len() > MAX_LISTED {
+        message.push_str(&format!(
+            "\n  … and {} more (see `auto-memory project list`)",
+            projects.len() - MAX_LISTED
+        ));
+    }
+    message.push_str("\n\nUse the *permalink* (the first column), not the display name.");
+    message
+}
+
 async fn resolve_project_target(
     store: &Store,
     user: &UserConfig,
@@ -592,11 +707,7 @@ async fn resolve_project_target(
                     }
                 }
                 None => {
-                    return Err(
-                        "no project: pass `--project <name>`, or set `default_project` in \
-                         ~/.config/auto-memory/config.json, or pass `--vault <dir>`"
-                            .to_owned(),
-                    );
+                    return Err(no_project_message(store).await);
                 }
             },
         },
@@ -1015,11 +1126,145 @@ fn nudge_with_projects(hint: &str, candidates: &[String]) -> String {
 /// server and tell the caller to use the CLI, and until now that meant hand-editing the
 /// index. The argument shape is the reference's (`project add <name> <path>`) so the
 /// refusal text only has to differ by the binary name.
+/// `auto-memory config <show|set|unset>` — read and write the user config file.
+///
+/// Synchronous: nothing here opens the index. `show` reports the *file's* values
+/// (plus the path), not the fully resolved chain — `doctor` owns resolution,
+/// because resolving an index means touching it and a config command must not.
+fn config_command(command: ConfigCommand) -> ExitCode {
+    match command {
+        ConfigCommand::Show(args) => config_show_command(args),
+        ConfigCommand::Set(args) => config_set_command(args),
+        ConfigCommand::Unset(args) => config_unset_command(args),
+    }
+}
+
+fn config_show_command(args: ConfigShowArgs) -> ExitCode {
+    let path = auto_memory::config::user_config_path();
+    let loaded = auto_memory::config::load_user_config();
+    let config = loaded.values().cloned().unwrap_or_default();
+    if args.json {
+        let payload = json!({
+            "path": path.to_string_lossy(),
+            "state": loaded.describe(),
+            "index": config.index.as_ref().map(|p| p.to_string_lossy().into_owned()),
+            "default_project": config.default_project,
+        });
+        print_json(&payload);
+        return ExitCode::SUCCESS;
+    }
+    match &loaded {
+        auto_memory::config::UserConfig::Malformed { error, .. } => {
+            eprintln!("{} is unusable: {error}", path.display());
+            return ExitCode::FAILURE;
+        }
+        auto_memory::config::UserConfig::Absent { .. } => {
+            println!("{} (not present)", path.display());
+        }
+        auto_memory::config::UserConfig::Loaded { .. } => {
+            println!("{}", path.display());
+        }
+    }
+    println!(
+        "  index           {}",
+        config
+            .index
+            .as_ref()
+            .map_or_else(|| "(unset)".to_owned(), |p| p.display().to_string())
+    );
+    println!(
+        "  default_project {}",
+        config.default_project.as_deref().unwrap_or("(unset)")
+    );
+    ExitCode::SUCCESS
+}
+
+/// Reject unknown keys instead of writing them.
+///
+/// The file is a shared contract with the reference implementation and drops keys
+/// this build does not know, so accepting a typo here would look like it worked
+/// and then vanish on the next write.
+fn config_key_error(key: &str) -> String {
+    format!("unknown config key: {key} (expected `index` or `default_project`)")
+}
+
+fn config_set_command(args: ConfigSetArgs) -> ExitCode {
+    let ConfigSetArgs { key, value } = args;
+    let mut config = match auto_memory::config::load_user_config() {
+        auto_memory::config::UserConfig::Loaded { config, .. } => config,
+        auto_memory::config::UserConfig::Absent { .. } => auto_memory::config::Config::default(),
+        auto_memory::config::UserConfig::Malformed { path, error } => {
+            // Overwriting a broken file would silently discard whatever the user
+            // meant to keep; make them fix or remove it.
+            eprintln!(
+                "refusing to overwrite {}: {error}\nfix or remove the file, then retry",
+                path.display()
+            );
+            return ExitCode::FAILURE;
+        }
+    };
+    match key.as_str() {
+        "index" => config.index = Some(PathBuf::from(value)),
+        "default_project" => config.default_project = Some(value),
+        other => {
+            eprintln!("{}", config_key_error(other));
+            return ExitCode::FAILURE;
+        }
+    }
+    match auto_memory::config::save_user_config(&config) {
+        Ok(path) => {
+            println!("wrote {}", path.display());
+            ExitCode::SUCCESS
+        }
+        Err(error) => {
+            eprintln!("failed to write config: {error}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+fn config_unset_command(args: ConfigUnsetArgs) -> ExitCode {
+    let ConfigUnsetArgs { key } = args;
+    let mut config = match auto_memory::config::load_user_config() {
+        auto_memory::config::UserConfig::Loaded { config, .. } => config,
+        auto_memory::config::UserConfig::Absent { .. } => {
+            println!("nothing to unset: no config file");
+            return ExitCode::SUCCESS;
+        }
+        auto_memory::config::UserConfig::Malformed { path, error } => {
+            eprintln!(
+                "refusing to rewrite {}: {error}\nfix or remove the file, then retry",
+                path.display()
+            );
+            return ExitCode::FAILURE;
+        }
+    };
+    match key.as_str() {
+        "index" => config.index = None,
+        "default_project" => config.default_project = None,
+        other => {
+            eprintln!("{}", config_key_error(other));
+            return ExitCode::FAILURE;
+        }
+    }
+    match auto_memory::config::save_user_config(&config) {
+        Ok(path) => {
+            println!("wrote {}", path.display());
+            ExitCode::SUCCESS
+        }
+        Err(error) => {
+            eprintln!("failed to write config: {error}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
 async fn project_command(command: ProjectCommand) -> ExitCode {
     match command {
         ProjectCommand::Add(args) => project_add_command(args).await,
         ProjectCommand::List(args) => project_list_command(args).await,
         ProjectCommand::Remove(args) => project_remove_command(args).await,
+        ProjectCommand::Default(args) => project_default_command(args).await,
     }
 }
 
@@ -1031,6 +1276,7 @@ async fn project_add_command(args: ProjectAddArgs) -> ExitCode {
         index,
         permalink,
         no_index,
+        default,
         json,
     } = args;
     if !path.is_dir() {
@@ -1102,7 +1348,139 @@ async fn project_add_command(args: ProjectAddArgs) -> ExitCode {
             ),
             None => println!("not indexed (--no-index)"),
         }
+        if default {
+            match set_default_project(&permalink) {
+                Ok(path) => println!("default project is now {permalink} ({})", path.display()),
+                Err(error) => {
+                    eprintln!("project registered, but setting the default failed: {error}");
+                    return ExitCode::FAILURE;
+                }
+            }
+        }
         ExitCode::SUCCESS
+    }
+}
+
+/// Write `default_project` into the user config file, preserving the rest.
+///
+/// Shared by `project add --default` and `project default <permalink>`, so the
+/// two cannot disagree about which key they write or how a broken file is
+/// treated.
+fn set_default_project(permalink: &str) -> std::result::Result<PathBuf, String> {
+    let mut config = match auto_memory::config::load_user_config() {
+        auto_memory::config::UserConfig::Loaded { config, .. } => config,
+        auto_memory::config::UserConfig::Absent { .. } => auto_memory::config::Config::default(),
+        auto_memory::config::UserConfig::Malformed { path, error } => {
+            return Err(format!(
+                "refusing to rewrite {}: {error} (fix or remove it, then retry)",
+                path.display()
+            ));
+        }
+    };
+    config.default_project = Some(permalink.to_owned());
+    auto_memory::config::save_user_config(&config)
+        .map_err(|error| format!("failed to write config: {error}"))
+}
+
+/// `project default [<permalink>]` — print or set the default project.
+async fn project_default_command(args: ProjectDefaultArgs) -> ExitCode {
+    let ProjectDefaultArgs {
+        permalink,
+        index,
+        json,
+    } = args;
+
+    let Some(permalink) = permalink else {
+        // Read-only path: report what is set, and whether the index actually has it.
+        // A dangling default is the failure mode worth surfacing — the config points
+        // at a project this index does not know, so `mcp` would exit with
+        // `project not found` on every start.
+        let current = match auto_memory::config::load_user_config() {
+            auto_memory::config::UserConfig::Loaded { config, .. } => config.default_project,
+            auto_memory::config::UserConfig::Absent { .. } => None,
+            auto_memory::config::UserConfig::Malformed { path, error } => {
+                eprintln!("{} is unusable: {error}", path.display());
+                return ExitCode::FAILURE;
+            }
+        };
+        let Some(current) = current else {
+            if json {
+                print_json(&json!({ "default_project": null }));
+            } else {
+                println!("no default project set");
+                println!("set one with: auto-memory project default <permalink>");
+            }
+            return ExitCode::SUCCESS;
+        };
+        let registered = match cli_index(index) {
+            Some((index, _)) => match Store::open(&index).await {
+                Ok(store) => store
+                    .project_by_permalink(&current)
+                    .await
+                    .ok()
+                    .flatten()
+                    .is_some(),
+                Err(_) => false,
+            },
+            None => false,
+        };
+        if json {
+            print_json(&json!({
+                "default_project": current,
+                "registered": registered,
+            }));
+        } else {
+            println!("{current}");
+            if !registered {
+                eprintln!(
+                    "warning: '{current}' is not registered in this index; \
+                     `auto-memory mcp` will fail with `project not found`"
+                );
+            }
+        }
+        return ExitCode::SUCCESS;
+    };
+
+    // Setting: refuse a permalink the index does not have. Writing it anyway would
+    // move the failure to every later command, far from the typo.
+    if let Some((index, _)) = cli_index(index) {
+        match Store::open(&index).await {
+            Ok(store) => match store.project_by_permalink(&permalink).await {
+                Ok(Some(_)) => {}
+                Ok(None) => {
+                    eprintln!(
+                        "project not found: {permalink}\nrun `auto-memory project list` to see the permalinks this index has"
+                    );
+                    return ExitCode::FAILURE;
+                }
+                Err(error) => {
+                    eprintln!("failed to read project {permalink}: {error}");
+                    return ExitCode::FAILURE;
+                }
+            },
+            Err(error) => {
+                eprintln!("failed to open index {}: {error}", index.display());
+                return ExitCode::FAILURE;
+            }
+        }
+    }
+
+    match set_default_project(&permalink) {
+        Ok(path) => {
+            if json {
+                print_json(&json!({
+                    "default_project": permalink,
+                    "config": path.to_string_lossy(),
+                }));
+            } else {
+                println!("default project is now {permalink} ({})", path.display());
+            }
+            ExitCode::SUCCESS
+        }
+        Err(error) => {
+            eprintln!("{error}");
+            ExitCode::FAILURE
+        }
     }
 }
 
@@ -1152,6 +1530,9 @@ async fn project_list_command(args: ProjectListArgs) -> ExitCode {
     } else {
         if rows.is_empty() {
             println!("no projects registered in {}", index.display());
+            // The empty case is where a new user lands first; say what creates one
+            // rather than leaving them with a bare negative.
+            println!("create one with: auto-memory project add \"<name>\" <vault-dir>");
             return ExitCode::SUCCESS;
         }
         let width = rows
@@ -1161,19 +1542,40 @@ async fn project_list_command(args: ProjectListArgs) -> ExitCode {
             .max()
             .unwrap_or(4)
             .max(4);
+        // Mark the default so `project default` and this table agree on screen;
+        // otherwise the setting is invisible unless you already know to ask.
+        let default_project = match auto_memory::config::load_user_config() {
+            auto_memory::config::UserConfig::Loaded { config, .. } => config.default_project,
+            _ => None,
+        };
         println!(
-            "{:<width$}  {:>8}  {:<24}  path",
+            "  {:<width$}  {:>8}  {:<24}  path",
             "name", "entities", "permalink"
         );
         for row in &rows {
+            let permalink = row["permalink"].as_str().unwrap_or_default();
+            let marker = if default_project.as_deref() == Some(permalink) {
+                "*"
+            } else {
+                " "
+            };
             println!(
-                "{:<width$}  {:>8}  {:<24}  {}",
+                "{marker} {:<width$}  {:>8}  {:<24}  {}",
                 row["name"].as_str().unwrap_or_default(),
                 row["entities"].as_i64().unwrap_or_default(),
-                row["permalink"].as_str().unwrap_or_default(),
+                permalink,
                 row["path"].as_str().unwrap_or_default(),
             );
         }
+        // The whole point of this table for a first-time user is the permalink
+        // column: read commands and the MCP `--project` flag take it, and passing
+        // the `name` column instead fails with `project not found`. One line of
+        // guidance here is cheaper than that discovery.
+        println!();
+        println!(
+            "Read commands and the MCP server's `--project` take the **permalink** \
+             (column 3), not `name`. `*` marks the default project."
+        );
         ExitCode::SUCCESS
     }
 }
