@@ -57,15 +57,19 @@ the doc build:
 ./scripts/check-rust.sh
 ```
 
-The same script is wired as a `pre-push` hook under `.githooks/`, so a push runs it before
-anything leaves the machine. Git only reads hooks from `.git/hooks` by default, so opt in once
-per clone:
+`.githooks/` also carries a `pre-commit` hook that refuses a commit made directly on `main`.
+Work lands on a branch and merges, so a commit on `main` skips review and cannot become a pull
+request without rewriting history. The hook prints the two ways forward (create a branch, or
+`git commit --no-verify`).
+
+Git only reads hooks from `.git/hooks` by default, so opt in once per clone — this enables both:
 
 ```bash
 git config core.hooksPath .githooks
 ```
 
-`git push --no-verify` skips it.
+The same gates run as `pre-push`, so a push runs them before anything leaves the machine.
+`git push --no-verify` skips that; `git commit --no-verify` skips the branch guard.
 
 ## Documentation
 
