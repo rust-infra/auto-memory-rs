@@ -12,7 +12,7 @@ into `~/.local/bin` (override with `--prefix` or `$PREFIX`):
 
 ```bash
 ./scripts/install.sh                    # latest release
-./scripts/install.sh --version v0.1.0   # a specific tag
+./scripts/install.sh --version v1.0.3   # a specific tag
 ./scripts/install.sh --dry-run          # say what it would do
 ```
 

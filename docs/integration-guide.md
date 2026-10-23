@@ -54,7 +54,7 @@
 
 # 或者自己编译
 cargo build --release
-./target/release/auto-memory --version      # auto-memory 0.1.0
+./target/release/auto-memory --version      # auto-memory 1.0.3
 
 # 或者直接装到 PATH 上（→ ~/.cargo/bin/auto-memory）
 cargo install --path .
@@ -325,7 +325,7 @@ EOF
 期望（实测）：
 
 ```json
-{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2024-11-05","capabilities":{"tools":{}},"serverInfo":{"name":"auto-memory-rs","version":"0.1.0"}}}
+{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2024-11-05","capabilities":{"tools":{}},"serverInfo":{"name":"auto-memory-rs","version":"1.0.3"}}}
 ```
 
 第二个响应里应包含：
