@@ -76,8 +76,14 @@ fn join_variants(parts: impl IntoIterator<Item = String>) -> String {
         .filter(|part| !part.trim().is_empty())
         .collect::<Vec<_>>()
         .join("\n");
-    if stems.len() > MAX_CONTENT_STEMS_SIZE {
-        stems.truncate(MAX_CONTENT_STEMS_SIZE);
+    // The cap counts *characters*, matching the reference's `text[:6000]` on a
+    // Python `str`. Counting bytes and calling `String::truncate` panics whenever
+    // byte 6000 lands inside a multi-byte character — routine for a CJK note,
+    // where 6000 characters run to as many as 18000 bytes. The two readings also
+    // disagree at the edge: a byte cap drops the character that straddles it,
+    // where the reference keeps it.
+    if stems.chars().count() > MAX_CONTENT_STEMS_SIZE {
+        stems = stems.chars().take(MAX_CONTENT_STEMS_SIZE).collect();
     }
     stems
 }
@@ -281,5 +287,32 @@ mod tests {
         );
         assert_eq!(row.title, "A -> B");
         assert_eq!(row.relation_type.as_deref(), Some("rel"));
+    }
+
+    /// A CJK body that crosses the cap *in bytes* while staying under it in
+    /// characters. `String::truncate(6000)` used to panic here, because byte 6000
+    /// lands inside a three-byte character; the cap counts characters, so the
+    /// whole body must survive untouched.
+    #[test]
+    fn a_body_under_the_cap_in_characters_is_kept_whole() {
+        let body = "中".repeat(MAX_CONTENT_STEMS_SIZE - 10);
+        assert!(body.len() > MAX_CONTENT_STEMS_SIZE);
+
+        let row = entity_row(1, "标题", "note", None, "note.md", &body, &[]);
+        assert!(row.content_stems.contains(&body));
+    }
+
+    /// The cap itself, on text that straddles it: 6000 *characters* is the limit,
+    /// not 6000 bytes, and the cut has to land on a character boundary.
+    #[test]
+    fn overlong_cjk_stems_truncate_to_the_character_cap() {
+        let body = "中".repeat(MAX_CONTENT_STEMS_SIZE + 500);
+
+        let row = entity_row(1, "标题", "note", None, "note.md", &body, &[]);
+        assert_eq!(row.content_stems.chars().count(), MAX_CONTENT_STEMS_SIZE);
+        // The cut keeps the title that opens the concatenation and only ever
+        // drops whole characters.
+        assert!(row.content_stems.starts_with("标题\n"));
+        assert!(row.content_stems.ends_with('中'));
     }
 }

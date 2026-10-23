@@ -2151,9 +2151,9 @@ let has_match = match_query.is_some() || options.title.is_some();
 - score 仍然是 `0.0`。
 - 排序走 `updated_at DESC`，而不是 BM25。
 
-### 7.7 `content_stems` 使用字节长度截断
+### 7.7 `content_stems` 曾按字节长度截断（已修复）
 
-索引构造中使用：
+索引构造中曾经是：
 
 ```rust
 if stems.len() > MAX_CONTENT_STEMS_SIZE {
@@ -2161,12 +2161,29 @@ if stems.len() > MAX_CONTENT_STEMS_SIZE {
 }
 ```
 
-`String::truncate` 要求长度位于 UTF-8 字符边界。
+`String::truncate` 要求长度位于 UTF-8 字符边界，而 `len()` 是字节数。
 
-风险：
+风险（已实测发生）：
 
-- 如果 6000 字节边界落在中文等多字节字符内部，会 panic。
-- 更安全的实现应按字符数截断，或向前回退到最近的 UTF-8 边界。
+- 6000 字节边界落在中文等多字节字符内部时直接 panic，整个 `reindex` 失败
+  （`assertion failed: self.is_char_boundary(new_len)`，退出信息为
+  `incremental reindex failed: ... ConnectionClosed`）。
+- 一篇约 6800 字节的中文笔记即可触发；由于 `text_variants` 的集合迭代顺序不定，
+  同一篇笔记在不同运行中约有一半概率崩溃。
+
+现在按字符数截断，与 `specs/search-spec.md` 和参考实现的 `text[:6000]`（Python `str`
+切片，本来就是字符）一致：
+
+```rust
+if stems.chars().count() > MAX_CONTENT_STEMS_SIZE {
+    stems = stems.chars().take(MAX_CONTENT_STEMS_SIZE).collect();
+}
+```
+
+两者在边界处也略有差异：按字节截断会丢掉跨越边界的那个字符，参考实现保留它。
+`src/search/index_rows.rs` 的
+`a_body_under_the_cap_in_characters_is_kept_whole` 和
+`overlong_cjk_stems_truncate_to_the_character_cap` 两个测试固定该行为。
 
 ### 7.8 全项目文本合并的排序语义
 
