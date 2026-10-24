@@ -91,6 +91,41 @@ protecting: the corpus stays authoritative about everything 0.24.0 did not touch
 | #1254 | `prune` removes index entries the ignore rules now exclude. |
 | #1414 | `project index NAME`; `status` reports readiness per stage. |
 
+### Second pass: gaps the first pass claimed but did not close
+
+The first pass over the changelog marked several items covered that were not. They were
+found by re-reading all 161 numbered entries against the code, and are now implemented:
+
+| Upstream | Change |
+|---|---|
+| #1259, #1718 | `write_note` probes the vector index on a create and reports similar existing notes, as a question. The floor is 0.70 rather than search's 0.55: on the default model almost any note's nearest neighbour clears 0.55. Linked notes are skipped, at most three are shown, and no scores are reported. |
+| #1495 | A JSON read of a missing note carries `error: "NOTE_NOT_FOUND"`. |
+| #1744 | An extracted sidecar carries `derived_from`, in frontmatter and as an authored relation line. |
+| #1422, #1636 | Accepted changes land in a per-project journal, which the Wiki log reads. A delete's row is written before the entity goes away, and the reference is `SET NULL` so the row survives. |
+| #1451 | A leading `---` block that is not a YAML mapping is indexed as plain markdown instead of dropping the file. The guard stands: the file is never rewritten, so it gets no permalink. |
+| #1629 | A non-Markdown extension resolves to its exact file before the permalink candidates. |
+| #1534 | An unindexed project answers "Project Index Required", not "no results". |
+| #1533 | An unspaced CJK compound that finds nothing suggests a shorter term or spaces. |
+| #1537 | An editor's scratch copy (`#note.md#`, `.#note.md`, `.swp`) is not a note. |
+| #1539 | An escaped hash in `.bmignore` is a pattern, not a comment. |
+| #1657 | `IT-644 cacheability` quotes only the punctuated word and requires every word, instead of becoming one exact phrase. |
+
+### Gaps that remain open
+
+These are real and unimplemented. Each is either a performance property this port has not
+measured, or an accounting change to the vector manifest:
+
+| Upstream | What is missing |
+|---|---|
+| #1335 | Entity-body chunks still come one per bullet. Splitting on headings and a size budget changes the chunk corpus, which the captured vector golden pins. |
+| #1691 | Chunks are keyed by the search row id they were cut from, so a rewrite re-embeds unchanged text. Re-keying by text hash needs a migration. |
+| #1700, #1726 | A note too large to embed in one pass is not finished on later index passes; `reindex --embeddings` does not loop over deferred notes. |
+| #1557 | A paged reranked search re-retrieves instead of reusing the first request's pool. |
+| #1555 | The reranker does not batch candidates eight at a time. |
+| #1788 | Chunk metadata updates are per-row, not set-based. |
+| #1446 | The first `status` on a never-indexed project hashes every file. |
+| #1437 | Not applicable rather than missing: this port namespaces an observation's address under `observations/` and gives a relation row its entity's permalink, so the two address spaces cannot collide as they did upstream. |
+
 ## 3. What this port does differently, and why
 
 Each of these is a deliberate difference, not a gap:
@@ -136,6 +171,11 @@ Unit tests live beside the code they pin: `src/application/{lines,posix,ingest,w
 `src/search/{filters,ngram}.rs`, `src/markdown/sections.rs`, `src/domain/valid_time.rs`,
 `src/application/manual.rs`.
 
-The suite is now **53 test binaries / 643 tests**, all passing, and
+The second pass added `tests/gaps_group_a.rs` (the #1259/#1495/#1744/#1422 journal
+behaviors) and `tests/gaps_group_b.rs` (#1537/#1539 walks and ignore patterns), plus unit
+tests beside `src/application/search_text.rs` (the two guidance branches) and
+`src/search/query.rs` (#1657's preparation).
+
+The suite is now **55 test binaries / 666 tests**, all passing, and
 `./scripts/check-rust.sh` (format, clippy `-D warnings`, the full suite, the doc build and
 the DSH plugin check) is green.

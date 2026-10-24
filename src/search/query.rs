@@ -52,13 +52,31 @@ pub fn prepare_single_term(term: &str, is_prefix: bool) -> String {
     if problematic || special {
         if term.contains(' ') && !problematic {
             let words: Vec<&str> = term.split_whitespace().collect();
-            let has_special_in_words = words.iter().any(|word| has_any(word, &QUOTING_CHARS[1..]));
-            if !has_special_in_words {
-                let prepared: Vec<String> = if is_prefix {
-                    words.iter().map(|word| format!("{word}*")).collect()
-                } else {
-                    words.iter().map(|word| (*word).to_owned()).collect()
-                };
+            // Upstream 0.24.0 (#1657): quote only the word that carries punctuation, and
+            // require every word to match. Quoting the whole query as one phrase only
+            // finds the words when they are adjacent, so `IT-644 cacheability` returned
+            // nothing from a note that holds both. A Boolean query keeps its own path: an
+            // operator would be quoted into a literal here.
+            let has_operator = words
+                .iter()
+                .any(|word| matches!(*word, "AND" | "OR" | "NOT"));
+            if !has_operator {
+                let prepared: Vec<String> = words
+                    .iter()
+                    .map(|word| {
+                        let token = if has_any(word, QUOTING_CHARS) {
+                            // Quoted so FTS5 reads the punctuation as part of the term.
+                            format!("\"{}\"", word.replace('"', "\"\""))
+                        } else {
+                            (*word).to_owned()
+                        };
+                        if is_prefix {
+                            format!("{token}*")
+                        } else {
+                            token
+                        }
+                    })
+                    .collect();
                 return prepared.join(" AND ");
             }
         }
@@ -211,5 +229,26 @@ mod tests {
     #[test]
     fn title_queries_have_no_prefix() {
         assert_eq!(prepare_title_query("Alpha").as_deref(), Some("Alpha"));
+    }
+    #[test]
+    fn a_punctuated_word_beside_other_words_quotes_only_itself() {
+        // Upstream 0.24.0 (#1657): `IT-644 cacheability` used to become one exact phrase,
+        // which only matches when the words are adjacent in that order.
+        assert_eq!(
+            prepare_single_term("IT-644 cacheability", true),
+            "\"IT-644\"* AND cacheability*"
+        );
+        assert_eq!(
+            prepare_single_term("IT-644 cacheability", false),
+            "\"IT-644\" AND cacheability"
+        );
+    }
+
+    #[test]
+    fn plain_multi_word_queries_are_unchanged() {
+        assert_eq!(
+            prepare_single_term("rust search", true),
+            "rust* AND search*"
+        );
     }
 }
