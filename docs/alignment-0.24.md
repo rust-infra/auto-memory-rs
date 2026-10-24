@@ -112,19 +112,23 @@ found by re-reading all 161 numbered entries against the code, and are now imple
 
 ### Gaps that remain open
 
-These are real and unimplemented. Each is either a performance property this port has not
-measured, or an accounting change to the vector manifest:
-
 | Upstream | What is missing |
 |---|---|
-| #1335 | Entity-body chunks still come one per bullet. Splitting on headings and a size budget changes the chunk corpus, which the captured vector golden pins. |
-| #1691 | Chunks are keyed by the search row id they were cut from, so a rewrite re-embeds unchanged text. Re-keying by text hash needs a migration. |
-| #1700, #1726 | A note too large to embed in one pass is not finished on later index passes; `reindex --embeddings` does not loop over deferred notes. |
-| #1557 | A paged reranked search re-retrieves instead of reusing the first request's pool. |
-| #1555 | The reranker does not batch candidates eight at a time. |
-| #1788 | Chunk metadata updates are per-row, not set-based. |
-| #1446 | The first `status` on a never-indexed project hashes every file. |
-| #1437 | Not applicable rather than missing: this port namespaces an observation's address under `observations/` and gives a relation row its entity's permalink, so the two address spaces cannot collide as they did upstream. |
+| #1335 | Entity-body chunks still come one per bullet. Splitting on headings and a size budget changes the chunk corpus, which the captured vector golden pins — it is a corpus change, not a bug fix. |
+| #1691 | Chunks are keyed by the search row id they were cut from, so a rewrite re-embeds unchanged text. Re-keying by text hash needs a migration that rewrites the existing manifest. |
+| #1788 | Chunk metadata updates are written per row rather than in one set-based statement. |
+
+### Upstream items that do not arise in this design
+
+Each was checked against the code rather than assumed, and each is a property this port gets
+by construction rather than by implementing the fix:
+
+| Upstream | Why it does not arise |
+|---|---|
+| #1437 | An observation's address is namespaced under `observations/`, and a relation row carries its entity's permalink, so the two address spaces are disjoint and cannot collide as upstream's did. |
+| #1446 | `status` walks the vault for a file count and reads counts from the index; it never opens a file to hash it, so a never-indexed project costs a directory walk. |
+| #1557 | `rerank_and_paginate` is a pure function over rows the caller already fetched; paging past the pool reorders what it has and does not re-retrieve. |
+| #1700, #1726 | There is no per-pass token budget, so no note is deferred and there is no deferred set for `reindex --embeddings` to loop over. The upstream cap exists to bound one ONNX batch; #1555 bounds that instead. |
 
 ## 3. What this port does differently, and why
 

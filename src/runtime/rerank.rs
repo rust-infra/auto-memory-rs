@@ -109,22 +109,35 @@ impl RerankProvider for OnnxRerankProvider {
         let mut model = self.model.lock().map_err(|_| Error::Embedding {
             message: "reranker session lock was poisoned".to_owned(),
         })?;
-        // fastembed returns the results sorted by score; the reference's provider keeps
-        // the *input* order, so the indices are used to put them back.
-        let texts: Vec<&str> = documents.iter().map(String::as_str).collect();
-        let ranked = model
-            .rerank(query, texts, false, None)
-            .map_err(|error| Error::Embedding {
-                message: format!("rerank failed: {error}"),
-            })?;
+        // Upstream 0.24.0 (#1555): score in batches of eight so the ONNX arena stays
+        // bounded on a large candidate pool. Scores are per document and independent, so
+        // the result is identical to one pass — only the peak allocation changes.
+        const BATCH: usize = 8;
         let mut scores = vec![0.0f32; documents.len()];
-        for result in ranked {
-            let Some(slot) = scores.get_mut(result.index) else {
-                return Err(Error::Embedding {
-                    message: format!("reranker returned an out-of-range index: {}", result.index),
-                });
-            };
-            *slot = squash_logit(result.score)?;
+        for (offset, batch) in documents.chunks(BATCH).enumerate() {
+            let base = offset * BATCH;
+            let texts: Vec<&str> = batch.iter().map(String::as_str).collect();
+            // fastembed returns the results sorted by score; the reference's provider
+            // keeps the *input* order, so the indices are used to put them back.
+            let ranked =
+                model
+                    .rerank(query, texts, false, None)
+                    .map_err(|error| Error::Embedding {
+                        message: format!("rerank failed: {error}"),
+                    })?;
+            for result in ranked {
+                let index = base
+                    .checked_add(result.index)
+                    .ok_or_else(|| Error::Embedding {
+                        message: "reranker returned an out-of-range index".to_owned(),
+                    })?;
+                let Some(slot) = scores.get_mut(index) else {
+                    return Err(Error::Embedding {
+                        message: format!("reranker returned an out-of-range index: {index}"),
+                    });
+                };
+                *slot = squash_logit(result.score)?;
+            }
         }
         Ok(scores)
     }
