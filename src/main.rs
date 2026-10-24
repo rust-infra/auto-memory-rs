@@ -110,9 +110,80 @@ enum Command {
     /// Import a document as a searchable sidecar note.
     #[command(subcommand)]
     Import(ImportCommand),
+    /// Generate or check the Wiki navigation pages.
+    #[command(subcommand)]
+    Wiki(WikiCommand),
+    /// Export or check an OKF v0.2 bundle.
+    #[command(subcommand)]
+    Okf(OkfCommand),
     /// Read or write the user configuration file.
     #[command(subcommand)]
     Config(ConfigCommand),
+}
+
+/// `auto-memory okf <export|check>`.
+#[derive(Subcommand)]
+enum OkfCommand {
+    /// Write a static OKF bundle from a project.
+    Export(OkfExportArgs),
+    /// Validate an OKF bundle.
+    Check(OkfCheckArgs),
+}
+
+/// `auto-memory okf export <destination>`.
+#[derive(Args)]
+struct OkfExportArgs {
+    /// Directory to write the bundle to.
+    destination: PathBuf,
+    /// Index database (defaults to `AUTO_MEMORY_INDEX`, the user config file, then
+    /// the standard path).
+    #[arg(long, value_name = "DB")]
+    index: Option<PathBuf>,
+    /// Project name (defaults to `default_project`, else the single registered one).
+    #[arg(long, value_name = "NAME")]
+    project: Option<String>,
+    /// Overwrite an existing bundle.
+    #[arg(long)]
+    replace: bool,
+    /// Report as JSON.
+    #[arg(long)]
+    json: bool,
+}
+
+/// `auto-memory okf check <bundle>`.
+#[derive(Args)]
+struct OkfCheckArgs {
+    /// Bundle directory to validate.
+    bundle: PathBuf,
+    /// Report as JSON.
+    #[arg(long)]
+    json: bool,
+}
+
+/// `auto-memory wiki <status|validate|rebuild>`.
+#[derive(Subcommand)]
+enum WikiCommand {
+    /// Report what the projection would do, without writing.
+    Status(WikiArgs),
+    /// Check the projected pages for conflicts.
+    Validate(WikiArgs),
+    /// Write the projected `index.md` and `log.md` pages.
+    Rebuild(WikiArgs),
+}
+
+/// Flags shared by the wiki verbs.
+#[derive(Args)]
+struct WikiArgs {
+    /// Index database (defaults to `AUTO_MEMORY_INDEX`, the user config file, then
+    /// the standard path).
+    #[arg(long, value_name = "DB")]
+    index: Option<PathBuf>,
+    /// Project name (defaults to `default_project`, else the single registered one).
+    #[arg(long, value_name = "NAME")]
+    project: Option<String>,
+    /// Report as JSON.
+    #[arg(long)]
+    json: bool,
 }
 
 /// `auto-memory import <document>`.
@@ -722,6 +793,8 @@ fn main() -> ExitCode {
         Command::Tail(args) => async_command(tail_command(args)),
         Command::Man(args) => man_command(args),
         Command::Import(command) => async_command(import_command(command)),
+        Command::Wiki(command) => async_command(wiki_command(command)),
+        Command::Okf(command) => async_command(okf_command(command)),
         Command::Context(args) => async_command(context_command(args)),
         Command::Schema(command) => async_command(schema_command(command)),
         Command::Hook(args) => async_command(hook_command(args)),
@@ -3265,6 +3338,405 @@ async fn tail_command(args: TailArgs) -> ExitCode {
         return usage("no notes");
     }
     ExitCode::SUCCESS
+}
+
+/// Drop the `- [category] ...` lines a concept's body carries.
+///
+/// The bundle renders observations from their parsed categories, so leaving the raw lines
+/// in the body would show every observation twice.
+fn strip_observation_lines(body: &str) -> String {
+    body.lines()
+        .filter(|line| {
+            let trimmed = line.trim_start();
+            let Some(rest) = trimmed.strip_prefix("- [") else {
+                return true;
+            };
+            // A categorized observation is `- [category] text`; a task checkbox is
+            // `- [ ]` or `- [x]`, which stays prose.
+            match rest.split_once(']') {
+                Some((category, _)) => {
+                    category.is_empty()
+                        || category == "x"
+                        || category == "X"
+                        || category == " "
+                        || !category
+                            .chars()
+                            .next()
+                            .is_some_and(|first| first.is_alphanumeric())
+                }
+                None => true,
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// `auto-memory okf <export|check>` — write or validate an OKF bundle.
+async fn okf_command(command: OkfCommand) -> ExitCode {
+    match command {
+        OkfCommand::Export(args) => okf_export_command(args).await,
+        OkfCommand::Check(args) => okf_check_command(args),
+    }
+}
+
+async fn okf_export_command(args: OkfExportArgs) -> ExitCode {
+    let OkfExportArgs {
+        destination,
+        index,
+        project,
+        replace,
+        json,
+    } = args;
+    let (store, project_name, vault) = match posix_target(index, project).await {
+        Ok(target) => target,
+        Err(message) => return usage(&message),
+    };
+    // The project row only confirms the project exists: the bundle is built from the
+    // vault, which is the durable state, so an export from a stale index cannot silently
+    // drop a note written since the last reindex.
+    if !(match store.projects().await {
+        Ok(rows) => rows,
+        Err(error) => return usage(&error.to_string()),
+    })
+    .iter()
+    .any(|row| row.name == project_name)
+    {
+        return usage(&format!("project not found: {project_name}"));
+    }
+    // The export parses the *file*, not the stripped body: the frontmatter is the part of
+    // the concept the bundle has to carry.
+    let mut raw_notes = Vec::new();
+    for (relative, path) in auto_memory::indexing::document::markdown_files(&vault) {
+        let Ok(raw) = std::fs::read_to_string(&path) else {
+            continue;
+        };
+        raw_notes.push((relative, raw));
+    }
+    raw_notes.sort_by(|left, right| left.0.cmp(&right.0));
+    let mut concepts = Vec::new();
+    for (relative, raw) in &raw_notes {
+        let Ok(document) = auto_memory::markdown::parse_document(relative, raw) else {
+            continue;
+        };
+        let mut observations: std::collections::BTreeMap<String, Vec<String>> =
+            std::collections::BTreeMap::new();
+        for observation in &document.observations {
+            let category = observation
+                .category
+                .clone()
+                .unwrap_or_else(|| "note".to_owned());
+            observations
+                .entry(category)
+                .or_default()
+                .push(observation.content.clone());
+        }
+        concepts.push(auto_memory::application::okf::Concept {
+            source_path: relative.clone(),
+            title: document.frontmatter.title.clone(),
+            note_type: document.frontmatter.note_type.clone(),
+            frontmatter: document
+                .frontmatter
+                .metadata
+                .iter()
+                .map(|(key, value)| {
+                    let rendered = match value {
+                        serde_json::Value::String(text) => text.clone(),
+                        other => other.to_string(),
+                    };
+                    (key.clone(), rendered)
+                })
+                .collect(),
+            observations,
+            relations: document
+                .relations
+                .iter()
+                .map(|relation| {
+                    (
+                        relation.relation_type.as_str().to_owned(),
+                        relation.target.clone(),
+                    )
+                })
+                .collect(),
+            // The body carries the prose; the observations are rendered above it from the
+            // parsed categories, so repeating their lines here would duplicate them.
+            body: strip_observation_lines(&document.content),
+            assets: Vec::new(),
+        });
+    }
+    // Resolve every wikilink target to its concept path, so the rewrite can emit links
+    // that actually resolve.
+    let mut resolve = std::collections::BTreeMap::new();
+    for concept in &concepts {
+        resolve.insert(concept.title.clone(), concept.source_path.clone());
+        resolve.insert(concept.source_path.clone(), concept.source_path.clone());
+        let stem = concept
+            .source_path
+            .rsplit('/')
+            .next()
+            .unwrap_or_default()
+            .trim_end_matches(".md")
+            .to_owned();
+        resolve.insert(stem, concept.source_path.clone());
+    }
+    let mut files = Vec::new();
+    for concept in &concepts {
+        let mut concept = concept.clone();
+        concept.body = auto_memory::application::okf::rewrite_wikilinks(&concept.body, &resolve);
+        files.push(auto_memory::application::okf::render_concept(&concept));
+    }
+    // A root index and a dated log, the two generated pages a bundle carries.
+    let by_folder = |folder: &str| -> Vec<&auto_memory::application::okf::Concept> {
+        concepts
+            .iter()
+            .filter(|concept| {
+                let concept_folder = concept
+                    .source_path
+                    .rsplit_once('/')
+                    .map(|(folder, _)| folder.to_owned())
+                    .unwrap_or_default();
+                concept_folder == folder
+            })
+            .collect()
+    };
+    files.push(auto_memory::application::okf::render_folder_index(
+        "",
+        &by_folder(""),
+    ));
+    let mut folders: Vec<String> = concepts
+        .iter()
+        .filter_map(|concept| {
+            concept
+                .source_path
+                .rsplit_once('/')
+                .map(|(folder, _)| folder.to_owned())
+        })
+        .collect();
+    folders.sort();
+    folders.dedup();
+    for folder in folders {
+        files.push(auto_memory::application::okf::render_folder_index(
+            &folder,
+            &by_folder(&folder),
+        ));
+    }
+    files.push(auto_memory::application::okf::render_root_log(
+        &auto_memory::domain::timeframe::now_storage_timestamp()[..10],
+        &concepts.iter().collect::<Vec<_>>(),
+    ));
+
+    match auto_memory::application::okf::publish(&files, &destination, replace) {
+        Ok(()) => {
+            if json {
+                println!(
+                    "{{\"destination\": \"{}\", \"files\": {}}}",
+                    destination.display(),
+                    files.len()
+                );
+            } else {
+                println!(
+                    "exported {} file(s) to {}",
+                    files.len(),
+                    destination.display()
+                );
+            }
+            ExitCode::SUCCESS
+        }
+        Err(error) => usage(&error.to_string()),
+    }
+}
+
+fn okf_check_command(args: OkfCheckArgs) -> ExitCode {
+    let OkfCheckArgs { bundle, json } = args;
+    let Ok(entries) = std::fs::read_dir(&bundle) else {
+        return usage(&format!("no such bundle: {}", bundle.display()));
+    };
+    let mut files = Vec::new();
+    // Walk the bundle, so a nested concept is checked too.
+    let mut pending: Vec<PathBuf> = vec![bundle.clone()];
+    while let Some(directory) = pending.pop() {
+        let Ok(entries) = std::fs::read_dir(&directory) else {
+            return usage(&format!("could not read {}", directory.display()));
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                pending.push(path);
+                continue;
+            }
+            let Ok(content) = std::fs::read_to_string(&path) else {
+                return usage(&format!("could not read {}", path.display()));
+            };
+            let relative = path
+                .strip_prefix(&bundle)
+                .map(|relative| relative.to_string_lossy().replace('\\', "/"))
+                .unwrap_or_else(|_| path.to_string_lossy().into_owned());
+            files.push(auto_memory::application::okf::BundleFile {
+                path: relative,
+                content,
+            });
+        }
+    }
+    let _ = entries;
+    let issues = auto_memory::application::okf::validate_bundle(&files);
+    if json {
+        match serde_json::to_string_pretty(&issues) {
+            Ok(rendered) => println!("{rendered}"),
+            Err(error) => return usage(&error.to_string()),
+        }
+    } else if issues.is_empty() {
+        println!("ok: {} file(s) validated", files.len());
+    } else {
+        for issue in &issues {
+            println!("{}: [{}] {}", issue.file_path, issue.rule, issue.message);
+        }
+    }
+    // A violation is a non-zero exit, so CI can gate on it.
+    if issues.is_empty() {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::FAILURE
+    }
+}
+
+/// `auto-memory wiki <status|validate|rebuild>` — project the navigation pages.
+async fn wiki_command(command: WikiCommand) -> ExitCode {
+    let (verb, args) = match command {
+        WikiCommand::Status(args) => ("status", args),
+        WikiCommand::Validate(args) => ("validate", args),
+        WikiCommand::Rebuild(args) => ("rebuild", args),
+    };
+    let WikiArgs {
+        index,
+        project,
+        json,
+    } = args;
+    let (store, project_name, vault) = match posix_target(index, project).await {
+        Ok(target) => target,
+        Err(message) => return usage(&message),
+    };
+    // The projection reads the index for titles and tags, and the vault for the pages that
+    // already exist — a page on disk that the index has not caught up with is still a
+    // page a human may have written.
+    let Some(row) = (match store.projects().await {
+        Ok(rows) => rows,
+        Err(error) => return usage(&error.to_string()),
+    })
+    .into_iter()
+    .find(|row| row.name == project_name) else {
+        return usage(&format!("project not found: {project_name}"));
+    };
+    let notes: Vec<auto_memory::application::wiki::NoteSummary> =
+        match store.entities_with_metadata(row.id).await {
+            Ok(rows) => rows
+                .into_iter()
+                .map(|row| auto_memory::application::wiki::NoteSummary {
+                    tags: row
+                        .metadata
+                        .get("tags")
+                        .map(|value| {
+                            value
+                                .split(',')
+                                .map(|tag| tag.trim().to_owned())
+                                .filter(|tag| !tag.is_empty())
+                                .collect()
+                        })
+                        .unwrap_or_default(),
+                    file_path: row.file_path,
+                    title: row.title,
+                })
+                .collect(),
+            Err(error) => return usage(&error.to_string()),
+        };
+    let mut existing = std::collections::BTreeMap::new();
+    for outcome in
+        auto_memory::application::wiki::plan(&notes, &[], &std::collections::BTreeMap::new())
+    {
+        let file_path = outcome.file_path().to_owned();
+        if let Ok(content) = std::fs::read_to_string(vault.join(&file_path)) {
+            existing.insert(file_path, content);
+        }
+    }
+    let outcomes = auto_memory::application::wiki::plan(&notes, &[], &existing);
+
+    match verb {
+        "status" => {
+            if json {
+                match serde_json::to_string_pretty(&outcomes) {
+                    Ok(rendered) => println!("{rendered}"),
+                    Err(error) => return usage(&error.to_string()),
+                }
+                return ExitCode::SUCCESS;
+            }
+            for outcome in &outcomes {
+                println!("{}", render_wiki_outcome(outcome));
+            }
+            ExitCode::SUCCESS
+        }
+        "validate" => {
+            let issues = auto_memory::application::wiki::validate(&outcomes, &notes);
+            if json {
+                match serde_json::to_string_pretty(&issues) {
+                    Ok(rendered) => println!("{rendered}"),
+                    Err(error) => return usage(&error.to_string()),
+                }
+            } else if issues.is_empty() {
+                println!("ok: the wiki projection is clean");
+            } else {
+                for issue in &issues {
+                    println!("{}: {}", issue.file_path, issue.message);
+                }
+            }
+            // A violation is a non-zero exit, so a CI job can gate on it.
+            if issues.is_empty() {
+                ExitCode::SUCCESS
+            } else {
+                ExitCode::FAILURE
+            }
+        }
+        _ => {
+            let mut written = 0usize;
+            for outcome in &outcomes {
+                match outcome {
+                    auto_memory::application::wiki::PageOutcome::Create { page }
+                    | auto_memory::application::wiki::PageOutcome::Update { page } => {
+                        let target = vault.join(&page.file_path);
+                        if let Some(parent) = target.parent()
+                            && let Err(error) = std::fs::create_dir_all(parent)
+                        {
+                            return usage(&format!(
+                                "could not create {}: {error}",
+                                parent.display()
+                            ));
+                        }
+                        if let Err(error) = std::fs::write(&target, &page.content) {
+                            return usage(&format!(
+                                "could not write {}: {error}",
+                                target.display()
+                            ));
+                        }
+                        written += 1;
+                    }
+                    auto_memory::application::wiki::PageOutcome::Conflict { file_path, reason } => {
+                        eprintln!("skipped {file_path}: {reason}");
+                    }
+                    auto_memory::application::wiki::PageOutcome::Unchanged { .. } => {}
+                }
+            }
+            println!("wrote {written} page(s)");
+            ExitCode::SUCCESS
+        }
+    }
+}
+
+/// One `wiki status` line.
+fn render_wiki_outcome(outcome: &auto_memory::application::wiki::PageOutcome) -> String {
+    use auto_memory::application::wiki::PageOutcome;
+    match outcome {
+        PageOutcome::Create { page } => format!("create    {}", page.file_path),
+        PageOutcome::Update { page } => format!("update    {}", page.file_path),
+        PageOutcome::Unchanged { file_path } => format!("unchanged {file_path}"),
+        PageOutcome::Conflict { file_path, .. } => format!("conflict  {file_path}"),
+    }
 }
 
 /// `auto-memory import document` — extract a document into a sidecar note.

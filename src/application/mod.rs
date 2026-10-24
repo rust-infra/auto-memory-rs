@@ -7,11 +7,13 @@ pub mod ingest;
 pub mod lines;
 pub mod manual;
 pub mod note;
+pub mod okf;
 pub mod posix;
 pub mod schema;
 pub mod schema_text;
 pub mod schema_tools;
 pub mod search_text;
+pub mod wiki;
 
 pub use activity::{
     ActivityContext, ActivityOptions, ActivityResult, recent_context, recent_rows,

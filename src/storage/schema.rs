@@ -90,6 +90,24 @@ CREATE TABLE IF NOT EXISTS relation (
     UNIQUE (from_id, to_name, relation_type)
 );
 
+-- Upstream 0.24.0 (#1422, #1381-#1484): the per-project accepted-change journal the
+-- Wiki projector reads. A row is written when a note write is accepted, so the projected
+-- `log.md` lists changes in the order they happened rather than in file order.
+CREATE TABLE IF NOT EXISTS accepted_change (
+    id          INTEGER PRIMARY KEY,
+    project_id  INTEGER NOT NULL REFERENCES project(id) ON DELETE CASCADE,
+    entity_id   INTEGER NOT NULL REFERENCES entity(id) ON DELETE CASCADE,
+    -- `create`, `update`, `edit`, `move`, or `delete`.
+    kind        TEXT NOT NULL,
+    file_path   TEXT NOT NULL,
+    -- The path before a move, for the log's "moved from" line.
+    previous_path TEXT,
+    created_at  TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS ix_accepted_change_project
+    ON accepted_change (project_id, id DESC);
+
 -- Upstream 0.24.0 (#1398): a note's body indexed by heading, so the POSIX-style read
 -- tools can address one section instead of the whole file.
 CREATE TABLE IF NOT EXISTS note_section (
