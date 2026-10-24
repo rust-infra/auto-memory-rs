@@ -298,12 +298,24 @@ fn markdown_link_targets(content: &str) -> Vec<String> {
     targets
 }
 
+/// What to do when the destination already holds a bundle.
+///
+/// An enum rather than a `bool` because `publish(&files, &dest, false)` says nothing about
+/// what `false` means at the call site.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExistingBundle {
+    /// Refuse to touch a destination that already exists.
+    Refuse,
+    /// Replace it, keeping the old one until the new one is in place.
+    Replace,
+}
+
 /// Publish a rendered bundle to `destination`.
 ///
-/// The export stages beside the destination, validates before publishing, refuses to
-/// overwrite without `replace`, and restores the previous bundle if publication fails —
-/// so a failed export never leaves a half-written directory.
-pub fn publish(files: &[BundleFile], destination: &Path, replace: bool) -> Result<()> {
+/// The export stages beside the destination, validates before publishing, honours
+/// `existing`, and restores the previous bundle if publication fails — so a failed export
+/// never leaves a half-written directory.
+pub fn publish(files: &[BundleFile], destination: &Path, existing: ExistingBundle) -> Result<()> {
     let issues = validate_bundle(files);
     if !issues.is_empty() {
         return Err(Error::InvalidArgument {
@@ -315,7 +327,7 @@ pub fn publish(files: &[BundleFile], destination: &Path, replace: bool) -> Resul
             ),
         });
     }
-    if destination.exists() && !replace {
+    if destination.exists() && existing == ExistingBundle::Refuse {
         return Err(Error::InvalidArgument {
             message: format!(
                 "{} already exists; pass --replace to overwrite it",
@@ -407,7 +419,10 @@ mod tests {
             "{}",
             file.content
         );
-        assert!(file.content.contains("okf_version: \"0.2\""));
+        assert!(
+            file.content.contains("okf_version: \"0.2\""),
+            "a concept declares the bundle version it targets"
+        );
     }
 
     #[test]
@@ -443,7 +458,10 @@ mod tests {
     #[test]
     fn a_clean_bundle_validates() {
         let files = vec![render_concept(&concept())];
-        assert!(validate_bundle(&files).is_empty());
+        assert!(
+            validate_bundle(&files).is_empty(),
+            "a generated page needs no frontmatter title"
+        );
     }
 
     #[test]
@@ -478,7 +496,10 @@ mod tests {
             path: "a.md".to_owned(),
             content: "---\ntitle: A\ntype: note\n---\n\n[site](https://example.com)\n".to_owned(),
         }];
-        assert!(validate_bundle(&files).is_empty());
+        assert!(
+            validate_bundle(&files).is_empty(),
+            "an external link is not a dangling one"
+        );
     }
 
     #[test]
@@ -516,7 +537,7 @@ mod tests {
         let destination = dir.path().join("bundle");
         std::fs::create_dir_all(&destination).expect("destination");
         let files = vec![render_concept(&concept())];
-        let error = publish(&files, &destination, false).expect_err("must refuse");
+        let error = publish(&files, &destination, ExistingBundle::Refuse).expect_err("must refuse");
         assert!(error.to_string().contains("--replace"), "{error}");
     }
 
@@ -525,11 +546,20 @@ mod tests {
         let dir = tempfile::tempdir().expect("tempdir");
         let destination = dir.path().join("bundle");
         let files = vec![render_concept(&concept())];
-        publish(&files, &destination, false).expect("publish");
-        assert!(destination.join("notes/simple.md").is_file());
+        publish(&files, &destination, ExistingBundle::Refuse).expect("publish");
+        assert!(
+            destination.join("notes/simple.md").is_file(),
+            "the concept lands at its source path"
+        );
         // The staging directory is gone, and no backup is left behind.
-        assert!(!staging_path(&destination).exists());
-        assert!(!destination.with_extension("okf-backup").exists());
+        assert!(
+            !staging_path(&destination).exists(),
+            "a published bundle leaves no staging directory"
+        );
+        assert!(
+            !destination.with_extension("okf-backup").exists(),
+            "a successful publish removes its backup"
+        );
     }
 
     #[test]
@@ -537,11 +567,11 @@ mod tests {
         let dir = tempfile::tempdir().expect("tempdir");
         let destination = dir.path().join("bundle");
         let first = vec![render_concept(&concept())];
-        publish(&first, &destination, false).expect("first publish");
+        publish(&first, &destination, ExistingBundle::Refuse).expect("first publish");
         let mut second_concept = concept();
         second_concept.title = "Renamed".to_owned();
         let second = vec![render_concept(&second_concept)];
-        publish(&second, &destination, true).expect("second publish");
+        publish(&second, &destination, ExistingBundle::Replace).expect("second publish");
         let content =
             std::fs::read_to_string(destination.join("notes/simple.md")).expect("concept");
         assert!(content.contains("Renamed"), "{content}");
@@ -555,7 +585,7 @@ mod tests {
             path: "a.md".to_owned(),
             content: String::new(),
         }];
-        let error = publish(&files, &destination, false).expect_err("must refuse");
+        let error = publish(&files, &destination, ExistingBundle::Refuse).expect_err("must refuse");
         assert!(error.to_string().contains("failed validation"), "{error}");
         assert!(!destination.exists(), "a refused bundle writes nothing");
     }

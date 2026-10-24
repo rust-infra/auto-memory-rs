@@ -32,14 +32,29 @@ pub struct LineRange {
     pub body: String,
 }
 
+/// A bounded range of lines, both ends 1-based and inclusive.
+///
+/// Named fields rather than a `(usize, usize)` tuple: `span.start` reads, `span.0` does
+/// not, and the two ends are easy to transpose.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LineSpan {
+    /// First line, 1-based.
+    pub start: usize,
+    /// Last line, 1-based and inclusive.
+    pub end: usize,
+}
+
 impl LineRange {
     /// The range a caller should request next, or `None` at the end of the document.
     #[must_use]
-    pub fn next_range(&self) -> Option<(usize, usize)> {
+    pub fn next_range(&self) -> Option<LineSpan> {
         (self.end < self.total).then(|| {
             let start = self.end + 1;
             let width = self.end - self.start + 1;
-            (start, (start + width - 1).min(self.total))
+            LineSpan {
+                start,
+                end: (start + width - 1).min(self.total),
+            }
         })
     }
 
@@ -114,7 +129,7 @@ pub fn render_line_range(identifier: &str, range: &LineRange) -> String {
         range.start, range.end, range.total, range.body
     );
     match range.next_range() {
-        Some((start, end)) => out.push_str(&format!(
+        Some(LineSpan { start, end }) => out.push_str(&format!(
             "\n*Next: read_note(identifier=\"{identifier}\", start_line={start}, end_line={end})*"
         )),
         None => out.push_str("\n*End of document.*"),
@@ -132,7 +147,7 @@ mod tests {
     fn a_whole_document_read_numbers_every_line() {
         let range = read_lines(NOTE, None, None).expect("range");
         assert_eq!((range.start, range.end, range.total), (1, 5, 5));
-        assert!(range.is_whole_document());
+        assert!(range.is_whole_document(), "the range covers every line");
         assert!(range.body.starts_with("   1 | line one"), "{}", range.body);
         assert!(range.body.ends_with("   5 | line five"), "{}", range.body);
         // The trailing newline is not a sixth line.
@@ -144,8 +159,11 @@ mod tests {
         let range = read_lines(NOTE, Some(2), Some(3)).expect("range");
         assert_eq!((range.start, range.end, range.total), (2, 3, 5));
         assert_eq!(range.body, "   2 | line two\n   3 | line three");
-        assert_eq!(range.next_range(), Some((4, 5)));
-        assert!(!range.is_whole_document());
+        assert_eq!(range.next_range(), Some(LineSpan { start: 4, end: 5 }));
+        assert!(
+            !range.is_whole_document(),
+            "a middle range is not the whole note"
+        );
     }
 
     #[test]
@@ -179,7 +197,13 @@ mod tests {
         let range = read_lines(&long, Some(1), None).expect("range");
         assert_eq!(range.end, DEFAULT_LINE_WINDOW);
         assert_eq!(range.total, 500);
-        assert_eq!(range.next_range(), Some((121, 240)));
+        assert_eq!(
+            range.next_range(),
+            Some(LineSpan {
+                start: 121,
+                end: 240
+            })
+        );
     }
 
     #[test]

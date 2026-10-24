@@ -112,10 +112,22 @@ mod tests {
         let grams = ngrams("中文笔记");
         // Four unigrams, three bigrams, all distinct.
         assert_eq!(grams.len(), 7, "{grams:?}");
-        assert!(grams.contains(&"中".to_owned()));
-        assert!(grams.contains(&"中文".to_owned()));
-        assert!(grams.contains(&"文笔".to_owned()));
-        assert!(grams.contains(&"笔记".to_owned()));
+        assert!(
+            grams.contains(&"中".to_owned()),
+            "a Chinese run contributes its unigrams"
+        );
+        assert!(
+            grams.contains(&"中文".to_owned()),
+            "the query side relies on this bigram being indexed"
+        );
+        assert!(
+            grams.contains(&"文笔".to_owned()),
+            "every adjacent pair is a bigram"
+        );
+        assert!(
+            grams.contains(&"笔记".to_owned()),
+            "the last bigram of the run is included"
+        );
         assert!(
             !grams.contains(&"中笔".to_owned()),
             "no skip-grams: {grams:?}"
@@ -129,8 +141,14 @@ mod tests {
 
     #[test]
     fn latin_text_produces_no_ngrams() {
-        assert!(ngrams("plain english text").is_empty());
-        assert!(!contains_unsegmented_script("plain english"));
+        assert!(
+            ngrams("plain english text").is_empty(),
+            "Latin text is left to the word index"
+        );
+        assert!(
+            !contains_unsegmented_script("plain english"),
+            "Latin text has no unsegmented script"
+        );
     }
 
     #[test]
@@ -151,9 +169,18 @@ mod tests {
 
     #[test]
     fn japanese_and_korean_are_unsegmented_too() {
-        assert!(contains_unsegmented_script("これはテスト"));
-        assert!(contains_unsegmented_script("한국어"));
-        assert!(ngrams("テスト").contains(&"テス".to_owned()));
+        assert!(
+            contains_unsegmented_script("これはテスト"),
+            "Japanese is unsegmented"
+        );
+        assert!(
+            contains_unsegmented_script("한국어"),
+            "Korean is unsegmented"
+        );
+        assert!(
+            ngrams("テスト").contains(&"テス".to_owned()),
+            "Katakana yields bigrams"
+        );
     }
 
     #[test]
@@ -190,6 +217,9 @@ mod tests {
         // 8 characters: 8 unigrams + 7 bigrams.
         assert_eq!(grams.len(), 15, "{grams:?}");
         // The query side relies on this: `中文` is a term in the index.
-        assert!(grams.contains(&"中文".to_owned()));
+        assert!(
+            grams.contains(&"中文".to_owned()),
+            "the query side relies on this bigram being indexed"
+        );
     }
 }

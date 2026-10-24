@@ -306,8 +306,14 @@ mod tests {
         assert_eq!(time.start, "2026-06-10");
         // An instant covers the whole day it names, so its range ends at the next day.
         assert_eq!(time.end, "2026-06-11");
-        assert!(time.covers("2026-06-10"));
-        assert!(!time.covers("2026-06-11"));
+        assert!(
+            time.covers("2026-06-10"),
+            "the start of a half-open range is covered"
+        );
+        assert!(
+            !time.covers("2026-06-11"),
+            "an instant does not cover the following day"
+        );
         // The qualifier is removed from the text the index stores.
         assert_eq!(parsed.body, "The cache layer will use Redis.");
     }
@@ -321,9 +327,18 @@ mod tests {
             ("2026-06-10", "2026-07-27")
         );
         // Half-open: the start is covered, the end is not.
-        assert!(time.covers("2026-06-10"));
-        assert!(time.covers("2026-07-26"));
-        assert!(!time.covers("2026-07-27"));
+        assert!(
+            time.covers("2026-06-10"),
+            "the start of a half-open range is covered"
+        );
+        assert!(
+            time.covers("2026-07-26"),
+            "the day before the end is covered"
+        );
+        assert!(
+            !time.covers("2026-07-27"),
+            "the end of a half-open range is not covered"
+        );
         assert_eq!(parsed.body, "The cache layer.");
     }
 
@@ -369,7 +384,10 @@ mod tests {
     #[test]
     fn an_ordinary_observation_is_untouched() {
         let parsed = parse_qualifier("The cache layer will use Redis.");
-        assert!(parsed.time.is_none());
+        assert!(
+            parsed.time.is_none(),
+            "a malformed qualifier yields no valid time"
+        );
         assert_eq!(parsed.body, "The cache layer will use Redis.");
     }
 
@@ -385,10 +403,16 @@ mod tests {
             .time
             .expect("range");
         // Adjacent half-open ranges do not overlap: July 1 belongs to `july` alone.
-        assert!(!june.overlaps(&july));
-        assert!(!july.overlaps(&june));
-        assert!(june.overlaps(&late_june));
-        assert!(late_june.overlaps(&june));
+        assert!(
+            !june.overlaps(&july),
+            "adjacent half-open ranges do not overlap"
+        );
+        assert!(!july.overlaps(&june), "overlap is symmetric");
+        assert!(
+            june.overlaps(&late_june),
+            "a nested range overlaps its container"
+        );
+        assert!(late_june.overlaps(&june), "overlap is symmetric");
     }
 
     #[test]
@@ -418,6 +442,19 @@ mod tests {
         );
         assert_eq!(normalize_date("2026-06-10").as_deref(), Some("2026-06-10"));
         assert_eq!(normalize_date("nope"), None);
+    }
+
+    #[test]
+    fn a_non_ascii_eight_character_probe_does_not_panic() {
+        // The compact-date branch slices bytes, so a multi-byte string must be rejected by
+        // the `is_ascii_digit` guard rather than reaching the slice.
+        for probe in ["２０２６０６", "中文中文", "abcdefgh", "2026-06-"] {
+            assert_eq!(
+                normalize_date(probe),
+                None,
+                "{probe:?} must be rejected, not sliced"
+            );
+        }
     }
 
     #[test]

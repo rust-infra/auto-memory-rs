@@ -355,8 +355,14 @@ mod tests {
     fn several_operators_apply_to_one_field() {
         let parsed = filters(json!({ "priority": { "$gte": 2, "$lte": 8 } }));
         assert_eq!(parsed[0].ops.len(), 2);
-        assert!(parsed[0].ops.contains(&FilterOp::Gte(json!(2))));
-        assert!(parsed[0].ops.contains(&FilterOp::Lte(json!(8))));
+        assert!(
+            parsed[0].ops.contains(&FilterOp::Gte(json!(2))),
+            "the lower bound must be recorded"
+        );
+        assert!(
+            parsed[0].ops.contains(&FilterOp::Lte(json!(8))),
+            "the upper bound must be recorded"
+        );
     }
 
     #[test]
@@ -419,7 +425,10 @@ mod tests {
                 .expect("ok")
                 .is_empty()
         );
-        assert!(parse_metadata_filters(&Value::Null).expect("ok").is_empty());
+        assert!(
+            parse_metadata_filters(&Value::Null).expect("ok").is_empty(),
+            "a null filter object filters nothing"
+        );
     }
 
     #[test]
@@ -477,7 +486,7 @@ mod tests {
         let parsed = filters(json!({ "status": { "$in": [] } }));
         let compiled = compile_field_filter(&parsed[0]).expect("compiled");
         assert_eq!(compiled.sql, "0");
-        assert!(compiled.params.is_empty());
+        assert!(compiled.params.is_empty(), "an empty $in binds no values");
     }
 
     #[test]

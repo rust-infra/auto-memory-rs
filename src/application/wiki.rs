@@ -418,7 +418,10 @@ mod tests {
             "{}",
             page.content
         );
-        assert!(page.content.contains(GENERATED_MARKER));
+        assert!(
+            page.content.contains(GENERATED_MARKER),
+            "a projected page must be recognisable on the next run"
+        );
     }
 
     #[test]

@@ -400,10 +400,22 @@ mod tests {
 
     #[test]
     fn only_csv_and_text_are_extractable_here() {
-        assert!(DocumentFormat::Csv.is_extractable());
-        assert!(DocumentFormat::Text.is_extractable());
-        assert!(!DocumentFormat::Pdf.is_extractable());
-        assert!(!DocumentFormat::Word.is_extractable());
+        assert!(
+            DocumentFormat::Csv.is_extractable(),
+            "CSV text is extractable without an external tool"
+        );
+        assert!(
+            DocumentFormat::Text.is_extractable(),
+            "plain text is extractable without an external tool"
+        );
+        assert!(
+            !DocumentFormat::Pdf.is_extractable(),
+            "PDF needs pdf-inspector, which this build does not bundle"
+        );
+        assert!(
+            !DocumentFormat::Word.is_extractable(),
+            "Word needs markitdown, which this build does not bundle"
+        );
         // Every non-extractable format explains itself rather than shipping an empty body.
         for format in [
             DocumentFormat::Pdf,
@@ -434,7 +446,7 @@ mod tests {
             extraction.text
         );
         assert_eq!(extraction.line_count, Some(2));
-        assert!(!extraction.truncated);
+        assert!(!extraction.truncated, "a short text file is not truncated");
     }
 
     #[test]
@@ -455,7 +467,10 @@ mod tests {
             .map(|index| format!("{index},v{index}\n"))
             .collect();
         let extraction = extract_csv(&rows);
-        assert!(extraction.truncated);
+        assert!(
+            extraction.truncated,
+            "a text file past the preview cap is truncated"
+        );
         assert!(
             extraction.text.contains("Preview: first"),
             "{}",
@@ -468,14 +483,17 @@ mod tests {
         let extraction = extract_text("hello\nworld\n");
         assert_eq!(extraction.text, "hello\nworld\n");
         assert_eq!(extraction.line_count, Some(2));
-        assert!(!extraction.truncated);
+        assert!(!extraction.truncated, "a short text file is not truncated");
     }
 
     #[test]
     fn a_long_text_file_is_bounded() {
         let long = "x".repeat(TEXT_PREVIEW_CHARS + 100);
         let extraction = extract_text(&long);
-        assert!(extraction.truncated);
+        assert!(
+            extraction.truncated,
+            "a text file past the preview cap is truncated"
+        );
         assert_eq!(extraction.text.chars().count(), TEXT_PREVIEW_CHARS);
     }
 
@@ -492,10 +510,22 @@ mod tests {
         let extraction = extract_csv("a,b\n1,2\n");
         let sidecar = build_sidecar("data/table.csv", &extraction, "abc");
         assert_eq!(sidecar.file_path, "data/table.csv.md");
-        assert!(sidecar.content.contains("bm_parse_semantics: false"));
-        assert!(sidecar.content.contains("type: extracted_text"));
-        assert!(sidecar.content.contains("source: data/table.csv"));
-        assert!(sidecar.content.contains("| a | b |"));
+        assert!(
+            sidecar.content.contains("bm_parse_semantics: false"),
+            "the sidecar must not mint knowledge from extracted text"
+        );
+        assert!(
+            sidecar.content.contains("type: extracted_text"),
+            "the note is still an extracted_text sidecar"
+        );
+        assert!(
+            sidecar.content.contains("source: data/table.csv"),
+            "the sidecar records its source"
+        );
+        assert!(
+            sidecar.content.contains("| a | b |"),
+            "the CSV rows must render as a Markdown table"
+        );
     }
 
     #[test]
@@ -515,10 +545,16 @@ mod tests {
             "{}",
             sidecar.content
         );
-        assert!(sidecar.content.contains("pdf-inspector"));
+        assert!(
+            sidecar.content.contains("pdf-inspector"),
+            "the sidecar must name the missing extractor"
+        );
         // The note is still an `extracted_text` sidecar — it records that extraction was
         // attempted — but its body says plainly that the text is not there.
-        assert!(sidecar.content.contains("type: extracted_text"));
+        assert!(
+            sidecar.content.contains("type: extracted_text"),
+            "the note is still an extracted_text sidecar"
+        );
         assert!(
             sidecar.content.contains("its text is not in this"),
             "{}",
@@ -531,9 +567,18 @@ mod tests {
         let extraction = extract_csv("a,b\n1,2\n");
         let run = build_run_note("data/table.csv", &extraction, "abc", "run-123");
         assert_eq!(run.file_path, "document-ingestion-runs/run-123.md");
-        assert!(run.content.contains("type: document_ingestion_run"));
-        assert!(run.content.contains("status: extracted"));
-        assert!(run.content.contains("checksum: `abc`"));
+        assert!(
+            run.content.contains("type: document_ingestion_run"),
+            "a run note declares its own type"
+        );
+        assert!(
+            run.content.contains("status: extracted"),
+            "the run note records that extraction succeeded"
+        );
+        assert!(
+            run.content.contains("checksum: `abc`"),
+            "the run note records the source checksum"
+        );
     }
 
     #[test]
@@ -548,7 +593,10 @@ mod tests {
     #[test]
     fn only_an_imported_sidecar_is_replaceable() {
         let imported = build_sidecar("a.csv", &extract_csv("a\n1\n"), "abc");
-        assert!(is_replaceable(&imported.content));
+        assert!(
+            is_replaceable(&imported.content),
+            "a note this importer wrote may be replaced"
+        );
         // A hand-written note at the same path is not.
         assert!(!is_replaceable(
             "---\ntitle: My notes\ntype: note\n---\n\nHand written.\n"
@@ -558,6 +606,9 @@ mod tests {
         enriched.push_str("\n- [fact] I added this myself\n");
         // Still replaceable by the marker test; the *caller* refuses when the file
         // changed since the import, which is what the checksum comparison covers.
-        assert!(is_replaceable(&enriched));
+        assert!(
+            is_replaceable(&enriched),
+            "the marker still identifies an importer-written note"
+        );
     }
 }

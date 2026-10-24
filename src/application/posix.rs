@@ -560,8 +560,12 @@ mod tests {
         let result = cat("notes/alpha.md", NOTE, &CatOptions::default()).expect("cat");
         assert_eq!(result.start_line, 1);
         assert_eq!(result.end_line, result.total_lines);
-        assert!(!result.truncated);
-        assert!(result.text.contains("## Closed"));
+        assert!(!result.truncated, "a whole-note read is not truncated");
+        assert!(
+            result.text.contains("## Closed"),
+            "the whole body must be returned: {}",
+            result.text
+        );
     }
 
     #[test]
@@ -576,7 +580,11 @@ mod tests {
             "the heading must be in the section: {}",
             result.text
         );
-        assert!(result.text.contains("- two"));
+        assert!(
+            result.text.contains("- two"),
+            "the section body must be returned: {}",
+            result.text
+        );
         // The next `##` (line 10) ends the section's own range, so its last own line is 9.
         assert_eq!(result.end_line, 9);
     }
@@ -602,7 +610,7 @@ mod tests {
         };
         let result = cat("notes/alpha.md", NOTE, &options).expect("cat");
         assert_eq!((result.start_line, result.end_line), (5, 7));
-        assert!(result.truncated);
+        assert!(result.truncated, "a line range cuts the note short");
         // A range read is numbered, so the caller can cite the lines it read.
         assert_eq!(result.text, "   5 | ## Open items\n   6 | \n   7 | - one");
     }
@@ -625,7 +633,7 @@ mod tests {
         };
         let result = cat("notes/alpha.md", NOTE, &options).expect("cat");
         assert_eq!(result.text.chars().count(), 10);
-        assert!(result.truncated);
+        assert!(result.truncated, "a character budget cuts the note short");
     }
 
     #[test]
@@ -670,8 +678,11 @@ mod tests {
         let names: Vec<&str> = entries.iter().map(|entry| entry.name.as_str()).collect();
         // `notes` is the only directory, so it sorts ahead of the files.
         assert_eq!(names[0], "notes");
-        assert!(entries[0].is_directory);
-        assert!(names.contains(&"root.md"));
+        assert!(
+            entries[0].is_directory,
+            "a directory sorts before the files"
+        );
+        assert!(names.contains(&"root.md"), "{names:?}");
     }
 
     #[test]
@@ -694,10 +705,16 @@ mod tests {
             metadata,
         };
         let predicate = MetadataPredicate::parse("confidence>0.6").expect("predicate");
-        assert!(predicate.matches(&note.metadata));
+        assert!(
+            predicate.matches(&note.metadata),
+            "0.9 is above 0.6 numerically"
+        );
         // The string comparison would have put "0.9" below "0.6"; the numeric one does not.
         let low = MetadataPredicate::parse("confidence>0.95").expect("predicate");
-        assert!(!low.matches(&note.metadata));
+        assert!(
+            !low.matches(&note.metadata),
+            "0.9 is below 0.95, so the predicate must not match"
+        );
     }
 
     #[test]

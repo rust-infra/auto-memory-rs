@@ -467,7 +467,10 @@ mod tests {
 
     #[test]
     fn an_unknown_topic_returns_none() {
-        assert!(find("no-such-tool").is_none());
+        assert!(
+            find("no-such-tool").is_none(),
+            "an unknown topic must not resolve to a page"
+        );
     }
 
     #[test]

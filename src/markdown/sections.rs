@@ -230,7 +230,10 @@ mod tests {
         assert_eq!(sections[0].level, 0);
         assert_eq!(sections[0].anchor(), "preamble");
         assert_eq!(sections[0].start_line, 1);
-        assert!(sections[0].content.contains("Some prose first."));
+        assert!(
+            sections[0].content.contains("Some prose first."),
+            "the preamble keeps the text before the first heading"
+        );
     }
 
     #[test]
@@ -263,7 +266,10 @@ mod tests {
 
     #[test]
     fn an_empty_note_has_no_sections() {
-        assert!(split_sections("").is_empty());
+        assert!(
+            split_sections("").is_empty(),
+            "an empty note has no sections"
+        );
     }
 
     #[test]

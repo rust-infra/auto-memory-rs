@@ -3743,7 +3743,14 @@ async fn okf_export_command(args: OkfExportArgs) -> ExitCode {
         &concepts.iter().collect::<Vec<_>>(),
     ));
 
-    match auto_memory::application::okf::publish(&files, &destination, replace) {
+    // The CLI flag becomes the enum the publisher takes, so the call site says what
+    // happens to an existing bundle instead of passing a bare `bool`.
+    let existing = if replace {
+        auto_memory::application::okf::ExistingBundle::Replace
+    } else {
+        auto_memory::application::okf::ExistingBundle::Refuse
+    };
+    match auto_memory::application::okf::publish(&files, &destination, existing) {
         Ok(()) => {
             if json {
                 println!(
