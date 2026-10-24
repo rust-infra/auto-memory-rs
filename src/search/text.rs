@@ -18,7 +18,7 @@ use crate::search::query::{
 };
 
 /// Maximum display length of the reference `content` field.
-const CONTENT_DISPLAY_LIMIT: usize = 4000;
+pub(crate) const CONTENT_DISPLAY_LIMIT: usize = 4000;
 
 /// Options for one text-search page.
 #[derive(Debug, Clone)]
@@ -211,7 +211,21 @@ fn run_query(
             .entity_id
             .and_then(|id| entity_info.get(&id).cloned())
             .unwrap_or_default();
-        let content = row.snippet.as_deref().map(truncate_content);
+        // Upstream 0.24.0 (#1455): a result says how long the whole note is and whether
+        // `content` is only a prefix of it, so a caller can decide to read the note
+        // instead of trusting a truncated preview.
+        let (content, content_length, content_truncated) = match row.snippet.as_deref() {
+            Some(snippet) => {
+                let length = snippet.chars().count();
+                let truncated = length > CONTENT_DISPLAY_LIMIT;
+                (
+                    Some(truncate_content(snippet)),
+                    Some(length),
+                    Some(truncated),
+                )
+            }
+            None => (None, None, None),
+        };
         results.push(SearchResult {
             title: row.title.clone().unwrap_or_default(),
             item_type: parsed_type,
@@ -220,6 +234,8 @@ fn run_query(
             external_id: entity_external_id,
             permalink: row.permalink.clone(),
             content: content.clone(),
+            content_length,
+            content_truncated,
             // The reference only fills `matched_chunk` for vector/hybrid hits; FTS
             // results omit the field entirely.
             matched_chunk: None,

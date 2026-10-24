@@ -172,6 +172,53 @@ pub(crate) fn page_payload(page: &SearchPageAlias) -> Value {
     })
 }
 
+/// Strip note content from a search page, keeping identifiers and pagination.
+///
+/// Upstream 0.24.0 (#686): `compact=True` lets an agent pick what to read before paying
+/// for the bodies. Every row keeps its title, permalink, `external_id`, `file_path`,
+/// score, type and metadata — and `content_length`/`content_truncated`, so the caller
+/// still knows how much it is deferring — while `content` and `matched_chunk` go away.
+pub(crate) fn compact_search_payload(mut payload: Value) -> Value {
+    if let Some(rows) = payload["results"].as_array_mut() {
+        for row in rows {
+            if let Some(object) = row.as_object_mut() {
+                object.remove("content");
+                object.remove("matched_chunk");
+            }
+        }
+    }
+    payload
+}
+
+/// Strip note content from a `build_context` payload, keeping the graph.
+///
+/// Upstream 0.24.0 (#686, #1702): compact context keeps the primary identifiers,
+/// relation targets and pagination, and drops the note bodies. `compact=True` also
+/// stops loading observations, so the payload carries no `observations` key at all —
+/// text-mode compact already hid them, and #1702 made JSON agree.
+pub(crate) fn compact_context_payload(mut payload: Value) -> Value {
+    if let Some(primary) = payload["results"]
+        .as_array_mut()
+        .and_then(|rows| rows.first_mut())
+        .and_then(|row| row.as_object_mut())
+    {
+        primary.remove("observations");
+        if let Some(entity) = primary["primary_result"].as_object_mut() {
+            entity.remove("content");
+        }
+        // Related rows carry a body only when the traversal hydrated one; a relation row
+        // keeps its `to_entity`/`from_entity` targets, which is what compact is for.
+        if let Some(related) = primary["related_results"].as_array_mut() {
+            for row in related {
+                if let Some(object) = row.as_object_mut() {
+                    object.remove("content");
+                }
+            }
+        }
+    }
+    payload
+}
+
 /// Carry a `search_notes` filter set over to the semantic legs.
 pub(crate) fn vector_options(options: &TextSearchOptions) -> VectorSearchOptions {
     VectorSearchOptions {

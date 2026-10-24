@@ -35,6 +35,12 @@ const PROPERTY_EXCEPTIONS: &[(&str, &str)] = &[
     ("edit_note", "expected_checksum"),
     // NEW_IN_0_24: metadata-only reads (#1552).
     ("read_note", "include_content"),
+    // NEW_IN_0_24: bounded line reads (#1501).
+    ("read_note", "start_line"),
+    ("read_note", "end_line"),
+    // NEW_IN_0_24: content-free pages (#686).
+    ("search_notes", "compact"),
+    ("build_context", "compact"),
 ];
 
 /// Reference-required arguments this port treats as optional.

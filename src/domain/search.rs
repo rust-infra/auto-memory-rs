@@ -82,6 +82,17 @@ pub struct SearchResult {
     pub permalink: Option<String>,
     /// Body/content preview.
     pub content: Option<String>,
+    /// Length of the note's full content, when `content` is a bounded preview
+    /// (upstream 0.24.0 #1455).
+    ///
+    /// A caller can tell "this is the whole note" from "this is the first N
+    /// characters" without fetching the note, which is what makes `compact` search
+    /// pages trustworthy.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub content_length: Option<usize>,
+    /// Whether `content` is a prefix of a longer note body (upstream 0.24.0 #1455).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub content_truncated: Option<bool>,
     /// Matched vector chunk or content snippet.
     pub matched_chunk: Option<String>,
     /// Project-relative file path.

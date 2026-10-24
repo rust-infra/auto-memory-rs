@@ -14,7 +14,7 @@ use crate::runtime::rerank::RerankRequest;
 use crate::search::chunking::ChunkRecord;
 use crate::search::embedding::cosine_similarity;
 use crate::search::rerank::{rerank_and_paginate, rerank_candidate_limit};
-use crate::search::text::{SearchPage, TextSearchOptions, truncate_content};
+use crate::search::text::{CONTENT_DISPLAY_LIMIT, SearchPage, TextSearchOptions, truncate_content};
 use crate::storage::{SearchRowView, Store, VectorChunkRow};
 
 /// Default minimum cosine similarity (reference `semantic_min_similarity`).
@@ -451,6 +451,19 @@ async fn hydrate_entries(
                 .flatten()
         });
         let hydration = entity_hydration(store, row.entity_id).await?;
+        // Upstream 0.24.0 (#1455): report the snippet's real length and whether the
+        // preview was cut, so a `compact` page stays honest about what it omits.
+        let (content, content_length, content_truncated) = match snippet {
+            Some(snippet) => {
+                let length = snippet.chars().count();
+                (
+                    Some(truncate_content(snippet)),
+                    Some(length),
+                    Some(length > CONTENT_DISPLAY_LIMIT),
+                )
+            }
+            None => (None, None, None),
+        };
         results.push(SearchResult {
             title: row.title.clone().unwrap_or_default(),
             item_type,
@@ -458,7 +471,9 @@ async fn hydrate_entries(
             entity: hydration.0,
             external_id: hydration.1,
             permalink: row.permalink.clone(),
-            content: snippet.map(truncate_content),
+            content,
+            content_length,
+            content_truncated,
             matched_chunk,
             file_path: row.file_path.clone(),
             metadata: row.metadata.as_deref().and_then(|raw| {

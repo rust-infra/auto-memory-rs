@@ -152,6 +152,12 @@ pub(crate) struct ReadNoteParams {
     /// paying for the whole note.
     #[serde(deserialize_with = "lax")]
     pub(crate) include_content: Option<bool>,
+    /// First line of a bounded read (1-based, upstream 0.24.0 #1501).
+    #[serde(deserialize_with = "lax")]
+    pub(crate) start_line: Option<u64>,
+    /// Last line of a bounded read, inclusive (upstream 0.24.0 #1501).
+    #[serde(deserialize_with = "lax")]
+    pub(crate) end_line: Option<u64>,
     #[serde(deserialize_with = "lax")]
     pub(crate) page: Option<u64>,
     /// Older spelling of `page`.
@@ -343,6 +349,11 @@ pub(crate) struct SearchNotesParams {
     /// Search every registered project and merge the pages.
     #[serde(deserialize_with = "lax")]
     pub(crate) search_all_projects: Option<bool>,
+    /// Return identifiers, metadata, relation targets and pagination without note
+    /// content, so an agent can pick what to read before paying for the bodies
+    /// (upstream 0.24.0 #686).
+    #[serde(deserialize_with = "lax")]
+    pub(crate) compact: Option<bool>,
     #[serde(deserialize_with = "lax")]
     pub(crate) output_format: Option<String>,
 }
@@ -427,6 +438,13 @@ pub(crate) struct BuildContextParams {
     pub(crate) page: Option<u64>,
     #[serde(deserialize_with = "lax")]
     pub(crate) page_size: Option<u64>,
+    /// Identifiers, metadata, relation targets and pagination without note content
+    /// (upstream 0.24.0 #686, #1702).
+    ///
+    /// Compact mode also stops loading observations, and compact JSON carries no
+    /// `observations` key — text-mode compact already hid them.
+    #[serde(deserialize_with = "lax")]
+    pub(crate) compact: Option<bool>,
     #[serde(deserialize_with = "lax")]
     pub(crate) output_format: Option<String>,
 }

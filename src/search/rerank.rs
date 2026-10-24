@@ -221,6 +221,8 @@ mod tests {
             external_id: None,
             permalink: Some(title.to_owned()),
             content: Some(chunk.to_owned()),
+            content_length: Some(chunk.chars().count()),
+            content_truncated: Some(false),
             matched_chunk: None,
             file_path: format!("{title}.md"),
             updated_at: None,

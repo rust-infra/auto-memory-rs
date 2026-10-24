@@ -565,6 +565,26 @@ impl<'a> McpServer<'a> {
         let page = params.page();
         let page_size = params.page_size();
 
+        // Upstream 0.24.0 (#1501): a bounded read returns numbered lines plus the next
+        // range to read. It is a text rendering, so it is answered before the
+        // `output_format` split — a caller that asks for lines wants the numbered body
+        // whatever else it passed.
+        if let Some(start) = params.start_line {
+            let Some((_, raw)) = self.read_note_source(&identifier).await? else {
+                return Ok(text_result(
+                    self.note_text(&identifier, page, page_size).await?,
+                ));
+            };
+            let range = crate::application::lines::read_lines(
+                &raw,
+                Some(start as usize),
+                params.end_line.map(|end| end as usize),
+            )?;
+            return Ok(text_result(crate::application::lines::render_line_range(
+                &identifier,
+                &range,
+            )));
+        }
         if !output_format.is_json() {
             return Ok(text_result(
                 self.note_text(&identifier, page, page_size).await?,
@@ -1402,8 +1422,14 @@ impl<'a> McpServer<'a> {
         if params.search_all_projects.unwrap_or(false) {
             return self.search_all_projects(params, output_format).await;
         }
+        let compact = params.compact.unwrap_or(false);
         match self.search_outcome(params).await? {
             SearchOutcome::Payload(payload) => {
+                let payload = if compact {
+                    compact_search_payload(payload)
+                } else {
+                    payload
+                };
                 if output_format.is_json() {
                     return json_result(payload);
                 }
@@ -1516,6 +1542,11 @@ impl<'a> McpServer<'a> {
             "total_is_exact": total_is_exact,
             "has_more": any_project_has_more || total > end || merged.len() > end,
         });
+        let payload = if params.compact.unwrap_or(false) {
+            compact_search_payload(payload)
+        } else {
+            payload
+        };
         if output_format.is_json() {
             return json_result(payload);
         }
@@ -1729,14 +1760,17 @@ impl<'a> McpServer<'a> {
             since: Some(timeframe::parse_timeframe(timeframe)?),
         };
         let graph = build_context(self.store, self.project_id, &url, &options).await?;
+        let mut response = serde_json::to_value(&graph)?;
+        if params.compact.unwrap_or(false) {
+            response = compact_context_payload(response);
+        }
         if output_format == OutputFormat::Text {
-            let response = serde_json::to_value(&graph)?;
             return Ok(text_result(crate::application::context::render_markdown(
                 &response,
                 &self.project_name,
             )));
         }
-        json_result(serde_json::to_value(graph)?)
+        json_result(response)
     }
 
     async fn list_directory(&mut self, params: &ListDirectoryParams) -> Result<Value> {
