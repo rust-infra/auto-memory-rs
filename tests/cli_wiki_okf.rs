@@ -22,7 +22,11 @@ fn run(index: &std::path::Path, args: &[&str]) -> (bool, String, String) {
     let mut command = Command::new(env!("CARGO_BIN_EXE_auto-memory"));
     command.args(args);
     if !matches!(args.first(), Some(&"okf")) || !matches!(args.get(1), Some(&"check")) {
-        command.arg("--index").arg(index).arg("--project").arg("oracle");
+        command
+            .arg("--index")
+            .arg(index)
+            .arg("--project")
+            .arg("oracle");
     }
     let output = command.output().expect("verb");
     (

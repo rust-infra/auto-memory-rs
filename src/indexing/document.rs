@@ -141,6 +141,23 @@ fn metadata_to_instant(time: std::io::Result<SystemTime>) -> timeframe::Instant 
 }
 
 /// Collect every markdown file under `root` (sorted, dot-directories skipped).
+/// Every markdown file in `root`, honouring the vault's ignore rules.
+///
+/// Upstream 0.24.0 (#1254): `bm prune` compares this set against the index to find entries
+/// the current `.bmignore` or `.gitignore` now excludes. Indexing does not do that on its
+/// own, because an upgrade that changed the ignore defaults would otherwise drop notes.
+pub fn markdown_files_honouring_ignore(root: &Path) -> Vec<(String, PathBuf)> {
+    let rules = crate::indexing::watcher::IgnoreRules::load(root, &[]);
+    markdown_files(root)
+        .into_iter()
+        .filter(|(relative, _)| !rules.should_ignore(relative))
+        .collect()
+}
+
+/// Every markdown file in `root` as `(project-relative path, absolute path)`.
+///
+/// This is the raw walk, without the ignore rules: indexing has its own entry point and
+/// `prune` uses [`markdown_files_honouring_ignore`] to compare the vault against the index.
 pub fn markdown_files(root: &Path) -> Vec<(String, PathBuf)> {
     let mut files: Vec<(String, PathBuf)> = WalkDir::new(root)
         // The reference walk uses `Path::is_dir`, so it descends into symlinked

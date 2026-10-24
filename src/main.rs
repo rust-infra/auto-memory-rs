@@ -116,9 +116,29 @@ enum Command {
     /// Export or check an OKF v0.2 bundle.
     #[command(subcommand)]
     Okf(OkfCommand),
+    /// Remove index entries for files the ignore rules now exclude.
+    Prune(PruneArgs),
     /// Read or write the user configuration file.
     #[command(subcommand)]
     Config(ConfigCommand),
+}
+
+/// `auto-memory prune`.
+#[derive(Args)]
+struct PruneArgs {
+    /// Index database (defaults to `AUTO_MEMORY_INDEX`, the user config file, then
+    /// the standard path).
+    #[arg(long, value_name = "DB")]
+    index: Option<PathBuf>,
+    /// Project name (defaults to `default_project`, else the single registered one).
+    #[arg(long, value_name = "NAME")]
+    project: Option<String>,
+    /// List what would be removed without removing it.
+    #[arg(long)]
+    dry_run: bool,
+    /// Skip the confirmation prompt.
+    #[arg(long)]
+    yes: bool,
 }
 
 /// `auto-memory okf <export|check>`.
@@ -490,6 +510,9 @@ struct StatusArgs {
     /// Project permalink.
     #[arg(long, value_name = "NAME")]
     project: String,
+    /// Report readiness per stage as JSON (upstream 0.24.0 #1414).
+    #[arg(long)]
+    json: bool,
 }
 
 /// `auto-memory doctor`.
@@ -527,6 +550,22 @@ enum ProjectCommand {
     Remove(ProjectRemoveArgs),
     /// Show or set the default project.
     Default(ProjectDefaultArgs),
+    /// Reindex one project's vault.
+    Index(ProjectIndexArgs),
+}
+
+/// `project index <name>`.
+#[derive(Args)]
+struct ProjectIndexArgs {
+    /// Project name to reindex.
+    name: String,
+    /// Index database (defaults to `AUTO_MEMORY_INDEX`, the user config file, then
+    /// the standard path).
+    #[arg(long, value_name = "DB")]
+    index: Option<PathBuf>,
+    /// Rebuild every note instead of reconciling.
+    #[arg(long)]
+    full: bool,
 }
 
 /// `project default [<permalink>]`.
@@ -795,6 +834,7 @@ fn main() -> ExitCode {
         Command::Import(command) => async_command(import_command(command)),
         Command::Wiki(command) => async_command(wiki_command(command)),
         Command::Okf(command) => async_command(okf_command(command)),
+        Command::Prune(args) => async_command(prune_command(args)),
         Command::Context(args) => async_command(context_command(args)),
         Command::Schema(command) => async_command(schema_command(command)),
         Command::Hook(args) => async_command(hook_command(args)),
@@ -1501,6 +1541,7 @@ async fn project_command(command: ProjectCommand) -> ExitCode {
         ProjectCommand::List(args) => project_list_command(args).await,
         ProjectCommand::Remove(args) => project_remove_command(args).await,
         ProjectCommand::Default(args) => project_default_command(args).await,
+        ProjectCommand::Index(args) => project_index_command(args).await,
     }
 }
 
@@ -2895,6 +2936,7 @@ async fn status_command(args: StatusArgs) -> ExitCode {
     let StatusArgs {
         index,
         project: permalink,
+        json,
     } = args;
     let Some((index, _user)) = cli_index(index) else {
         return ExitCode::FAILURE;
@@ -2917,13 +2959,57 @@ async fn status_command(args: StatusArgs) -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    match store.counts(project.id).await {
-        Ok(counts) => print_json(&counts),
+    // Upstream 0.24.0 (#1414): readiness is reported per stage, with a phase that tells a
+    // never-indexed project from an idle one. A project with files but no indexed notes is
+    // not "idle" — it has never been indexed, which is the state a caller has to fix.
+    let counts = match store.counts(project.id).await {
+        Ok(counts) => counts,
         Err(error) => {
             eprintln!("failed to read counts: {error}");
-            ExitCode::FAILURE
+            return ExitCode::FAILURE;
         }
+    };
+    let vault = PathBuf::from(&project.path);
+    let files_on_disk = auto_memory::indexing::document::markdown_files(&vault).len();
+    let phase = if counts.entities == 0 && files_on_disk == 0 {
+        "empty"
+    } else if counts.entities == 0 {
+        "never_indexed"
+    } else {
+        "idle"
+    };
+    let report = serde_json::json!({
+        "project": project.name,
+        "permalink": project.permalink,
+        "phase": phase,
+        "stages": {
+            // The files stage is ready when every markdown file has an entity row.
+            "files": { "ready": files_on_disk as i64 <= counts.entities, "on_disk": files_on_disk, "indexed": counts.entities },
+            // Relations are resolved in the same pass as the notes, so they are ready
+            // whenever the notes are.
+            "relations": { "ready": counts.entities > 0 || files_on_disk == 0, "resolved": counts.relations },
+            // Embeddings need the runtime, which this report cannot see; a zero count with
+            // notes present means they have not been built.
+            "embeddings": { "ready": false, "vectors": serde_json::Value::Null },
+        },
+        "entities": counts.entities,
+        "observations": counts.observations,
+        "relations": counts.relations,
+    });
+    if json {
+        print_json(&report);
+        return ExitCode::SUCCESS;
     }
+    println!("project:   {}", project.name);
+    println!("permalink: {}", project.permalink);
+    println!("phase:     {phase}");
+    println!(
+        "files:     {} on disk, {} indexed",
+        files_on_disk, counts.entities
+    );
+    println!("relations: {}", counts.relations);
+    println!("observations: {}", counts.observations);
+    ExitCode::SUCCESS
 }
 
 /// `context <url>`: resolve a `memory://` URL and print its graph context.
@@ -3369,6 +3455,139 @@ fn strip_observation_lines(body: &str) -> String {
         })
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+/// `project index <name>` — reindex one project's vault.
+///
+/// Upstream 0.24.0 (#1414): `bm project index NAME` reindexes one project, which is the
+/// recovery path a watcher failure points at.
+async fn project_index_command(args: ProjectIndexArgs) -> ExitCode {
+    let ProjectIndexArgs { name, index, full } = args;
+    let Some((index, _user)) = cli_index(index) else {
+        return ExitCode::FAILURE;
+    };
+    let mut store = match Store::open(&index).await {
+        Ok(store) => store,
+        Err(error) => {
+            eprintln!("failed to open index {}: {error}", index.display());
+            return ExitCode::FAILURE;
+        }
+    };
+    let Some(row) = (match store.projects().await {
+        Ok(rows) => rows,
+        Err(error) => return usage(&error.to_string()),
+    })
+    .into_iter()
+    .find(|row| row.name == name || row.permalink == name) else {
+        return usage(&format!("project not found: {name}"));
+    };
+    let vault = PathBuf::from(&row.path);
+    let options = IndexOptions::new(&row.permalink);
+    let mut service = IndexService::new(&mut store, row.id, &vault, options);
+    let result = if full {
+        service
+            .full_rebuild()
+            .await
+            .map(|report| format!("rebuilt {} note(s)", report.documents_indexed))
+    } else {
+        service.reconcile().await.map(|report| {
+            format!(
+                "reconciled: {} added, {} updated, {} removed",
+                report.added, report.updated, report.removed
+            )
+        })
+    };
+    match result {
+        Ok(summary) => {
+            println!("{summary}");
+            ExitCode::SUCCESS
+        }
+        Err(error) => usage(&format!("could not index {name}: {error}")),
+    }
+}
+
+/// `auto-memory prune` — remove index entries the ignore rules now exclude.
+///
+/// Upstream 0.24.0 (#1254). Indexing does not do this on its own, because an upgrade that
+/// changed the ignore defaults would otherwise drop notes without anyone asking.
+async fn prune_command(args: PruneArgs) -> ExitCode {
+    let PruneArgs {
+        index,
+        project,
+        dry_run,
+        yes,
+    } = args;
+    let (mut store, project_name, vault) = match posix_target(index, project).await {
+        Ok(target) => target,
+        Err(message) => return usage(&message),
+    };
+    let Some(row) = (match store.projects().await {
+        Ok(rows) => rows,
+        Err(error) => return usage(&error.to_string()),
+    })
+    .into_iter()
+    .find(|row| row.name == project_name) else {
+        return usage(&format!("project not found: {project_name}"));
+    };
+    // The set of files the vault still holds, honouring the current ignore rules.
+    let present: std::collections::HashSet<String> =
+        auto_memory::indexing::document::markdown_files_honouring_ignore(&vault)
+            .into_iter()
+            .map(|(relative, _)| relative)
+            .collect();
+    // The set the index holds.
+    let indexed = match store.entities_with_metadata(row.id).await {
+        Ok(rows) => rows,
+        Err(error) => return usage(&error.to_string()),
+    };
+    let stale: Vec<String> = indexed
+        .into_iter()
+        .map(|row| row.file_path)
+        .filter(|file_path| !present.contains(file_path))
+        .collect();
+    if stale.is_empty() {
+        println!("nothing to prune");
+        return ExitCode::SUCCESS;
+    }
+    println!(
+        "{} entr{} to prune:",
+        stale.len(),
+        if stale.len() == 1 { "y" } else { "ies" }
+    );
+    for file_path in &stale {
+        println!("  {file_path}");
+    }
+    if dry_run {
+        return ExitCode::SUCCESS;
+    }
+    if !yes {
+        // A destructive verb asks first; a non-interactive run gets a refusal rather than
+        // a hang.
+        eprint!("Remove these entries? [y/N] ");
+        use std::io::Write as _;
+        let _ = std::io::stderr().flush();
+        let mut answer = String::new();
+        if std::io::stdin().read_line(&mut answer).is_err()
+            || !matches!(answer.trim().to_ascii_lowercase().as_str(), "y" | "yes")
+        {
+            println!("aborted");
+            return ExitCode::FAILURE;
+        }
+    }
+    let options = IndexOptions::new(&row.permalink);
+    let mut service = IndexService::new(&mut store, row.id, &vault, options);
+    let mut removed = 0usize;
+    for file_path in &stale {
+        match service.remove_file(file_path).await {
+            Ok(_) => removed += 1,
+            Err(error) => eprintln!("could not prune {file_path}: {error}"),
+        }
+    }
+    println!(
+        "pruned {removed} entr{}",
+        if removed == 1 { "y" } else { "ies" }
+    );
+    ExitCode::SUCCESS
 }
 
 /// `auto-memory okf <export|check>` — write or validate an OKF bundle.
