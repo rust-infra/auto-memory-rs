@@ -8,6 +8,7 @@ pub mod frontmatter;
 pub mod observations;
 pub mod parser;
 pub mod relations;
+pub mod sections;
 pub mod serialize;
 pub mod wikilinks;
 

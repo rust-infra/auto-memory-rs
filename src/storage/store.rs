@@ -550,6 +550,26 @@ impl Store {
             tx.execute("DELETE FROM observation WHERE entity_id = ?1", [entity_id])?;
             tx.execute("DELETE FROM relation WHERE from_id = ?1", [entity_id])?;
             tx.execute("DELETE FROM search_index WHERE entity_id = ?1", [entity_id])?;
+            tx.execute("DELETE FROM note_section WHERE entity_id = ?1", [entity_id])?;
+
+            // Upstream 0.24.0 (#1398): index the body by heading. The POSIX read tools
+            // address a section instead of re-parsing the file on every call.
+            for section in crate::markdown::sections::split_sections(&document.content) {
+                tx.execute(
+                    "INSERT INTO note_section
+                        (project_id, entity_id, level, heading, start_line, end_line, content)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                    params![
+                        project_id,
+                        entity_id,
+                        i64::from(section.level),
+                        section.heading,
+                        section.start_line as i64,
+                        section.end_line as i64,
+                        section.content
+                    ],
+                )?;
+            }
 
             let mut observation_ids: Vec<(i64, &crate::domain::observation::Observation)> =
                 Vec::with_capacity(document.observations.len());

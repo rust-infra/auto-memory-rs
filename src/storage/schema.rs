@@ -83,6 +83,22 @@ CREATE TABLE IF NOT EXISTS relation (
     UNIQUE (from_id, to_name, relation_type)
 );
 
+-- Upstream 0.24.0 (#1398): a note's body indexed by heading, so the POSIX-style read
+-- tools can address one section instead of the whole file.
+CREATE TABLE IF NOT EXISTS note_section (
+    id         INTEGER PRIMARY KEY,
+    project_id INTEGER NOT NULL REFERENCES project(id) ON DELETE CASCADE,
+    entity_id  INTEGER NOT NULL REFERENCES entity(id) ON DELETE CASCADE,
+    level      INTEGER NOT NULL DEFAULT 0,
+    heading    TEXT NOT NULL DEFAULT '',
+    start_line INTEGER NOT NULL,
+    end_line   INTEGER NOT NULL,
+    content    TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS ix_note_section_entity_id ON note_section (entity_id);
+CREATE INDEX IF NOT EXISTS ix_note_section_heading ON note_section (heading);
+
 CREATE INDEX IF NOT EXISTS ix_relation_from_id ON relation (from_id);
 CREATE INDEX IF NOT EXISTS ix_relation_to_id ON relation (to_id);
 CREATE INDEX IF NOT EXISTS ix_relation_type ON relation (relation_type);
