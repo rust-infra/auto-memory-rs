@@ -192,7 +192,13 @@ outputs.
 
 | Reference verb | Port status | Note |
 |---|---|---|
-| `status` | different | Same name, different payload. The port prints index counts for one project; the reference reports the project-index observation (`--json`, `--verbose`, `--wait`, `--local`/`--cloud`). |
+| `status` | yes | Reports readiness per stage (files, relations, embeddings) with a phase that tells a never-indexed project from an idle one, and `--json`. The reference's `--verbose`/`--wait`/`--local`/`--cloud` are not ported. |
+| `cat`, `grep`, `ls`, `find`, `tail`, `man` | yes | The POSIX-style read verbs, sharing their logic with the MCP tools of the same names. `ls --tree` is this port's spelling of the reference's `bm tree`. |
+| `prune` | yes | Removes index entries the current ignore rules exclude; `--dry-run` and `--yes`. |
+| `project index` | yes | Reindexes one project (`--full` to rebuild). |
+| `wiki` | yes | `status`, `validate`, `rebuild`. |
+| `okf` | yes | `export`, `check`. |
+| `import document` | partial | CSV and text-like formats extract; PDF and Office are recognised and their sidecar records the missing extractor. `import chatgpt`/`memory-json`/`claude` are not ported. |
 | `reindex` | yes | Same verb. The port adds `--vault`/`--index` and keeps `--full`/`--embeddings`. |
 | `mcp` | yes | stdio and Streamable HTTP. The reference's third transport, `sse`, is not ported. |
 | `project` | partial | Port: `add`, `list`, `remove`. Reference also has `default`, `move`, `ls`, `info` and the cloud pair `set-cloud`/`set-local`. |
@@ -202,10 +208,9 @@ outputs.
 | `inspect` | no — parked | `query`/`chunks`; internal retrieval stages the golden replays already pin. |
 | `orphans` | no — parked | Entities with no relations; derivable from the relation table. |
 | `format` | no | Runs the configured formatter over `.md`/`.json`/`.canvas` in the vault. The only unported verb that writes user files. |
-| `import` | no | The `memory-json`, `chatgpt`, and `claude` importers. |
 | `reset` | no | Drops and recreates the tables. `reindex --full` covers the rebuild half; the drop is not exposed. |
 | `config` | no | `list`/`get`/`set`/`unset` over the reference's `config.json`. The port does not read *that* file and hardcodes the reference **defaults**, so a behavior knob set there is ignored. It does read its own `~/.config/auto-memory/config.json` (`src/config.rs`, now live) — but only for the `index`/`default_project` routing keys, not for any behavior knob. |
-| `tool` | no | Wraps the MCP tools as CLI verbs (`bm tool write-note` …). The port exposes the workflows it needs as first-class verbs instead. |
+| `tool` | no | Wraps the MCP tools as CLI verbs (`bm tool write-note` …). The port exposes the workflows it needs as first-class verbs instead, which now covers the POSIX surface the reference reaches through `tool`. |
 | `man` | no | Man-page installation; tooling, no behavior. |
 | `update` | no | Self-update of the Python distribution; meaningless for a Rust binary. |
 | `workspace`, `cloud`, `ci` | no — out of scope | Cloud/Web surfaces, scoped out from the start. |

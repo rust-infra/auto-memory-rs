@@ -12,7 +12,7 @@ Project specs and plans are stored outside the user-documentation tree in `../sp
 |---|---|
 | [auto-memory-rs-spec.md](../specs/auto-memory-rs-spec.md) | High-level spec: scope, architecture, Rust organization, DoD |
 | [auto-memory-rs-execution-plan.md](../plans/auto-memory-rs-execution-plan.md) | Phased execution plan (Phase 0–15, milestones, risks) |
-| [reference.md](reference.md) | **Pinned reference baseline** — 0.23.2, source paths, verified constants, corrections |
+| [reference.md](reference.md) | **Pinned reference baseline** — 0.23.2, source paths, verified constants, corrections. Behavior now tracks 0.24.1; see [alignment-0.24.md](alignment-0.24.md) for the delta and for which golden values are still 0.23.2. |
 | [data-format.md](data-format.md) | Markdown/knowledge format contract (frontmatter, observations, relations, permalinks, FTS row model) |
 | [search-spec.md](../specs/search-spec.md) | Search behavior contract (FTS5, vector, hybrid fusion, filters, pagination) |
 | [context-spec.md](../specs/context-spec.md) | `build_context` / memory:// / recent_activity contract |
@@ -49,6 +49,7 @@ Project specs and plans are stored outside the user-documentation tree in `../sp
 | [patterns.md](patterns.md) | Design patterns in use, ones deliberately avoided, and the trigger to revisit each |
 | [../tools/README.md](../tools/README.md) | Oracle harness usage (`tools/export_reference.py`) |
 | [../tests/golden/README.md](../tests/golden/README.md) | Golden corpus layout, canonicalization, verified behaviors |
+| [alignment-0.24.md](alignment-0.24.md) | **0.24.1 alignment record** — what moved from the 0.23.2 baseline, which golden assertions were deliberately relaxed and where the new behavior is pinned |
 | [review-and-gaps-2026-09-09.md](review-and-gaps-2026-09-09.md) | Doc review + gap log (2026-09-09) |
 
 ## Status (through 2026-09-19)
