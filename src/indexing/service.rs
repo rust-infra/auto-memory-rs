@@ -157,16 +157,39 @@ impl<'a> IndexService<'a> {
             LoadOutcome::Missing => return Ok(IndexOutcome::Missing),
         };
 
-        if let Some(existing) = self
+        let existed = match self
             .store
             .entity_by_file_path(self.project_id, relative_path)
             .await?
         {
-            if existing.checksum.as_deref() == Some(indexed.checksum.as_str()) {
-                return Ok(IndexOutcome::Unchanged);
+            Some(existing) => {
+                if existing.checksum.as_deref() == Some(indexed.checksum.as_str()) {
+                    return Ok(IndexOutcome::Unchanged);
+                }
+                true
             }
-        }
+            None => false,
+        };
         self.write(&indexed, resolve).await?;
+        // Upstream 0.24.0 (#1422, #1636): the accepted-change journal is what the Wiki
+        // projector's log reads. An index pass records the same create/update kinds a tool
+        // write does, so a `project add` or a watcher pass produces a usable log too.
+        if let Some(entity) = self
+            .store
+            .entity_by_file_path(self.project_id, relative_path)
+            .await?
+        {
+            self.store
+                .record_change(
+                    self.project_id,
+                    entity.id,
+                    if existed { "update" } else { "create" },
+                    relative_path,
+                    None,
+                    None,
+                )
+                .await?;
+        }
         Ok(IndexOutcome::Indexed)
     }
 

@@ -898,6 +898,75 @@ impl Store {
         }).await
     }
 
+    /// Record one accepted change in the per-project journal.
+    ///
+    /// Upstream 0.24.0 (#1636, #1422): the journal is what the Wiki projector's `log.md`
+    /// reads, and it is where a delete's actor is recorded. `actor` is `None` for a local
+    /// runtime, which supplies no author — the row is written exactly as before in that
+    /// case, so a local vault gains no provenance it did not ask for.
+    pub async fn record_change(
+        &mut self,
+        project_id: i64,
+        entity_id: i64,
+        kind: &str,
+        file_path: &str,
+        previous_path: Option<&str>,
+        actor: Option<&str>,
+    ) -> Result<()> {
+        let kind = kind.to_owned();
+        let file_path = file_path.to_owned();
+        let previous_path = previous_path.map(str::to_owned);
+        let actor = actor.map(str::to_owned);
+        self.call(move |conn| {
+            conn.execute(
+                "INSERT INTO accepted_change
+                    (project_id, entity_id, kind, file_path, previous_path, actor,
+                     created_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                params![
+                    project_id,
+                    entity_id,
+                    kind,
+                    file_path,
+                    previous_path,
+                    actor,
+                    timeframe::now_storage_timestamp()
+                ],
+            )?;
+            Ok(())
+        })
+        .await
+    }
+
+    /// The most recent journal entries for one project, newest first.
+    pub async fn recent_changes(
+        &self,
+        project_id: i64,
+        limit: usize,
+    ) -> Result<Vec<crate::application::wiki::ChangeEntry>> {
+        self.call(move |conn| {
+            let mut statement = conn.prepare(
+                "SELECT kind, file_path, previous_path, created_at
+                   FROM accepted_change WHERE project_id = ?1
+                  ORDER BY id DESC LIMIT ?2",
+            )?;
+            let rows = statement.query_map(params![project_id, limit as i64], |row| {
+                Ok(crate::application::wiki::ChangeEntry {
+                    kind: row.get(0)?,
+                    file_path: row.get(1)?,
+                    previous_path: row.get(2)?,
+                    created_at: row.get(3)?,
+                })
+            })?;
+            let mut entries = Vec::new();
+            for row in rows {
+                entries.push(row?);
+            }
+            Ok(entries)
+        })
+        .await
+    }
+
     /// Every entity in one project with its frontmatter as `key -> rendered value`.
     ///
     /// The POSIX `find` tool filters on frontmatter, which is what the index stores; reading

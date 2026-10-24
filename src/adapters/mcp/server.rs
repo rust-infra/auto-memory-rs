@@ -90,6 +90,49 @@ pub const MCP_PROTOCOL_VERSION: &str = "2024-11-05";
 /// Server name reported in `initialize`.
 pub const SERVER_NAME: &str = "auto-memory-rs";
 
+/// Choose the notes worth mentioning as "similar existing" (upstream 0.24.0 #1259).
+///
+/// Split out of [`McpServer::similar_notes`] so the selection rule is testable without an
+/// embedding runtime: the threshold, the self-exclusion, the already-linked skip and the
+/// cap are all decisions, not plumbing.
+fn select_similar_notes(
+    rows: Vec<crate::domain::SearchResult>,
+    written_path: &str,
+    linked_targets: &[String],
+    similarity_floor: f32,
+    limit: usize,
+) -> Vec<Value> {
+    let mut similar = Vec::new();
+    for row in rows {
+        if row.file_path == written_path || row.score < similarity_floor {
+            continue;
+        }
+        // A target is stored as authored, so compare against the path, the permalink and
+        // the title a link could have named.
+        let already_linked = linked_targets.iter().any(|target| {
+            target == &row.file_path
+                || row
+                    .permalink
+                    .as_deref()
+                    .is_some_and(|permalink| target == permalink)
+                || target == &row.title
+                || row.file_path.ends_with(&format!("{target}.md"))
+        });
+        if already_linked {
+            continue;
+        }
+        similar.push(json!({
+            "title": row.title,
+            "permalink": row.permalink,
+            "file_path": row.file_path,
+        }));
+        if similar.len() >= limit {
+            break;
+        }
+    }
+    similar
+}
+
 /// One `resources/read` result.
 fn resource_contents(uri: &str, mime_type: &str, text: String) -> Value {
     json!({
@@ -752,12 +795,17 @@ impl<'a> McpServer<'a> {
     /// The JSON miss payload: nulls, plus suggestion rows when the search found any.
     async fn missing_note(&mut self, identifier: &str, page: u32, page_size: u32) -> Result<Value> {
         let candidates = self.search_candidates(identifier, page, page_size).await?;
+        // Upstream 0.24.0 (#1495): a JSON read of a note that does not exist carries
+        // `error: "NOTE_NOT_FOUND"`, so a caller can branch on the code instead of
+        // inferring absence from a null title. The other fields stay null, which is the
+        // shape the 0.23.2 corpus pins.
         let mut payload = json!({
             "title": Value::Null,
             "permalink": Value::Null,
             "file_path": Value::Null,
             "content": Value::Null,
             "frontmatter": Value::Null,
+            "error": "NOTE_NOT_FOUND",
         });
         if !candidates.is_empty() {
             // The JSON surface names the fallback rows by title/permalink/file_path; the
@@ -970,18 +1018,49 @@ impl<'a> McpServer<'a> {
             .entity_by_file_path(self.project_id, &written.file_path)
             .await?;
 
+        // Upstream 0.24.0 (#1422, #1636): the journal feeds the Wiki projector's log.
+        if let Some(entity) = &entity {
+            self.store
+                .record_change(
+                    self.project_id,
+                    entity.id,
+                    if existed { "update" } else { "create" },
+                    &written.file_path,
+                    None,
+                    None,
+                )
+                .await?;
+        }
+
+        // Upstream 0.24.0 (#1259, #1718): a *create* on a server with semantic search
+        // probes the vector index with the new note's title and opening content, and
+        // reports notes it looks like. This is an advisory, never an overwrite: the
+        // caller decides whether to merge, link, or ignore.
+        let similar = if action == "created" {
+            self.similar_notes(&title, &content, &written.file_path)
+                .await?
+        } else {
+            Vec::new()
+        };
+
         if output_format.is_json() {
             // Upstream 0.24.0 (#1586, #1683): the write reports the note's real
             // checksum, which is the value `expected_checksum` compares against. It
             // used to be `null`/`checksum: unknown`, so a guarded edit had nothing to
             // send back.
-            return json_result(json!({
+            let mut payload = json!({
                 "title": written.title,
                 "permalink": written.permalink,
                 "file_path": written.file_path,
                 "checksum": written.checksum,
                 "action": action,
-            }));
+            });
+            // The list is present only when there is something to say, so a caller that
+            // checks for it sees a create with no near-duplicates as a plain create.
+            if !similar.is_empty() {
+                payload["similar_notes"] = json!(similar);
+            }
+            return json_result(payload);
         }
 
         // note: text output also includes index-derived observations and relations.
@@ -1047,6 +1126,31 @@ impl<'a> McpServer<'a> {
             summary.push(String::new());
             summary.push("## Tags".to_owned());
             summary.push(format!("- {}", tags.join(", ")));
+        }
+        // Upstream 0.24.0 (#1259): the advisory is phrased as a question, because the
+        // decision is the caller's, and it names the ways out rather than only the
+        // problem.
+        if !similar.is_empty() {
+            summary.push(String::new());
+            summary.push("## Similar existing notes".to_owned());
+            summary.push(String::new());
+            summary.push(
+                "This new note looks like notes that already exist. Did you mean to write to                  one of them?"
+                    .to_owned(),
+            );
+            summary.push(String::new());
+            for note in &similar {
+                summary.push(format!(
+                    "- {} (`{}`)",
+                    note["title"].as_str().unwrap_or_default(),
+                    note["permalink"].as_str().unwrap_or_default()
+                ));
+            }
+            summary.push(String::new());
+            summary.push(
+                "You can merge this content into an existing note with `edit_note` and delete                  this one, link the two with a relation, or ignore this message."
+                    .to_owned(),
+            );
         }
         Ok(text_result(format!(
             "{}\n\n[Session: Using project '{}']",
@@ -1397,6 +1501,22 @@ impl<'a> McpServer<'a> {
                 Ok(text_result("false"))
             };
         };
+        // Upstream 0.24.0 (#1636): a delete records its actor in the accepted-change
+        // journal, as creates, updates, edits and moves already did. The row is written
+        // *before* the entity row goes away, because the journal's `entity_id` references
+        // it: recording after the delete would either violate the foreign key or lose the
+        // link the log needs. A local runtime supplies no actor, so the column stays NULL
+        // and the vault gains no provenance it did not ask for.
+        self.store
+            .record_change(
+                self.project_id,
+                entity.id,
+                "delete",
+                &entity.file_path,
+                None,
+                None,
+            )
+            .await?;
         {
             let mut notes = self.notes();
             notes.delete_note(&entity.file_path).await?;
@@ -2175,6 +2295,79 @@ impl<'a> McpServer<'a> {
         Ok(notes)
     }
 
+    /// Notes a freshly created note looks like (upstream 0.24.0 #1259, #1718).
+    ///
+    /// The probe is the new note's title plus its opening content, embedded and searched
+    /// against the vector index. Three rules keep the advisory useful rather than noisy:
+    ///
+    /// - the threshold is **0.70**, not search's relevance floor (0.55): on the default
+    ///   model the nearest neighbour of almost any note clears 0.55, so that floor listed
+    ///   unrelated notes. Measured on the default model, a rewrite of an existing note
+    ///   scores 0.77–0.93 and an unrelated neighbour at most 0.67;
+    /// - notes the new note already links to are skipped — the caller has made the
+    ///   relationship explicit, so pointing it out is noise;
+    /// - no scores are reported. A near-duplicate and a merely related note land in the
+    ///   same band, so the decision belongs to the caller, which has the context the score
+    ///   does not.
+    ///
+    /// A server with no embedding runtime answers with an empty list rather than an error:
+    /// the note was written, and the advisory is not part of that contract.
+    async fn similar_notes(
+        &mut self,
+        title: &str,
+        content: &str,
+        written_path: &str,
+    ) -> Result<Vec<Value>> {
+        /// Similarity below which a neighbour is not worth mentioning on the default model.
+        const SIMILARITY_FLOOR: f32 = 0.70;
+        /// How much of the body the probe embeds: enough to characterize the note without
+        /// paying to embed the whole thing.
+        const PROBE_CHARS: usize = 600;
+
+        let Some(provider) = self.provider.as_ref() else {
+            return Ok(Vec::new());
+        };
+        // The body is stripped of its frontmatter by the caller's parse, but a note written
+        // with an inline fence could still carry one; the probe only needs the opening.
+        let opening: String = content.chars().take(PROBE_CHARS).collect();
+        let probe = format!("{title}\n\n{opening}");
+        let query_vector = provider.embed_query(&probe)?;
+        let options = crate::search::vector::VectorSearchOptions {
+            min_similarity: SIMILARITY_FLOOR,
+            page: 1,
+            page_size: 5,
+            ..crate::search::vector::VectorSearchOptions::default()
+        };
+        let page = crate::search::vector::search_vector(
+            self.store,
+            self.project_id,
+            &query_vector,
+            provider.model_name(),
+            &options,
+            None,
+        )
+        .await?;
+
+        // The relations the new note declares, so a note it already links to is skipped.
+        let linked: Vec<String> = crate::markdown::parse_document(written_path, content)
+            .map(|document| {
+                document
+                    .relations
+                    .iter()
+                    .map(|relation| relation.target.clone())
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        Ok(select_similar_notes(
+            page.results,
+            written_path,
+            &linked,
+            SIMILARITY_FLOOR,
+            3,
+        ))
+    }
+
     /// `cat` — print a note, one section of it, or a line range.
     async fn cat_tool(&mut self, params: &CatParams) -> Result<Value> {
         let path = required_str(params.path.as_deref(), "path")?.to_owned();
@@ -2842,6 +3035,95 @@ mod tests {
     /// (`specs/mcp-spec.md` §3–5) that clients and the reference golden depend on. The
     /// list below is the contract, deliberately not derived from the enum, so a
     /// renamed variant cannot quietly rename a tool on the wire.
+    /// A search row for the similar-notes selection rule.
+    fn similar_row(title: &str, file_path: &str, score: f32) -> crate::domain::SearchResult {
+        crate::domain::SearchResult {
+            title: title.to_owned(),
+            item_type: crate::domain::SearchItemType::Entity,
+            score,
+            entity: None,
+            external_id: None,
+            permalink: Some(format!("oracle/{}", file_path.trim_end_matches(".md"))),
+            content: None,
+            content_length: None,
+            content_truncated: None,
+            matched_chunk: None,
+            file_path: file_path.to_owned(),
+            updated_at: None,
+            metadata: None,
+            entity_id: None,
+            observation_id: None,
+            relation_id: None,
+            category: None,
+            from_entity: None,
+            to_entity: None,
+            relation_type: None,
+        }
+    }
+
+    #[test]
+    fn a_neighbour_below_the_floor_is_not_mentioned() {
+        // Upstream 0.24.0 #1718: the floor is 0.70, not search's 0.55 relevance floor.
+        // An unrelated neighbour of almost any note clears 0.55 on the default model.
+        let rows = vec![
+            similar_row("Unrelated", "unrelated.md", 0.55),
+            similar_row("Related", "related.md", 0.72),
+        ];
+        let selected = select_similar_notes(rows, "new.md", &[], 0.70, 3);
+        assert_eq!(selected.len(), 1, "{selected:?}");
+        assert_eq!(selected[0]["title"], serde_json::json!("Related"));
+    }
+
+    #[test]
+    fn the_written_note_is_never_its_own_suggestion() {
+        let rows = vec![similar_row("New", "new.md", 0.99)];
+        let selected = select_similar_notes(rows, "new.md", &[], 0.70, 3);
+        assert!(selected.is_empty(), "{selected:?}");
+    }
+
+    #[test]
+    fn a_note_the_new_note_already_links_to_is_skipped() {
+        // Upstream 0.24.0 #1718: the caller made the relationship explicit already.
+        let rows = vec![similar_row("Linked", "linked.md", 0.95)];
+        let linked = vec!["linked".to_owned()];
+        let selected = select_similar_notes(rows, "new.md", &linked, 0.70, 3);
+        assert!(selected.is_empty(), "{selected:?}");
+    }
+
+    #[test]
+    fn a_link_by_title_or_path_also_skips_the_note() {
+        let by_title = vec![similar_row("Linked By Title", "somewhere.md", 0.95)];
+        assert!(
+            select_similar_notes(by_title, "new.md", &["Linked By Title".to_owned()], 0.70, 3)
+                .is_empty()
+        );
+        let by_path = vec![similar_row("Other", "notes/other.md", 0.95)];
+        assert!(
+            select_similar_notes(by_path, "new.md", &["notes/other.md".to_owned()], 0.70, 3)
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn at_most_three_suggestions_are_reported() {
+        let rows: Vec<_> = (0..6)
+            .map(|index| similar_row(&format!("Note {index}"), &format!("n{index}.md"), 0.9))
+            .collect();
+        let selected = select_similar_notes(rows, "new.md", &[], 0.70, 3);
+        assert_eq!(selected.len(), 3, "{selected:?}");
+    }
+
+    #[test]
+    fn a_suggestion_carries_no_score() {
+        // A near-duplicate and a merely related note land in the same band, so the number
+        // would imply a precision the model does not have.
+        let rows = vec![similar_row("Related", "related.md", 0.85)];
+        let selected = select_similar_notes(rows, "new.md", &[], 0.70, 3);
+        assert!(selected[0].get("score").is_none(), "{selected:?}");
+        assert!(selected[0]["permalink"].is_string());
+        assert!(selected[0]["file_path"].is_string());
+    }
+
     #[test]
     fn tool_names_cover_the_advertised_definitions() {
         let names: Vec<&str> = ToolName::iter().map(<&str>::from).collect();

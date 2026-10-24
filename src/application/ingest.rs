@@ -286,6 +286,11 @@ pub fn build_sidecar(
     frontmatter.push_str("bm_parse_semantics: false\n");
     frontmatter.push_str(&format!("source: {source_relative}\n"));
     frontmatter.push_str(&format!("source_checksum: {source_checksum}\n"));
+    // Upstream 0.24.0 (#1744): the sidecar is linked to the file it came from by a
+    // `derived_from` relation, so the graph answers "what was extracted from this?".
+    // The relation is authored in the body, which is where the parser reads relations
+    // from; it survives even though the extracted text itself is graph-silent.
+    frontmatter.push_str(&format!("derived_from: {source_relative}\n"));
     if let Some(count) = extraction.line_count {
         frontmatter.push_str(&format!("source_lines: {count}\n"));
     }
@@ -295,6 +300,10 @@ pub fn build_sidecar(
     frontmatter.push_str("---\n\n");
 
     let mut body = String::new();
+    // The relation line is authored text, not extracted text, so it belongs above the
+    // `bm_parse_semantics: false` boundary: a `derived_from` edge is knowledge about the
+    // sidecar, while the document's own words are not.
+    body.push_str(&format!("- derived_from [[{source_relative}]]\n\n"));
     if let Some(hint) = extraction.format.extractor_hint() {
         // Not an empty body: an empty sidecar reads as "this document has no text".
         body.push_str(&format!("> [!warning] Not extracted\n>\n> {hint}\n\n"));

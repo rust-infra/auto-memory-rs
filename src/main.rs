@@ -3873,16 +3873,25 @@ async fn wiki_command(command: WikiCommand) -> ExitCode {
                 .collect(),
             Err(error) => return usage(&error.to_string()),
         };
+    // Upstream 0.24.0 (#1422): the log's entries come from the accepted-change journal,
+    // so it lists changes in the order they happened rather than in file order.
+    let changes = match store
+        .recent_changes(row.id, auto_memory::application::wiki::LOG_ENTRIES)
+        .await
+    {
+        Ok(changes) => changes,
+        Err(error) => return usage(&error.to_string()),
+    };
     let mut existing = std::collections::BTreeMap::new();
     for outcome in
-        auto_memory::application::wiki::plan(&notes, &[], &std::collections::BTreeMap::new())
+        auto_memory::application::wiki::plan(&notes, &changes, &std::collections::BTreeMap::new())
     {
         let file_path = outcome.file_path().to_owned();
         if let Ok(content) = std::fs::read_to_string(vault.join(&file_path)) {
             existing.insert(file_path, content);
         }
     }
-    let outcomes = auto_memory::application::wiki::plan(&notes, &[], &existing);
+    let outcomes = auto_memory::application::wiki::plan(&notes, &changes, &existing);
 
     match verb {
         "status" => {

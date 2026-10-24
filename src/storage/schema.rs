@@ -96,12 +96,18 @@ CREATE TABLE IF NOT EXISTS relation (
 CREATE TABLE IF NOT EXISTS accepted_change (
     id          INTEGER PRIMARY KEY,
     project_id  INTEGER NOT NULL REFERENCES project(id) ON DELETE CASCADE,
-    entity_id   INTEGER NOT NULL REFERENCES entity(id) ON DELETE CASCADE,
+    -- The journal outlives the note it records: a delete's own row must survive the
+    -- delete, so the reference is SET NULL rather than CASCADE (upstream 0.24.0 #1636).
+    entity_id   INTEGER REFERENCES entity(id) ON DELETE SET NULL,
     -- `create`, `update`, `edit`, `move`, or `delete`.
     kind        TEXT NOT NULL,
     file_path   TEXT NOT NULL,
     -- The path before a move, for the log's "moved from" line.
     previous_path TEXT,
+    -- Who made the change, when the runtime identifies its callers. A local runtime
+    -- supplies no actor, so the column stays NULL and the vault gains no provenance it
+    -- did not ask for (upstream 0.24.0 #1636).
+    actor       TEXT,
     created_at  TEXT NOT NULL
 );
 
