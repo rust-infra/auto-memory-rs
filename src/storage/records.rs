@@ -201,3 +201,14 @@ pub struct Counts {
     /// Indexed relations.
     pub relations: i64,
 }
+
+/// One entity's path, title, and stringified frontmatter, for the POSIX `find` tool.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MetadataRow {
+    /// Project-relative file path.
+    pub file_path: String,
+    /// Note title.
+    pub title: String,
+    /// Frontmatter as `key -> rendered value`.
+    pub metadata: std::collections::BTreeMap<String, String>,
+}

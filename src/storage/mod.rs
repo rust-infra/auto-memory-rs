@@ -8,8 +8,8 @@ pub mod schema;
 pub mod store;
 
 pub use records::{
-    Counts, DirectoryEntityRow, EntityRow, ObservationRow, ProjectRow, RelatedRow, RelationRow,
-    SearchRowView, VectorChunkRow, VectorRow,
+    Counts, DirectoryEntityRow, EntityRow, MetadataRow, ObservationRow, ProjectRow, RelatedRow,
+    RelationRow, SearchRowView, VectorChunkRow, VectorRow,
 };
 pub use schema::SCHEMA_VERSION;
 pub use store::{Store, checksum_bytes, deterministic_uuid};

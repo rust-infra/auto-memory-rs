@@ -16,11 +16,12 @@ use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncWrite, AsyncWriteExt};
 
 use super::helpers::*;
 use super::params::{
-    BuildContextParams, ChatgptFetchParams, ChatgptSearchParams, CreateMemoryProjectParams,
-    DeleteNoteParams, DeleteProjectParams, EditNoteParams, ListDirectoryParams,
-    ListMemoryProjectsParams, MoveNoteParams, ReadContentParams, ReadNoteParams,
-    RecentActivityParams, SchemaDiffParams, SchemaInferParams, SchemaValidateParams,
-    SearchNotesParams, ToolArguments, ViewNoteParams, WriteNoteParams,
+    BuildContextParams, CatParams, ChatgptFetchParams, ChatgptSearchParams,
+    CreateMemoryProjectParams, DeleteNoteParams, DeleteProjectParams, EditNoteParams, FindParams,
+    GrepParams, ListDirectoryParams, ListMemoryProjectsParams, LsParams, ManParams, MoveNoteParams,
+    ReadContentParams, ReadNoteParams, RecentActivityParams, SchemaDiffParams, SchemaInferParams,
+    SchemaValidateParams, SearchNotesParams, TailParams, ToolArguments, ViewNoteParams,
+    WriteNoteParams,
 };
 
 use strum::{Display, EnumIter, EnumString, IntoEnumIterator, IntoStaticStr};
@@ -110,6 +111,18 @@ pub enum ToolName {
     CreateMemoryProject,
     /// `delete_project` — delete an Auto Memory project.
     DeleteProject,
+    /// `cat` — read a note by path, section, or line range (upstream 0.24.0 #1398).
+    Cat,
+    /// `grep` — find matching lines across notes.
+    Grep,
+    /// `ls` — list a directory, with projects as mount points.
+    Ls,
+    /// `find` — find notes by metadata predicates.
+    Find,
+    /// `tail` — the last lines of recently updated notes.
+    Tail,
+    /// `man` — the packaged manual.
+    Man,
 }
 
 /// How a tool renders its result (`output_format`).
@@ -555,6 +568,27 @@ impl<'a> McpServer<'a> {
                     .await?
             }
             ToolName::AutoMemoryDiagnostics => self.diagnostics().await?,
+            ToolName::Cat => {
+                self.cat_tool(&CatParams::from_arguments(&arguments))
+                    .await?
+            }
+            ToolName::Grep => {
+                self.grep_tool(&GrepParams::from_arguments(&arguments))
+                    .await?
+            }
+            ToolName::Ls => self.ls_tool(&LsParams::from_arguments(&arguments)).await?,
+            ToolName::Find => {
+                self.find_tool(&FindParams::from_arguments(&arguments))
+                    .await?
+            }
+            ToolName::Tail => {
+                self.tail_tool(&TailParams::from_arguments(&arguments))
+                    .await?
+            }
+            ToolName::Man => {
+                self.man_tool(&ManParams::from_arguments(&arguments))
+                    .await?
+            }
         })
     }
 
@@ -1897,6 +1931,234 @@ impl<'a> McpServer<'a> {
         )))
     }
 
+    /// Every markdown note in this project as `(relative path, body)`.
+    ///
+    /// The POSIX tools read the vault rather than the index: `cat` and `grep` exist to show
+    /// a caller the file as it is, and a stale index would make them lie.
+    fn vault_notes(&self) -> Result<Vec<(String, String)>> {
+        let mut notes = Vec::new();
+        for (relative, path) in crate::indexing::document::markdown_files(&self.vault) {
+            let body = std::fs::read_to_string(&path)?;
+            // The tools address the note body, so the frontmatter block is stripped the
+            // same way the index does it.
+            let body = crate::markdown::serialize::split_frontmatter(&body)
+                .ok()
+                .flatten()
+                .map_or(body.clone(), |(_, rest)| rest.to_owned());
+            notes.push((relative, body));
+        }
+        notes.sort_by(|left, right| left.0.cmp(&right.0));
+        Ok(notes)
+    }
+
+    /// `cat` — print a note, one section of it, or a line range.
+    async fn cat_tool(&mut self, params: &CatParams) -> Result<Value> {
+        let path = required_str(params.path.as_deref(), "path")?.to_owned();
+        let resolved =
+            crate::application::posix::resolve_path(self.store, &self.project_name, &path).await?;
+        let file_path = if resolved.relative.is_empty() {
+            path.clone()
+        } else {
+            resolved.relative.clone()
+        };
+        let absolute = self.vault.join(&file_path);
+        let raw = std::fs::read_to_string(&absolute).map_err(|error| Error::InvalidArgument {
+            message: if error.kind() == std::io::ErrorKind::NotFound {
+                format!("no such note: {file_path}")
+            } else {
+                format!("could not read {file_path}: {error}")
+            },
+        })?;
+        let body = crate::markdown::serialize::split_frontmatter(&raw)
+            .ok()
+            .flatten()
+            .map_or(raw.clone(), |(_, rest)| rest.to_owned());
+        let options = crate::application::posix::CatOptions {
+            section: params.section.clone(),
+            start_line: params.start_line.map(|line| line as usize),
+            end_line: params.end_line.map(|line| line as usize),
+            max_chars: params.max_chars.map(|chars| chars as usize),
+        };
+        let result = crate::application::posix::cat(&file_path, &body, &options)?;
+        Ok(text_result(crate::application::posix::render_cat(&result)))
+    }
+
+    /// `grep` — find matching lines, case-insensitively.
+    async fn grep_tool(&mut self, params: &GrepParams) -> Result<Value> {
+        let pattern = required_str(params.pattern.as_deref(), "pattern")?.to_owned();
+        let notes = self.vault_notes()?;
+        // A `path` narrows the search the same way a shell path argument does: a file
+        // matches exactly, a directory prefix matches everything under it.
+        let scoped: Vec<(String, String)> = match params.path.as_deref() {
+            None | Some("/") | Some("") => notes,
+            Some(path) => {
+                let wanted = path
+                    .trim_start_matches('/')
+                    .trim_end_matches('/')
+                    .to_owned();
+                notes
+                    .into_iter()
+                    .filter(|(file_path, _)| {
+                        file_path == &wanted || file_path.starts_with(&format!("{wanted}/"))
+                    })
+                    .collect()
+            }
+        };
+        let context_lines = params.context_lines.unwrap_or(0) as usize;
+        let max_matches = params.max_matches.unwrap_or(100).min(1000) as usize;
+        let found = crate::application::posix::grep(&scoped, &pattern, context_lines, max_matches);
+        let rendered = crate::application::posix::render_grep(&found);
+        if rendered.is_empty() {
+            // Upstream 0.24.0 (#1685): grep matches keywords by default, so a pattern in no
+            // note returns no results rather than a nearest-neighbour list.
+            return Ok(text_result(format!("No matches for '{pattern}'.")));
+        }
+        Ok(text_result(rendered))
+    }
+
+    /// `ls` — list a directory, with projects as mount points.
+    async fn ls_tool(&mut self, params: &LsParams) -> Result<Value> {
+        let path = params.path.as_deref().unwrap_or("/");
+        let trimmed = path.trim().trim_start_matches('/').trim_end_matches('/');
+        if trimmed.is_empty() {
+            // `ls /` lists the mounts, so a caller can see what it can reach.
+            let mounts = crate::application::posix::mounts(self.store).await?;
+            if mounts.is_empty() {
+                return Ok(text_result("No projects registered.".to_owned()));
+            }
+            let lines: Vec<String> = mounts
+                .iter()
+                .map(|mount| format!("{}/  {}", mount.name, mount.path))
+                .collect();
+            return Ok(text_result(lines.join("\n")));
+        }
+        let notes = self.vault_notes()?;
+        let entries = crate::application::posix::ls(&notes, trimmed);
+        if entries.is_empty() {
+            return Ok(text_result(format!("No files in '{trimmed}'.")));
+        }
+        let lines: Vec<String> = entries
+            .iter()
+            .map(|entry| {
+                if entry.is_directory {
+                    format!("{}/", entry.name)
+                } else {
+                    entry.name.clone()
+                }
+            })
+            .collect();
+        Ok(text_result(lines.join("\n")))
+    }
+
+    /// `find` — find notes by metadata predicates.
+    async fn find_tool(&mut self, params: &FindParams) -> Result<Value> {
+        let mut predicates = Vec::new();
+        for expression in params.predicate.as_deref().unwrap_or_default() {
+            predicates.push(crate::application::posix::MetadataPredicate::parse(
+                expression,
+            )?);
+        }
+        let fields = params.fields.clone().unwrap_or_default();
+        // Metadata comes from the index: `find` filters on frontmatter, which is exactly
+        // what the index stores.
+        let rows = self.store.entities_with_metadata(self.project_id).await?;
+        let notes: Vec<crate::application::posix::FindNote<'_>> = rows
+            .iter()
+            .map(|row| crate::application::posix::FindNote {
+                file_path: &row.file_path,
+                title: &row.title,
+                metadata: row.metadata.clone(),
+            })
+            .collect();
+        let scoped: Vec<crate::application::posix::FindNote<'_>> = match params.path.as_deref() {
+            None | Some("/") | Some("") => notes,
+            Some(path) => {
+                let wanted = path
+                    .trim_start_matches('/')
+                    .trim_end_matches('/')
+                    .to_owned();
+                notes
+                    .into_iter()
+                    .filter(|note| {
+                        note.file_path == wanted
+                            || note.file_path.starts_with(&format!("{wanted}/"))
+                    })
+                    .collect()
+            }
+        };
+        let hits = crate::application::posix::find(&scoped, &predicates, &fields);
+        if hits.is_empty() {
+            return Ok(text_result("No notes match.".to_owned()));
+        }
+        Ok(text_result(crate::application::posix::render_find(&hits)))
+    }
+
+    /// `tail` — the last lines of recently updated notes.
+    async fn tail_tool(&mut self, params: &TailParams) -> Result<Value> {
+        let count = params.count.unwrap_or(10).min(200) as usize;
+        let notes = self.vault_notes()?;
+        let scoped: Vec<(String, String)> = match params.path.as_deref() {
+            None | Some("/") | Some("") => notes,
+            Some(path) => {
+                let wanted = path
+                    .trim_start_matches('/')
+                    .trim_end_matches('/')
+                    .to_owned();
+                notes
+                    .into_iter()
+                    .filter(|(file_path, _)| {
+                        file_path == &wanted || file_path.starts_with(&format!("{wanted}/"))
+                    })
+                    .collect()
+            }
+        };
+        // The newest notes first, so a caller tailing the vault sees what changed.
+        let mut ordered: Vec<(String, String)> = scoped;
+        ordered.sort_by(|left, right| {
+            let left_time = std::fs::metadata(self.vault.join(&left.0))
+                .and_then(|metadata| metadata.modified())
+                .ok();
+            let right_time = std::fs::metadata(self.vault.join(&right.0))
+                .and_then(|metadata| metadata.modified())
+                .ok();
+            right_time.cmp(&left_time)
+        });
+        let mut out: Vec<String> = Vec::new();
+        for (file_path, body) in ordered.iter().take(20) {
+            let lines = crate::application::posix::tail(body, count);
+            if lines.is_empty() {
+                continue;
+            }
+            out.push(format!("==> {file_path} <=="));
+            for (_, line) in lines {
+                out.push(line);
+            }
+        }
+        if out.is_empty() {
+            return Ok(text_result("No notes.".to_owned()));
+        }
+        Ok(text_result(out.join("\n")))
+    }
+
+    /// `man` — the packaged manual.
+    async fn man_tool(&mut self, params: &ManParams) -> Result<Value> {
+        let pages = crate::application::manual::pages();
+        if params.list.unwrap_or(false) || params.topic.is_none() {
+            let mut lines = vec!["Available pages:".to_owned()];
+            for page in pages {
+                lines.push(format!("  {}  — {}", page.name, page.summary));
+            }
+            return Ok(text_result(lines.join("\n")));
+        }
+        let topic = params.topic.as_deref().unwrap_or_default();
+        match crate::application::manual::find(topic) {
+            Some(page) => Ok(text_result(page.body.to_owned())),
+            None => Ok(text_result(format!(
+                "No manual entry for '{topic}'. Try man(list=True)."
+            ))),
+        }
+    }
+
     async fn read_content(&mut self, params: &ReadContentParams) -> Result<Value> {
         let raw_path = params
             .path()
@@ -2386,6 +2648,13 @@ mod tests {
                 "list_memory_projects",
                 "create_memory_project",
                 "delete_project",
+                // Upstream 0.24.0 (#1398): the POSIX-style read tools, on by default.
+                "cat",
+                "grep",
+                "ls",
+                "find",
+                "tail",
+                "man",
             ],
             "the wire names moved"
         );

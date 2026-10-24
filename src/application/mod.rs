@@ -4,7 +4,9 @@ pub mod activity;
 pub mod context;
 pub mod directory;
 pub mod lines;
+pub mod manual;
 pub mod note;
+pub mod posix;
 pub mod schema;
 pub mod schema_text;
 pub mod schema_tools;
@@ -23,6 +25,11 @@ pub use directory::{
     DirectorySortOrder, MAX_DIRECTORY_PAGE_SIZE, list_directory, render_directory_text,
 };
 pub use lines::{DEFAULT_LINE_WINDOW, LineRange, read_lines, render_line_range};
+pub use posix::{
+    CatOptions, CatResult, FindHit, GrepMatch, ListEntry, MetadataPredicate, MountPoint,
+    PredicateOp, ResolvedPath, cat, find, grep, ls, mounts, render_cat, render_find, render_grep,
+    resolve_path, tail,
+};
 pub use schema::{SchemaService, entity_frontmatter};
 pub use schema_text::{
     format_drift_report, format_inference_report, format_validation_report, no_notes_guidance,

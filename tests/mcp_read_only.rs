@@ -41,7 +41,8 @@ fn read_only_sessions_hide_and_refuse_the_write_tools() {
     ] {
         assert!(tools.contains(&kept), "{kept} must stay");
     }
-    assert_eq!(tools.len(), 20 - 6, "read tools plus the schema trio");
+    // Six of the 26 tools mutate; the rest stay visible.
+    assert_eq!(tools.len(), 26 - 6, "read tools plus the schema trio");
 
     // Reads still work…
     assert!(

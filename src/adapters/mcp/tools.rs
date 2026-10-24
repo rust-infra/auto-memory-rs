@@ -222,6 +222,60 @@ impl ToolName {
                     "output_format": { "type": "string", "enum": ["text", "json"] },
                 }),
             ),
+            Self::Cat => (
+                "Print a note's body, or one section, line range, or budget of it.",
+                &["path"],
+                json!({
+                    "path": { "type": "string" },
+                    "section": { "type": "string" },
+                    "start_line": { "type": "integer" },
+                    "end_line": { "type": "integer" },
+                    "max_chars": { "type": "integer" },
+                }),
+            ),
+            Self::Grep => (
+                "Find lines matching a pattern across notes.",
+                &["pattern"],
+                json!({
+                    "pattern": { "type": "string" },
+                    "path": { "type": "string" },
+                    "context_lines": { "type": "integer" },
+                    "max_matches": { "type": "integer" },
+                    "semantic": { "type": "boolean" },
+                }),
+            ),
+            Self::Ls => (
+                "List a directory. `/` lists the project mount points.",
+                &[],
+                json!({
+                    "path": { "type": "string" },
+                }),
+            ),
+            Self::Find => (
+                "Find notes by metadata predicates such as `status=active`.",
+                &[],
+                json!({
+                    "path": { "type": "string" },
+                    "predicate": { "type": "array", "items": { "type": "string" } },
+                    "fields": { "type": "array", "items": { "type": "string" } },
+                }),
+            ),
+            Self::Tail => (
+                "Print the last lines of recently updated notes.",
+                &[],
+                json!({
+                    "path": { "type": "string" },
+                    "count": { "type": "integer" },
+                }),
+            ),
+            Self::Man => (
+                "Print a manual page, or list the available ones.",
+                &[],
+                json!({
+                    "topic": { "type": "string" },
+                    "list": { "type": "boolean" },
+                }),
+            ),
             Self::DeleteProject => (
                 "Delete an Auto Memory project.",
                 &["project_name"],

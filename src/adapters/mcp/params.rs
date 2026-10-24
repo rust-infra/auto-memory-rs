@@ -984,3 +984,93 @@ mod tests {
         assert_eq!(params.query.as_deref(), Some("ranking"));
     }
 }
+
+/// `cat` — read a note by path, section, or line range (upstream 0.24.0 #1398).
+#[derive(Debug, Default, Deserialize)]
+#[serde(default)]
+pub(crate) struct CatParams {
+    /// Required: the note's path inside its project.
+    #[serde(deserialize_with = "lax")]
+    pub(crate) path: Option<String>,
+    /// Read only this heading's section.
+    #[serde(deserialize_with = "lax")]
+    pub(crate) section: Option<String>,
+    /// First line to return, 1-based.
+    #[serde(deserialize_with = "lax")]
+    pub(crate) start_line: Option<u64>,
+    /// Last line to return, inclusive.
+    #[serde(deserialize_with = "lax")]
+    pub(crate) end_line: Option<u64>,
+    /// Stop after roughly this many characters.
+    #[serde(deserialize_with = "lax")]
+    pub(crate) max_chars: Option<u64>,
+}
+
+/// `grep` — find matching lines across notes.
+#[derive(Debug, Default, Deserialize)]
+#[serde(default)]
+pub(crate) struct GrepParams {
+    /// Required: the text to find.
+    #[serde(deserialize_with = "lax")]
+    pub(crate) pattern: Option<String>,
+    /// Restrict the search to this path.
+    #[serde(deserialize_with = "lax")]
+    pub(crate) path: Option<String>,
+    /// Widen each match into a window of this many lines.
+    #[serde(deserialize_with = "lax")]
+    pub(crate) context_lines: Option<u64>,
+    /// Bound the number of returned lines.
+    #[serde(deserialize_with = "lax")]
+    pub(crate) max_matches: Option<u64>,
+    /// Rank by meaning instead of matching literally (upstream 0.24.0 #1685).
+    #[serde(deserialize_with = "lax")]
+    pub(crate) semantic: Option<bool>,
+}
+
+/// `ls` — list a directory, with projects as mount points.
+#[derive(Debug, Default, Deserialize)]
+#[serde(default)]
+pub(crate) struct LsParams {
+    /// Directory to list; `/` lists the project mount points.
+    #[serde(deserialize_with = "lax")]
+    pub(crate) path: Option<String>,
+}
+
+/// `find` — find notes by metadata predicates.
+#[derive(Debug, Default, Deserialize)]
+#[serde(default)]
+pub(crate) struct FindParams {
+    /// Restrict the search to this path.
+    #[serde(deserialize_with = "lax")]
+    pub(crate) path: Option<String>,
+    /// Predicates such as `status=active` or `confidence>0.6`.
+    #[serde(deserialize_with = "lax_strings")]
+    pub(crate) predicate: Option<Vec<String>>,
+    /// Frontmatter fields to project into the output.
+    #[serde(deserialize_with = "lax_strings")]
+    pub(crate) fields: Option<Vec<String>>,
+}
+
+/// `tail` — the last lines of recently updated notes.
+#[derive(Debug, Default, Deserialize)]
+#[serde(default)]
+pub(crate) struct TailParams {
+    /// Restrict to this path.
+    #[serde(deserialize_with = "lax")]
+    pub(crate) path: Option<String>,
+    /// How many lines per note.
+    #[serde(deserialize_with = "lax")]
+    pub(crate) count: Option<u64>,
+}
+
+/// `man` — the packaged manual.
+#[derive(Debug, Default, Deserialize)]
+#[serde(default)]
+pub(crate) struct ManParams {
+    /// Page name, such as `search-notes` or `3/search-notes`.
+    #[serde(deserialize_with = "lax")]
+    pub(crate) topic: Option<String>,
+    /// List the available pages instead of printing one.
+    #[serde(deserialize_with = "lax")]
+    pub(crate) list: Option<bool>,
+}

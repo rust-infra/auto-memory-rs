@@ -14,8 +14,8 @@ use crate::search::chunking::SemanticRow;
 use crate::search::index_rows::{SearchIndexWriteRow, entity_row, observation_row, relation_row};
 use crate::search::text::{SearchPage, TextSearchOptions, search_text};
 use crate::storage::records::{
-    Counts, DirectoryEntityRow, EntityRow, ObservationRow, ProjectRow, RelatedRow, RelationRow,
-    SearchRowView, VectorChunkRow, VectorRow,
+    Counts, DirectoryEntityRow, EntityRow, MetadataRow, ObservationRow, ProjectRow, RelatedRow,
+    RelationRow, SearchRowView, VectorChunkRow, VectorRow,
 };
 use crate::storage::schema;
 
@@ -889,6 +889,52 @@ impl Store {
             .optional()?;
             Ok(row)
         }).await
+    }
+
+    /// Every entity in one project with its frontmatter as `key -> rendered value`.
+    ///
+    /// The POSIX `find` tool filters on frontmatter, which is what the index stores; reading
+    /// it from there keeps `find` cheap on a large vault.
+    pub async fn entities_with_metadata(&self, project_id: i64) -> Result<Vec<MetadataRow>> {
+        self.call(move |conn| {
+            let mut statement = conn.prepare(
+                "SELECT file_path, title, entity_metadata FROM entity
+                 WHERE project_id = ?1 ORDER BY file_path",
+            )?;
+            let rows = statement.query_map([project_id], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                ))
+            })?;
+            let mut out = Vec::new();
+            for row in rows {
+                let (file_path, title, metadata) = row?;
+                let parsed: serde_json::Map<String, Value> =
+                    serde_json::from_str(&metadata).unwrap_or_default();
+                // A predicate compares strings, so every value is rendered the way a
+                // frontmatter reader would write it: scalars verbatim, arrays joined.
+                let metadata = parsed
+                    .into_iter()
+                    .map(|(key, value)| {
+                        let rendered = match value {
+                            Value::String(text) => text,
+                            Value::Null => String::new(),
+                            other => other.to_string(),
+                        };
+                        (key, rendered)
+                    })
+                    .collect();
+                out.push(MetadataRow {
+                    file_path,
+                    title,
+                    metadata,
+                });
+            }
+            Ok(out)
+        })
+        .await
     }
 
     /// The entity row's `updated_at` for one path, or `None` when it is not indexed.
