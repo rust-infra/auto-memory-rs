@@ -735,20 +735,23 @@ impl<'a> McpServer<'a> {
 
         // note: reject paths that escape the project; return a payload, not a transport error.
         if !directory.is_empty() && !is_valid_project_directory(&directory) {
+            // Upstream 0.24.0 (#1683): a refused write is a tool error. The payload is
+            // unchanged; only `isError` moves, so a client that checks it stops
+            // counting a refusal as a write.
             if output_format.is_json() {
-                return json_result(json!({
+                return Ok(as_tool_error(json_result(json!({
                     "title": title,
                     "permalink": Value::Null,
                     "file_path": Value::Null,
                     "checksum": Value::Null,
                     "action": "created",
                     "error": "SECURITY_VALIDATION_ERROR",
-                }));
+                }))?));
             }
-            return Ok(text_result(format!(
+            return Ok(as_tool_error(text_result(format!(
                 "# Error\n\nDirectory path '{directory}' is not allowed - paths must stay within \
                  project boundaries"
-            )));
+            ))));
         }
 
         // `note_type` supplies the frontmatter `type` unless the content already
@@ -788,21 +791,23 @@ impl<'a> McpServer<'a> {
         let generated_permalink = generate_permalink(&title);
         if existed && !overwrite {
             // note: keep a deterministic permalink in the conflict response.
+            // Upstream 0.24.0 (#1683): the conflict is an MCP tool error, with the same
+            // JSON payload as before (`action: "conflict"`, `error: NOTE_ALREADY_EXISTS`).
             if output_format.is_json() {
-                return json_result(json!({
+                return Ok(as_tool_error(json_result(json!({
                     "title": title,
                     "permalink": generated_permalink,
                     "file_path": Value::Null,
                     "checksum": Value::Null,
                     "action": "conflict",
                     "error": "NOTE_ALREADY_EXISTS",
-                }));
+                }))?));
             }
-            return Ok(text_result(overwrite_error(
+            return Ok(as_tool_error(text_result(overwrite_error(
                 &title,
                 &generated_permalink,
                 &self.project_name,
-            )));
+            ))));
         }
 
         // note: persist only after all validation has passed.
@@ -1735,7 +1740,21 @@ impl<'a> McpServer<'a> {
         // The reference resizes and re-encodes images with Pillow before returning
         // them. Re-encoding cannot be made byte-compatible from Rust, so the local
         // core returns the original bytes and labels the true media type instead.
+        //
+        // Upstream 0.24.0 (#1805, GHSA-74r2-7ff9-mjj2) narrowed the decodable formats
+        // to PNG/JPEG/WebP because its Pillow pin cannot take a newer one. The
+        // allowlist is applied here too, so a GIF or TIFF is refused with the same
+        // message rather than answered with bytes the reference would not return.
         if content_type.starts_with("image/") {
+            if !is_allowed_image_media_type(&content_type) {
+                return unwrapped_result(json!({
+                    "type": "error",
+                    "error": format!(
+                        "Unsupported image format '{content_type}'. read_content returns \
+                         PNG, JPEG and WebP images only."
+                    ),
+                }));
+            }
             return unwrapped_result(json!({
                 "type": "image",
                 "source": {

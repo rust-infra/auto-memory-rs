@@ -20,7 +20,8 @@ use std::time::Duration;
 use tokio::sync::Mutex;
 
 use auto_memory::adapters::mcp::http::{
-    DEFAULT_HTTP_HOST, DEFAULT_HTTP_PATH, DEFAULT_HTTP_PORT, HttpServer, serve,
+    DEFAULT_HTTP_HOST, DEFAULT_HTTP_PATH, DEFAULT_HTTP_PORT, HostAllowlist, HttpServer, bind,
+    serve_on_guarded,
 };
 use auto_memory::adapters::mcp::{McpServer, ensure_project};
 use auto_memory::application::context::{ContextOptions, build_context, render_plain};
@@ -247,6 +248,13 @@ struct McpArgs {
     /// Refuse the tools that write.
     #[arg(long)]
     read_only: bool,
+    /// Extra `Host` header value the HTTP transport accepts, beyond the bound
+    /// address (repeatable). Only needed behind a reverse proxy.
+    #[arg(long, value_name = "HOST")]
+    allow_host: Vec<String>,
+    /// Extra `Origin` the HTTP transport accepts (repeatable).
+    #[arg(long, value_name = "ORIGIN")]
+    allow_origin: Vec<String>,
     #[command(flatten)]
     embed: EmbeddingArgs,
     #[command(flatten)]
@@ -2333,6 +2341,8 @@ async fn mcp_command(args: McpArgs) -> ExitCode {
         port,
         path,
         read_only,
+        allow_host,
+        allow_origin,
         embed,
         rerank,
     } = args;
@@ -2439,7 +2449,20 @@ async fn mcp_command(args: McpArgs) -> ExitCode {
                 server = server.with_reranker_max_document_chars(max_chars);
             }
         }
-        return match serve(server, host, port, path, shutdown_signal()).await {
+        // The DNS-rebinding guard is installed inside `serve_on_guarded` from the
+        // listener's own address; these flags only widen it for a reverse proxy.
+        let allow = HostAllowlist {
+            hosts: allow_host,
+            origins: allow_origin,
+        };
+        let listener = match bind(host, port).await {
+            Ok(listener) => listener,
+            Err(error) => {
+                eprintln!("mcp http server failed: could not bind {host}:{port}: {error}");
+                return ExitCode::FAILURE;
+            }
+        };
+        return match serve_on_guarded(server, listener, path, allow, shutdown_signal()).await {
             Ok(()) => ExitCode::SUCCESS,
             Err(error) => {
                 eprintln!("mcp http server failed: {error}");

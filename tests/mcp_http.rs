@@ -50,19 +50,25 @@ impl Response {
 struct Client {
     addr: std::net::SocketAddr,
     session: Option<String>,
+    /// Override the `Host` header (and add an `Origin`) to drive the rebinding guard.
+    host: Option<String>,
+    origin: Option<String>,
 }
 
 impl Client {
     /// POST a JSON-RPC `body` to `path`, keeping any `Mcp-Session-Id` the server hands back.
     fn post(&mut self, path: &str, body: &Value) -> Response {
         let body = body.to_string();
+        let host = self.host.clone().unwrap_or_else(|| self.addr.to_string());
         let mut request = format!(
-            "POST {path} HTTP/1.1\r\nHost: {}\r\nContent-Type: application/json\r\n\
+            "POST {path} HTTP/1.1\r\nHost: {host}\r\nContent-Type: application/json\r\n\
              Accept: application/json, text/event-stream\r\nContent-Length: {}\r\n\
              Connection: close\r\n",
-            self.addr,
             body.len()
         );
+        if let Some(origin) = &self.origin {
+            request.push_str(&format!("Origin: {origin}\r\n"));
+        }
         if let Some(session) = &self.session {
             request.push_str(&format!("Mcp-Session-Id: {session}\r\n"));
         }
@@ -182,12 +188,76 @@ async fn spawn(read_only: bool, tag: &str) -> (common::Scratch, std::net::Socket
     (scratch, addr)
 }
 
+/// The DNS-rebinding guard: a page on another origin that resolves its hostname to
+/// `127.0.0.1` must not reach the unauthenticated tool surface.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_foreign_host_header_is_refused() {
+    let (_scratch, addr) = spawn(false, "mcp-http-foreign-host").await;
+    let mut client = Client {
+        addr,
+        session: None,
+        host: Some("evil.example".to_owned()),
+        origin: None,
+    };
+    let response = client.post(
+        "/mcp",
+        &json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2025-06-18",
+                "capabilities": {},
+                "clientInfo": { "name": "rebinding", "version": "0.1.0" },
+            },
+        }),
+    );
+    assert_eq!(response.status, 403, "body: {}", response.body);
+    assert!(response.body.contains("DNS-rebinding"), "{}", response.body);
+}
+
+/// A matching `Host` is not enough: the browser's `Origin` must be the same origin.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_foreign_origin_is_refused() {
+    let (_scratch, addr) = spawn(false, "mcp-http-foreign-origin").await;
+    let mut client = Client {
+        addr,
+        session: None,
+        host: None,
+        origin: Some("http://evil.example".to_owned()),
+    };
+    let response = client.post(
+        "/mcp",
+        &json!({ "jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {} }),
+    );
+    assert_eq!(response.status, 403, "body: {}", response.body);
+}
+
+/// A same-origin browser request is the legitimate web-UI case and must pass.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_same_origin_request_passes_the_guard() {
+    let (_scratch, addr) = spawn(false, "mcp-http-same-origin").await;
+    let mut client = Client {
+        addr,
+        session: None,
+        host: None,
+        origin: Some(format!("http://{addr}")),
+    };
+    let initialized = client.initialize();
+    assert_eq!(
+        initialized.frame(1)["result"]["serverInfo"]["name"],
+        json!("auto-memory-rs")
+    );
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn session_lists_and_calls_tools_over_streamable_http() {
     let (_scratch, addr) = spawn(false, "mcp-http-session").await;
     let mut client = Client {
         addr,
         session: None,
+        host: None,
+        origin: None,
     };
     let initialized = client.initialize();
     let result = initialized.frame(1);
@@ -233,6 +303,8 @@ async fn read_only_mode_hides_and_refuses_mutating_tools() {
     let mut client = Client {
         addr,
         session: None,
+        host: None,
+        origin: None,
     };
     client.initialize();
 
@@ -292,6 +364,8 @@ async fn http_tool_surface_matches_stdio() {
     let mut client = Client {
         addr,
         session: None,
+        host: None,
+        origin: None,
     };
     client.initialize();
     let listed = client.post(

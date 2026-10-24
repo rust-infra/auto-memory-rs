@@ -25,6 +25,14 @@ pub const MAX_PAGE_SIZE: u32 = 50;
 pub const DEFAULT_MAX_RELATED: u32 = 10;
 /// Reference `MAX_CONTEXT_RELATED_RESULTS`.
 pub const MAX_RELATED_RESULTS: u32 = 100;
+/// Upstream 0.24.0 (#1804): `build_context` accepts `depth` 1–5.
+///
+/// A traversal depth is internally doubled (relation row → entity row), so an
+/// unbounded value let one call run until the client timed out on a densely linked
+/// vault — reachable even with a read-only key.
+pub const MIN_CONTEXT_DEPTH: u32 = 1;
+/// See [`MIN_CONTEXT_DEPTH`].
+pub const MAX_CONTEXT_DEPTH: u32 = 5;
 
 /// Context assembly options (reference defaults: depth 1, page 1, page size 10,
 /// max related 10, timeframe `7d` applied by the CLI/MCP entry points).
@@ -57,6 +65,14 @@ impl Default for ContextOptions {
 impl ContextOptions {
     /// Validate pagination and traversal bounds the way the MCP tool does.
     pub fn validate(&self) -> Result<()> {
+        if !(MIN_CONTEXT_DEPTH..=MAX_CONTEXT_DEPTH).contains(&self.depth) {
+            return Err(invalid_arg(format!(
+                "depth must be between {MIN_CONTEXT_DEPTH} and {MAX_CONTEXT_DEPTH}, got {}. \
+                 build_context is a bounded traversal starting point; follow the returned \
+                 memory:// links for more context.",
+                self.depth
+            )));
+        }
         if self.page < 1 {
             return Err(invalid_arg(format!("page must be >= 1, got {}", self.page)));
         }
@@ -712,6 +728,35 @@ mod tests {
             }
             .validate()
             .is_err()
+        );
+        // Upstream 0.24.0 (#1804): a depth outside 1–5 is refused, naming the limit.
+        assert!(ContextOptions { depth: 0, ..base }.validate().is_err());
+        assert!(
+            ContextOptions {
+                depth: MAX_CONTEXT_DEPTH + 1,
+                ..base
+            }
+            .validate()
+            .is_err()
+        );
+        assert!(
+            ContextOptions {
+                depth: MAX_CONTEXT_DEPTH,
+                ..base
+            }
+            .validate()
+            .is_ok()
+        );
+        let message = ContextOptions {
+            depth: MAX_CONTEXT_DEPTH + 1,
+            ..base
+        }
+        .validate()
+        .expect_err("depth over the cap")
+        .to_string();
+        assert!(
+            message.contains("depth must be between 1 and 5"),
+            "{message}"
         );
     }
 

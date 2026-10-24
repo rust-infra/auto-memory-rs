@@ -92,6 +92,23 @@ pub(crate) fn unwrapped_result(payload: Value) -> Result<Value> {
     }))
 }
 
+/// Mark an already-built tool result as an MCP **tool error**.
+///
+/// Upstream 0.24.0 (#1683, #1688, #1641) turned every refused mutation into an
+/// `isError` result. Before that, a refused `write_note` (existing note without
+/// `overwrite`, revision conflict, a note that moved, a directory outside the project)
+/// and a failed `delete_note`/`move_note` came back as ordinary results whose *text*
+/// said "Edit Failed" or "Move Failed". A client that checks `isError` counted the
+/// refusal as a write and never retried it.
+///
+/// The payload is unchanged — the same text, the same `action`/`error` fields in JSON
+/// mode — so only the flag moves. `delete_note` on a note that does not exist still
+/// answers `false` rather than an error, which is the reference's own carve-out.
+pub(crate) fn as_tool_error(mut result: Value) -> Value {
+    result["isError"] = json!(true);
+    result
+}
+
 /// One `{"type": "text", "text": <payload as JSON>}` content item.
 ///
 /// The ChatGPT adapters hand back a *content list*, so their payloads are rendered as
@@ -202,7 +219,14 @@ pub(crate) fn move_result(
     project_name: &str,
 ) -> Result<Value> {
     if output_format.is_json() {
-        return json_result(payload);
+        let result = json_result(payload.clone())?;
+        // A JSON `{"moved": false}` is a refusal too, and the reference sets the flag
+        // in both output modes.
+        return Ok(if payload["moved"] == json!(true) {
+            result
+        } else {
+            as_tool_error(result)
+        });
     }
     if payload["moved"] == json!(true) {
         return Ok(text_result(format!(
@@ -216,13 +240,15 @@ pub(crate) fn move_result(
             payload["permalink"].as_str().unwrap_or_default(),
         )));
     }
-    Ok(text_result(format!(
+    // Upstream 0.24.0 (#1641): a failed move is a tool error, so a client that checks
+    // `isError` stops reading a refusal as success. The text is unchanged.
+    Ok(as_tool_error(text_result(format!(
         "# Move Failed\n\n\
          Could not move '{}': {}\n\n\
          <!-- Project: {project_name} -->",
         payload["source"].as_str().unwrap_or_default(),
         payload["error"].as_str().unwrap_or("unknown error"),
-    )))
+    ))))
 }
 
 /// The reference's refusal when `write_note` would clobber an existing note.
@@ -393,6 +419,20 @@ pub(crate) fn guess_content_type(path: &str) -> String {
         _ => "text/plain",
     };
     content_type.to_owned()
+}
+
+/// Image media types `read_content` is allowed to decode and return.
+///
+/// Upstream 0.24.0 (#1805, GHSA-74r2-7ff9-mjj2) narrowed this to the three formats its
+/// Pillow pin can decode safely. This port does not re-encode through Pillow, but it
+/// applies the same allowlist: a caller that reads a GIF gets a refusal here rather
+/// than a payload the upstream server would not have sent, so the tool's contract is
+/// the same on both implementations.
+pub const ALLOWED_IMAGE_MEDIA_TYPES: [&str; 3] = ["image/png", "image/jpeg", "image/webp"];
+
+/// Whether `read_content` may return `content_type` as an image.
+pub fn is_allowed_image_media_type(content_type: &str) -> bool {
+    ALLOWED_IMAGE_MEDIA_TYPES.contains(&content_type)
 }
 
 /// Split an opening YAML frontmatter block into `(body, mapping)`.

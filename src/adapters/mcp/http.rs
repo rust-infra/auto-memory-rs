@@ -26,6 +26,10 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex as StdMutex, PoisonError};
 
 use axum::Router;
+use axum::extract::Request;
+use axum::http::{HeaderMap, StatusCode, header};
+use axum::middleware::{self, Next};
+use axum::response::{IntoResponse, Response};
 use rmcp::ServerHandler;
 use rmcp::model::{
     CallToolRequestParams, CallToolResult, Implementation, InitializeRequestParams,
@@ -335,14 +339,57 @@ pub async fn serve_on(
     path: &str,
     shutdown: impl Future<Output = ()> + Send + 'static,
 ) -> Result<()> {
+    serve_on_guarded(server, listener, path, HostAllowlist::default(), shutdown).await
+}
+
+/// Extra `Host`/`Origin` values a reverse proxy needs, beyond the bound address.
+#[derive(Clone, Debug, Default)]
+pub struct HostAllowlist {
+    /// Accepted `Host` header values.
+    pub hosts: Vec<String>,
+    /// Accepted `Origin` values.
+    pub origins: Vec<String>,
+}
+
+impl HostAllowlist {
+    /// Whether the operator asked for anything beyond the bound address.
+    fn is_empty(&self) -> bool {
+        self.hosts.is_empty() && self.origins.is_empty()
+    }
+}
+
+/// Serve the Streamable HTTP transport with an explicit DNS-rebinding guard.
+///
+/// The guard is always built from the listener's own address, so the accepted `Host`
+/// is the one clients actually dialed. `allow` widens it for a reverse proxy. Exposed
+/// separately from [`serve_on`] so the tests can drive both the refused and the
+/// accepted paths without reaching into private state.
+pub async fn serve_on_guarded(
+    server: HttpServer,
+    listener: TcpListener,
+    path: &str,
+    allow: HostAllowlist,
+    shutdown: impl Future<Output = ()> + Send + 'static,
+) -> Result<()> {
     let path = normalize_path(path)?;
     let addr = listener.local_addr()?;
+    let loopback = addr.ip().is_loopback();
     tracing::info!(
         %addr,
         path = %path,
         read_only = server.read_only,
+        loopback,
         "mcp streamable http transport listening"
     );
+    if !loopback {
+        // The upstream v0.24.0 breaking change: binding beyond loopback is an explicit
+        // opt-in, and the operator should hear about it every time.
+        tracing::warn!(
+            %addr,
+            "mcp http is bound beyond loopback without authentication; anyone who can \
+             reach this address can call every tool"
+        );
+    }
     let config = StreamableHttpServerConfig::default();
     // Cloned before the config is moved into the service; cancelling it terminates
     // the SSE streams the service hands out, which is what lets graceful shutdown
@@ -354,7 +401,21 @@ pub async fn serve_on(
         Arc::new(LocalSessionManager::default()),
         config,
     );
-    let router = Router::new().nest_service(&path, service);
+    let mut router = Router::new().nest_service(&path, service);
+    // Only a loopback bind gets the guard by default: a non-loopback bind is already
+    // an explicit decision to expose the endpoint, and an allowlist there would break
+    // reverse proxies unless the operator names them.
+    let guard = (loopback || !allow.is_empty()).then(|| {
+        HostGuard::new(addr.to_string())
+            .with_allowed_hosts(allow.hosts)
+            .with_allowed_origins(allow.origins)
+    });
+    if let Some(guard) = guard {
+        router = router.layer(middleware::from_fn(move |request: Request, next: Next| {
+            let guard = guard.clone();
+            async move { enforce_host_guard(guard, request, next).await }
+        }));
+    }
     axum::serve(listener, router)
         .with_graceful_shutdown(async move {
             shutdown.await;
@@ -374,6 +435,138 @@ pub async fn serve(
 ) -> Result<()> {
     let listener = bind(host, port).await?;
     serve_on(server, listener, path, shutdown).await
+}
+
+/// DNS-rebinding guard for the unauthenticated HTTP transports.
+///
+/// A browser on the machine can resolve an attacker's hostname to `127.0.0.1` and
+/// then speak to this server with the browser's own credentials-free `fetch`, calling
+/// every MCP tool including the mutating ones. Binding to loopback does not stop that,
+/// so a loopback bind additionally requires the request's `Host` to name the bound
+/// listener and its `Origin` (when present) to be same-origin with that host. This
+/// mirrors upstream's GHSA-4gfv-c2mm-mvj2 fix and FastMCP's `Host`/`Origin` guard.
+///
+/// A non-loopback bind is an explicit opt-in to network exposure (the container image
+/// passes `--host 0.0.0.0`), so the guard is not installed there: the operator already
+/// decided the endpoint is reachable, and an allowlist would break reverse proxies.
+#[derive(Clone, Debug)]
+pub struct HostGuard {
+    /// `host:port` the listener is bound to, lowercased.
+    bound: String,
+    /// Extra `Host` values accepted verbatim, from `--allow-host`.
+    allowed_hosts: Vec<String>,
+    /// Extra `Origin` values accepted verbatim, from `--allow-origin`.
+    allowed_origins: Vec<String>,
+}
+
+impl HostGuard {
+    /// Build a guard for a listener bound to `bound` (`host:port`).
+    pub fn new(bound: impl Into<String>) -> Self {
+        Self {
+            bound: bound.into().to_ascii_lowercase(),
+            allowed_hosts: Vec::new(),
+            allowed_origins: Vec::new(),
+        }
+    }
+
+    /// Accept these additional `Host` header values (a reverse proxy's public name).
+    #[must_use]
+    pub fn with_allowed_hosts(mut self, hosts: impl IntoIterator<Item = String>) -> Self {
+        self.allowed_hosts = hosts
+            .into_iter()
+            .map(|host| host.trim().to_ascii_lowercase())
+            .filter(|host| !host.is_empty())
+            .collect();
+        self
+    }
+
+    /// Accept these additional `Origin` values.
+    #[must_use]
+    pub fn with_allowed_origins(mut self, origins: impl IntoIterator<Item = String>) -> Self {
+        self.allowed_origins = origins
+            .into_iter()
+            .map(|origin| origin.trim().trim_end_matches('/').to_ascii_lowercase())
+            .filter(|origin| !origin.is_empty())
+            .collect();
+        self
+    }
+
+    /// Whether a request may proceed.
+    ///
+    /// A missing `Host` is accepted: HTTP/1.0 clients and some test harnesses omit it,
+    /// and the rebinding attack needs a *present* attacker-controlled `Host`.
+    pub fn permits(&self, headers: &HeaderMap) -> bool {
+        let host = headers
+            .get(header::HOST)
+            .and_then(|value| value.to_str().ok())
+            .map(|value| value.trim().to_ascii_lowercase());
+        if let Some(host) = &host
+            && !self.host_matches(host)
+        {
+            return false;
+        }
+
+        // `Origin` is only sent by browsers, so its presence is exactly the case the
+        // guard exists for. A non-browser client omits it and stays unaffected.
+        match headers
+            .get(header::ORIGIN)
+            .and_then(|value| value.to_str().ok())
+        {
+            None => true,
+            Some(origin) => self.origin_matches(origin.trim().trim_end_matches('/')),
+        }
+    }
+
+    fn host_matches(&self, host: &str) -> bool {
+        if host == self.bound || self.allowed_hosts.iter().any(|allowed| allowed == host) {
+            return true;
+        }
+        // A port-less `Host` names the same listener on the default port.
+        match host.rsplit_once(':') {
+            Some((name, _)) => {
+                let bare = self
+                    .bound
+                    .rsplit_once(':')
+                    .map_or(self.bound.as_str(), |(h, _)| h);
+                name == bare && self.allowed_hosts.is_empty()
+            }
+            None => false,
+        }
+    }
+
+    fn origin_matches(&self, origin: &str) -> bool {
+        if self
+            .allowed_origins
+            .iter()
+            .any(|allowed| allowed == &origin.to_ascii_lowercase())
+        {
+            return true;
+        }
+        let Some(rest) = origin
+            .strip_prefix("http://")
+            .or_else(|| origin.strip_prefix("https://"))
+        else {
+            // `Origin: null` (sandboxed iframe, file://) never comes from this origin.
+            return false;
+        };
+        rest.to_ascii_lowercase() == self.bound
+            || self.allowed_hosts.iter().any(|host| host == rest)
+    }
+}
+
+/// Reject a request the [`HostGuard`] refuses.
+///
+/// The response body is deliberately terse: a probing page learns only that it was
+/// refused, not which value would have been accepted.
+async fn enforce_host_guard(guard: HostGuard, request: Request, next: Next) -> Response {
+    if guard.permits(request.headers()) {
+        return next.run(request).await;
+    }
+    (
+        StatusCode::FORBIDDEN,
+        "Forbidden: foreign Host or Origin header (DNS-rebinding protection)",
+    )
+        .into_response()
 }
 
 /// Validate and normalize the mount path.
@@ -506,6 +699,65 @@ mod tests {
             "arguments": { "title": "x", "content": "y" },
         });
         assert!(server.dispatch_tool(&params, None).await.is_err());
+    }
+
+    /// A `HeaderMap` carrying the headers a browser would send.
+    fn headers(pairs: &[(&str, &str)]) -> HeaderMap {
+        let mut map = HeaderMap::new();
+        for (name, value) in pairs {
+            map.insert(
+                axum::http::HeaderName::from_bytes(name.as_bytes()).expect("header name"),
+                value.parse().expect("header value"),
+            );
+        }
+        map
+    }
+
+    #[test]
+    fn host_guard_accepts_the_bound_loopback_address() {
+        let guard = HostGuard::new("127.0.0.1:8765");
+        assert!(guard.permits(&headers(&[("host", "127.0.0.1:8765")])));
+        // A browser posting from a page served by the same origin.
+        assert!(guard.permits(&headers(&[
+            ("host", "127.0.0.1:8765"),
+            ("origin", "http://127.0.0.1:8765"),
+        ])));
+        // No `Host` at all: an HTTP/1.0 client, not the rebinding attack.
+        assert!(guard.permits(&HeaderMap::new()));
+    }
+
+    #[test]
+    fn host_guard_refuses_a_foreign_host() {
+        let guard = HostGuard::new("127.0.0.1:8765");
+        // The attack: a page on evil.example resolves to 127.0.0.1 and the browser
+        // sends its own hostname in `Host`.
+        assert!(!guard.permits(&headers(&[("host", "evil.example")])));
+        assert!(!guard.permits(&headers(&[("host", "evil.example:8765")])));
+    }
+
+    #[test]
+    fn host_guard_refuses_a_foreign_origin_even_with_a_matching_host() {
+        let guard = HostGuard::new("127.0.0.1:8765");
+        assert!(!guard.permits(&headers(&[
+            ("host", "127.0.0.1:8765"),
+            ("origin", "http://evil.example"),
+        ])));
+        // A sandboxed iframe's opaque origin never comes from this listener.
+        assert!(!guard.permits(&headers(&[("host", "127.0.0.1:8765"), ("origin", "null"),])));
+    }
+
+    #[test]
+    fn host_guard_allowlist_widens_the_accepted_values() {
+        let guard = HostGuard::new("127.0.0.1:8765")
+            .with_allowed_hosts(vec!["memory.internal".to_owned()])
+            .with_allowed_origins(vec!["https://memory.internal".to_owned()]);
+        assert!(guard.permits(&headers(&[
+            ("host", "memory.internal"),
+            ("origin", "https://memory.internal"),
+        ])));
+        // The bound address keeps working alongside the allowlist.
+        assert!(guard.permits(&headers(&[("host", "127.0.0.1:8765")])));
+        assert!(!guard.permits(&headers(&[("host", "other.internal")])));
     }
 
     #[test]
