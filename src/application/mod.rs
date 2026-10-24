@@ -3,6 +3,7 @@
 pub mod activity;
 pub mod context;
 pub mod directory;
+pub mod ingest;
 pub mod lines;
 pub mod manual;
 pub mod note;

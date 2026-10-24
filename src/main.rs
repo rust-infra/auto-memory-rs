@@ -107,9 +107,39 @@ enum Command {
     Tail(TailArgs),
     /// Print a manual page, or list the available ones.
     Man(ManArgs),
+    /// Import a document as a searchable sidecar note.
+    #[command(subcommand)]
+    Import(ImportCommand),
     /// Read or write the user configuration file.
     #[command(subcommand)]
     Config(ConfigCommand),
+}
+
+/// `auto-memory import <document>`.
+#[derive(Subcommand)]
+enum ImportCommand {
+    /// Extract a document's text into a sidecar note beside it.
+    Document(ImportDocumentArgs),
+}
+
+/// `auto-memory import document <path>`.
+#[derive(Args)]
+struct ImportDocumentArgs {
+    /// Document to import, relative to the project root.
+    path: PathBuf,
+    /// Index database (defaults to `AUTO_MEMORY_INDEX`, the user config file, then
+    /// the standard path).
+    #[arg(long, value_name = "DB")]
+    index: Option<PathBuf>,
+    /// Project name (defaults to `default_project`, else the single registered one).
+    #[arg(long, value_name = "NAME")]
+    project: Option<String>,
+    /// Report what would happen without writing anything.
+    #[arg(long)]
+    dry_run: bool,
+    /// Replace a sidecar that a previous import wrote.
+    #[arg(long)]
+    replace: bool,
 }
 
 /// Shared flags for the POSIX-style read verbs: which index and project to read.
@@ -691,6 +721,7 @@ fn main() -> ExitCode {
         Command::Find(args) => async_command(find_command(args)),
         Command::Tail(args) => async_command(tail_command(args)),
         Command::Man(args) => man_command(args),
+        Command::Import(command) => async_command(import_command(command)),
         Command::Context(args) => async_command(context_command(args)),
         Command::Schema(command) => async_command(schema_command(command)),
         Command::Hook(args) => async_command(hook_command(args)),
@@ -3233,6 +3264,136 @@ async fn tail_command(args: TailArgs) -> ExitCode {
     if printed == 0 {
         return usage("no notes");
     }
+    ExitCode::SUCCESS
+}
+
+/// `auto-memory import document` — extract a document into a sidecar note.
+async fn import_command(command: ImportCommand) -> ExitCode {
+    match command {
+        ImportCommand::Document(args) => import_document_command(args).await,
+    }
+}
+
+async fn import_document_command(args: ImportDocumentArgs) -> ExitCode {
+    let ImportDocumentArgs {
+        path,
+        index,
+        project,
+        dry_run,
+        replace,
+    } = args;
+    // The index handle is needed twice — once to resolve the project, once to refresh it
+    // after writing — so the option is cloned rather than moved.
+    let (_store, _project, vault) = match posix_target(index.clone(), project).await {
+        Ok(target) => target,
+        Err(message) => return usage(&message),
+    };
+    // A relative path resolves against the project root, matching `bm ls` and `bm cat`
+    // (upstream 0.24.0 #1704).
+    let absolute = if path.is_absolute() {
+        path.clone()
+    } else {
+        vault.join(&path)
+    };
+    if !absolute.is_file() {
+        return usage(&format!(
+            "file not found: {} (resolved from the project root)",
+            absolute.display()
+        ));
+    }
+    let source_relative = absolute
+        .strip_prefix(&vault)
+        .map(|relative| relative.to_string_lossy().replace('\\', "/"))
+        .unwrap_or_else(|_| path.to_string_lossy().into_owned());
+    let Some(format) = auto_memory::application::ingest::DocumentFormat::of(&absolute) else {
+        return usage(&format!(
+            "unsupported document type: {source_relative}. Supported: csv, tsv, txt, log, \
+             org, rst, adoc, pdf, docx, pptx, xlsx"
+        ));
+    };
+    let extraction = match auto_memory::application::ingest::extract(&absolute, format) {
+        Ok(extraction) => extraction,
+        Err(error) => return usage(&error.to_string()),
+    };
+    let checksum = match std::fs::read(&absolute) {
+        Ok(bytes) => auto_memory::storage::checksum_bytes(&bytes),
+        Err(error) => return usage(&format!("could not read {source_relative}: {error}")),
+    };
+    let sidecar =
+        auto_memory::application::ingest::build_sidecar(&source_relative, &extraction, &checksum);
+    let run_id = auto_memory::application::ingest::run_id(&source_relative, &checksum);
+    let run = auto_memory::application::ingest::build_run_note(
+        &source_relative,
+        &extraction,
+        &checksum,
+        &run_id,
+    );
+
+    let sidecar_absolute = vault.join(&sidecar.file_path);
+    // Re-running is a no-op while the source is unchanged, and a hand-written or enriched
+    // note at the sidecar path is never overwritten unless `--replace` says so.
+    if sidecar_absolute.is_file() {
+        let Ok(existing) = std::fs::read_to_string(&sidecar_absolute) else {
+            return usage(&format!("could not read {}", sidecar.file_path));
+        };
+        let unchanged = existing.contains(&format!("source_checksum: {checksum}"));
+        if unchanged {
+            println!("unchanged: {}", sidecar.file_path);
+            return ExitCode::SUCCESS;
+        }
+        if !auto_memory::application::ingest::is_replaceable(&existing) || !replace {
+            return usage(&format!(
+                "{} already exists and was not written by an import; pass --replace to \
+                 overwrite it",
+                sidecar.file_path
+            ));
+        }
+    }
+    if dry_run {
+        println!("would write: {}", sidecar.file_path);
+        println!("would write: {}", run.file_path);
+        return ExitCode::SUCCESS;
+    }
+    for note in [&sidecar, &run] {
+        let target = vault.join(&note.file_path);
+        if let Some(parent) = target.parent()
+            && let Err(error) = std::fs::create_dir_all(parent)
+        {
+            return usage(&format!("could not create {}: {error}", parent.display()));
+        }
+        if let Err(error) = std::fs::write(&target, &note.content) {
+            return usage(&format!("could not write {}: {error}", target.display()));
+        }
+    }
+    // The index is derived, so the import finishes by refreshing it for the two new notes.
+    let index_path = match cli_index(index) {
+        Some((index, _user)) => index,
+        None => return ExitCode::FAILURE,
+    };
+    let mut store = match Store::open(&index_path).await {
+        Ok(store) => store,
+        Err(error) => {
+            eprintln!("failed to open index {}: {error}", index_path.display());
+            return ExitCode::FAILURE;
+        }
+    };
+    let Some(project_row) = (match store.projects().await {
+        Ok(rows) => rows,
+        Err(error) => return usage(&error.to_string()),
+    })
+    .into_iter()
+    .find(|row| row.path == vault.to_string_lossy()) else {
+        return usage("project not found for the resolved vault");
+    };
+    let options = IndexOptions::new(&project_row.permalink);
+    let mut service = IndexService::new(&mut store, project_row.id, &vault, options);
+    for note in [&sidecar, &run] {
+        if let Err(error) = service.index_file(&note.file_path).await {
+            return usage(&format!("could not index {}: {error}", note.file_path));
+        }
+    }
+    println!("wrote: {}", sidecar.file_path);
+    println!("wrote: {}", run.file_path);
     ExitCode::SUCCESS
 }
 
