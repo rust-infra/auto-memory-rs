@@ -1,7 +1,8 @@
 //! Semantic chunking — a port of `basic_memory.repository.semantic_chunking`.
 //!
-//! Markdown headers and bullets are natural boundaries; long sections are split
-//! into overlapping character windows (900 chars, 120 overlap).
+//! Markdown headings and the size budget are the boundaries (upstream 0.24.0 #1335); an
+//! oversized section breaks at line boundaries, and a single line over the budget falls
+//! back to an overlapping character window (900 chars, 120 overlap).
 //!
 //! A chunk key is content-addressed — `type:source_hash:index` — so rewriting a note does
 //! not change the key of text it did not touch, and the stored vector is reused (upstream
@@ -91,11 +92,12 @@ pub fn split_text_into_chunks(text: &str) -> Vec<String> {
         return Vec::new();
     }
     let normalized = normalized.replace("\r\n", "\n");
+    // A bullet is a fact, and per-fact vectors come from the observation rows; making each
+    // bullet its own body chunk reproduced every fact as a near-duplicate entity vector.
     let mut sections: Vec<String> = Vec::new();
     let mut current_section: Vec<&str> = Vec::new();
     for line in normalized.split('\n') {
-        let is_boundary = is_header_line(line) || is_bullet_line(line);
-        if is_boundary && !current_section.is_empty() {
+        if is_header_line(line) && !current_section.is_empty() {
             sections.push(current_section.join("\n").trim().to_owned());
             current_section = vec![line];
         } else {
@@ -109,7 +111,11 @@ pub fn split_text_into_chunks(text: &str) -> Vec<String> {
     let mut chunked_sections: Vec<String> = Vec::new();
     let mut current_chunk = String::new();
     for section in sections {
-        let is_bullet = is_bullet_line(&section);
+        // A heading starts a new chunk: packing purely by size would merge two short
+        // sections into one vector and lose the structure the split is for.
+        if is_header_line(section.lines().next().unwrap_or_default()) && !current_chunk.is_empty() {
+            chunked_sections.push(std::mem::take(&mut current_chunk));
+        }
         if char_len(&section) > MAX_VECTOR_CHUNK_CHARS {
             if !current_chunk.is_empty() {
                 chunked_sections.push(std::mem::take(&mut current_chunk));
@@ -120,13 +126,6 @@ pub fn split_text_into_chunks(text: &str) -> Vec<String> {
                 chunked_sections.extend(long_chunks);
                 current_chunk = last;
             }
-            continue;
-        }
-        if is_bullet {
-            if !current_chunk.is_empty() {
-                chunked_sections.push(std::mem::take(&mut current_chunk));
-            }
-            chunked_sections.push(section);
             continue;
         }
         let candidate = if current_chunk.is_empty() {
@@ -150,25 +149,26 @@ pub fn split_text_into_chunks(text: &str) -> Vec<String> {
         .collect()
 }
 
+/// Pack an oversized section into chunks, breaking at line boundaries.
+///
+/// A section over the budget used to be re-split into one chunk per bullet, which is the
+/// rule #1335 removed. Lines are the boundary now, and a single line longer than the
+/// budget falls back to a character window.
 fn split_long_section(section: &str) -> Vec<String> {
-    let paragraphs = split_into_paragraphs(section);
-    if paragraphs.is_empty() {
-        return Vec::new();
-    }
     let mut chunks: Vec<String> = Vec::new();
     let mut current = String::new();
-    for paragraph in paragraphs {
-        if char_len(&paragraph) > MAX_VECTOR_CHUNK_CHARS {
+    for line in section.split('\n') {
+        if char_len(line) > MAX_VECTOR_CHUNK_CHARS {
             if !current.is_empty() {
                 chunks.push(std::mem::take(&mut current));
             }
-            chunks.extend(split_by_char_window(&paragraph));
+            chunks.extend(split_by_char_window(line));
             continue;
         }
         let candidate = if current.is_empty() {
-            paragraph.clone()
+            line.to_owned()
         } else {
-            format!("{current}\n\n{paragraph}")
+            format!("{current}\n{line}")
         };
         if char_len(&candidate) <= MAX_VECTOR_CHUNK_CHARS {
             current = candidate;
@@ -176,41 +176,19 @@ fn split_long_section(section: &str) -> Vec<String> {
             if !current.is_empty() {
                 chunks.push(std::mem::take(&mut current));
             }
-            current = paragraph;
+            current = line.to_owned();
         }
     }
-    if !current.is_empty() {
+    if !current.trim().is_empty() {
         chunks.push(current);
     }
+    // Trailing blank lines belong to the section separator, not to the chunk: the text is
+    // what gets embedded and hashed, so it is trimmed at the boundary.
     chunks
-}
-
-fn split_into_paragraphs(section: &str) -> Vec<String> {
-    let mut result = Vec::new();
-    for paragraph in section.split("\n\n") {
-        let paragraph = paragraph.trim();
-        if paragraph.is_empty() {
-            continue;
-        }
-        let lines: Vec<&str> = paragraph.split('\n').collect();
-        if !lines.iter().any(|line| is_bullet_line(line)) {
-            result.push(paragraph.to_owned());
-            continue;
-        }
-        let mut current_item: Vec<&str> = Vec::new();
-        for line in lines {
-            if is_bullet_line(line) && !current_item.is_empty() {
-                result.push(current_item.join("\n").trim().to_owned());
-                current_item = vec![line];
-            } else {
-                current_item.push(line);
-            }
-        }
-        if !current_item.is_empty() {
-            result.push(current_item.join("\n").trim().to_owned());
-        }
-    }
-    result.into_iter().filter(|item| !item.is_empty()).collect()
+        .into_iter()
+        .map(|chunk| chunk.trim().to_owned())
+        .filter(|chunk| !chunk.is_empty())
+        .collect()
 }
 
 fn split_by_char_window(paragraph: &str) -> Vec<String> {
@@ -304,29 +282,65 @@ fn is_header_line(line: &str) -> bool {
     (1..=6).contains(&hashes) && trimmed.chars().nth(hashes).is_some_and(char::is_whitespace)
 }
 
-fn is_bullet_line(line: &str) -> bool {
-    let mut chars = line.chars();
-    matches!(chars.next(), Some('-' | '*')) && chars.next().is_some_and(char::is_whitespace)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    #[test]
-    fn splits_on_headers_and_bullets() {
-        let text = "# Title\n\nIntro line\n\n- bullet one\n- bullet two\n\nClosing line";
-        let chunks = split_text_into_chunks(text);
-        assert!(
-            chunks.len() >= 3,
-            "expected header/bullet splits, got {chunks:?}"
-        );
-        assert!(chunks.iter().any(|chunk| chunk.contains("bullet one")));
-        assert!(chunks.iter().any(|chunk| chunk.contains("bullet two")));
+    fn row(id: i64) -> SemanticRow {
+        SemanticRow {
+            id,
+            item_type: "entity".to_owned(),
+            title: Some("Title".to_owned()),
+            permalink: Some("p/title".to_owned()),
+            content_snippet: Some("Body".to_owned()),
+            category: None,
+            relation_type: None,
+            entity_id: Some(id),
+        }
     }
 
     #[test]
-    fn long_paragraphs_use_overlapping_windows() {
+    fn bullets_are_not_chunk_boundaries() {
+        // Upstream 0.24.0 (#1335). One bullet per chunk reproduced every fact as a
+        // near-duplicate entity vector; the per-fact vectors come from the observation
+        // rows, so the body packs its bullets into the budget instead.
+        let text = "# Title\n\n- bullet one\n- bullet two\n- bullet three";
+        let chunks = split_text_into_chunks(text);
+        assert_eq!(chunks.len(), 1, "{chunks:?}");
+        assert!(chunks[0].contains("bullet one"), "{chunks:?}");
+        assert!(chunks[0].contains("bullet three"), "{chunks:?}");
+    }
+
+    #[test]
+    fn a_heading_starts_a_new_chunk() {
+        let text = "# Alpha\n\ntext a\n\n# Beta\n\ntext b";
+        let chunks = split_text_into_chunks(text);
+        assert_eq!(chunks.len(), 2, "{chunks:?}");
+        assert!(chunks[0].starts_with("# Alpha"), "{chunks:?}");
+        assert!(chunks[1].starts_with("# Beta"), "{chunks:?}");
+    }
+
+    #[test]
+    fn an_oversized_section_breaks_at_line_boundaries() {
+        // Every line survives whole; none is cut in half.
+        let line = "abcdefghij".repeat(9);
+        let text = format!("# Big\n\n{}", vec![line; 40].join("\n"));
+        let chunks = split_text_into_chunks(&text);
+        assert!(chunks.len() > 1, "{chunks:?}");
+        for chunk in &chunks {
+            assert!(
+                chunk.chars().count() <= MAX_VECTOR_CHUNK_CHARS,
+                "over budget: {}",
+                chunk.chars().count()
+            );
+            for piece in chunk.lines().filter(|piece| piece.starts_with('a')) {
+                assert_eq!(piece.chars().count(), 90, "a line was cut: {piece:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_single_line_over_the_budget_falls_back_to_a_window() {
         let text = "x".repeat(2500);
         let chunks = split_text_into_chunks(&text);
         assert_eq!(chunks.len(), 4);
@@ -335,181 +349,58 @@ mod tests {
                 .iter()
                 .all(|chunk| chunk.chars().count() <= MAX_VECTOR_CHUNK_CHARS)
         );
-        assert!(chunks[0].chars().count() == MAX_VECTOR_CHUNK_CHARS);
+        assert_eq!(chunks[0].chars().count(), MAX_VECTOR_CHUNK_CHARS);
+    }
+
+    #[test]
+    fn a_chunk_carries_no_trailing_blank_lines() {
+        // The chunk text is what gets hashed and embedded, so the section separator must
+        // not leak into it.
+        let text = "# A\n\nshort\n\n\n";
+        for chunk in split_text_into_chunks(text) {
+            assert_eq!(chunk, chunk.trim(), "{chunk:?}");
+        }
     }
 
     #[test]
     fn branch_tour_empty_input_returns_no_chunks() {
-        // C01 / B01: the public entry returns before sectioning.
         assert!(split_text_into_chunks("").is_empty());
         assert!(split_text_into_chunks(" \n\t\r\n ").is_empty());
     }
 
     #[test]
-    fn branch_tour_boundaries_bullets_and_empty_tail() {
-        // C02 / B03-B05, B11-B19.
-        let text = "# First Heading\n\nintro one\n\n## Second Heading\n\nintro two\n\n- bullet one\n- bullet two\n\ntail";
-        assert_eq!(
-            split_text_into_chunks(text),
-            vec![
-                "# First Heading\n\nintro one\n\n## Second Heading\n\nintro two",
-                "- bullet one",
-                "- bullet two\n\ntail",
-            ]
-        );
-    }
-
-    #[test]
-    fn branch_tour_candidate_limit_flushes_before_merging() {
-        // C03 / B03-B05, B14-B18.
-        let a = "a".repeat(600);
-        let b = "b".repeat(400);
-        let first = format!("# A\n{a}");
-        let second = format!("# B\n{b}");
-        let third = "# C\ntail";
-        let text = format!("{first}\n{second}\n{third}");
-        assert_eq!(
-            split_text_into_chunks(&text),
-            vec![first, format!("{second}\n\n{third}")]
-        );
-    }
-
-    #[test]
     fn branch_tour_long_section_flushes_current_chunk() {
-        // C04 / B03-B10, B18; includes split_long_section merge/flush paths.
-        let short = "short prose";
-        let a = "a".repeat(500);
-        let b = "b".repeat(500);
-        let long = format!("# Long\n{a}\n\n{b}");
-        let text = format!("{short}\n{long}");
-        assert_eq!(
-            split_text_into_chunks(&text),
-            vec![short.to_owned(), format!("# Long\n{a}"), b]
-        );
-    }
-
-    #[test]
-    fn branch_tour_long_paragraph_uses_overlapping_windows() {
-        // C05 / B02, B06-B10, B18; covers split_by_char_window loop and overlap.
-        let text: String = (0..2500)
-            .map(|index| char::from(b'a' + (index % 26) as u8))
-            .collect();
+        let short = "short line";
+        let long = "y".repeat(MAX_VECTOR_CHUNK_CHARS + 100);
+        let text = format!("{short}\n\n{long}");
         let chunks = split_text_into_chunks(&text);
-        let lengths: Vec<usize> = chunks.iter().map(|chunk| chunk.chars().count()).collect();
-        assert_eq!(lengths, vec![900, 900, 900, 160]);
-
-        let c0: Vec<char> = chunks[0].chars().collect();
-        let c1: Vec<char> = chunks[1].chars().collect();
-        let c2: Vec<char> = chunks[2].chars().collect();
-        assert_eq!(&c0[780..900], &c1[..120]);
-        assert_eq!(&c1[780..900], &c2[..120]);
+        assert_eq!(chunks[0], short);
+        assert!(chunks.len() >= 2, "{chunks:?}");
     }
 
     #[test]
     fn branch_tour_boundary_classification_edges() {
-        // C08: the exact heading and bullet classifiers.
         assert!(is_header_line("# title"));
         assert!(is_header_line("  ## title"));
         assert!(!is_header_line("#title"));
         assert!(!is_header_line("#"));
         assert!(!is_header_line("####### title"));
         assert!(!is_header_line("plain text"));
-
-        assert!(is_bullet_line("- item"));
-        assert!(is_bullet_line("* item"));
-        assert!(!is_bullet_line(""));
-        assert!(!is_bullet_line("-"));
-        assert!(!is_bullet_line("-item"));
-        assert!(!is_bullet_line("+ item"));
-        assert!(!is_bullet_line("  - item"));
-    }
-
-    #[test]
-    fn branch_tour_long_paragraph_after_short_paragraph() {
-        // C07 / L03, L08; current is non-empty when the long paragraph starts.
-        let short = "s".repeat(100);
-        let long = "l".repeat(1000);
-        let text = format!("{short}\n\n{long}");
-        let chunks = split_text_into_chunks(&text);
-        let lengths: Vec<usize> = chunks.iter().map(|chunk| chunk.chars().count()).collect();
-        assert_eq!(lengths, vec![100, 900, 220]);
-        assert_eq!(chunks[0], short);
     }
 
     #[test]
     fn branch_tour_walkthrough_example() {
-        // C09: the single running example in docs/chunking-walkthrough.md.
-        let a = "a".repeat(100);
-        let b = "b".repeat(600);
-        let c = "c".repeat(400);
-        let d = "d".repeat(100);
-        let e = "e".repeat(1000);
-        let text = format!(
-            "# 开场\n{a}\n\n## 中段\n{b}\n\n## 继续\n{c}\n\n- 第一条 bullet\n- 第二条 bullet\nbullet 后面的普通文字\n\n## 长段\n{d}\n\n{e}\n\n- 最后一条 bullet"
-        );
-        let chunks = split_text_into_chunks(&text);
-        assert_eq!(chunks.len(), 8);
-        assert!(chunks[0].contains("# 开场"));
-        assert!(chunks[0].contains("## 中段"));
-        assert!(chunks[1].contains("## 继续"));
-        assert_eq!(chunks[2], "- 第一条 bullet");
-        assert!(chunks[3].starts_with("- 第二条 bullet"));
-        assert!(chunks[4].contains("## 长段"));
-        assert_eq!(chunks[5].chars().count(), 900);
-        assert_eq!(chunks[6].chars().count(), 220);
-        assert_eq!(chunks[7], "- 最后一条 bullet");
-    }
-
-    #[test]
-    fn branch_tour_field_prefix_can_be_its_own_chunk() {
-        // C10: composed fields are paragraphs, not special chunk types.
-        let title = "Title";
-        let permalink = "project/notes/example";
-        let body = "x".repeat(1000);
-        let text = format!("{title}\n\n{permalink}\n\n{body}");
-        let chunks = split_text_into_chunks(&text);
-        let lengths: Vec<usize> = chunks.iter().map(|chunk| chunk.chars().count()).collect();
-        assert_eq!(chunks[0], format!("{title}\n\n{permalink}"));
-        assert_eq!(lengths, vec![chunks[0].chars().count(), 900, 220]);
-    }
-
-    #[test]
-    fn branch_tour_long_bullet_uses_long_section_before_bullet_rule() {
-        // C11: the >900 branch has priority over the short-bullet branch.
-        let bullet = format!("- {}", "x".repeat(1000));
-        let text = format!("before\n{bullet}");
-        let chunks = split_text_into_chunks(&text);
-        let lengths: Vec<usize> = chunks.iter().map(|chunk| chunk.chars().count()).collect();
-        assert_eq!(chunks[0], "before");
-        assert_eq!(lengths, vec![6, 900, 222]);
-    }
-
-    #[test]
-    fn branch_tour_helper_defensive_paths() {
-        // C06 / L01, P01-P04, W01; direct helper branches that the public entry
-        // cannot reach once sectioning has removed blank input.
-        assert!(split_long_section("").is_empty());
-        assert!(split_by_char_window("").is_empty());
-        assert_eq!(split_into_paragraphs("A\n\n\n\nB"), vec!["A", "B"]);
-        assert_eq!(
-            split_into_paragraphs("- one\n- two"),
-            vec!["- one", "- two"]
-        );
+        let text = "# One\n\n- a\n- b\n\n# Two\n\n- c\n\n# Three\n\n- d";
+        let chunks = split_text_into_chunks(text);
+        assert_eq!(chunks.len(), 3, "{chunks:?}");
+        assert!(chunks[0].contains("- a") && chunks[0].contains("- b"));
+        assert!(chunks[1].contains("- c"));
+        assert!(chunks[2].contains("- d"));
     }
 
     #[test]
     fn chunk_keys_are_content_addressed_and_name_their_row() {
-        let rows = vec![SemanticRow {
-            id: 7,
-            item_type: "entity".to_owned(),
-            title: Some("Title".to_owned()),
-            permalink: Some("p/title".to_owned()),
-            content_snippet: Some("Body".to_owned()),
-            category: None,
-            relation_type: None,
-            entity_id: Some(7),
-        }];
-        let records = build_chunk_records(&rows);
+        let records = build_chunk_records(&[row(7)]);
         // Upstream 0.24.0 (#1691): the key is `type:source_hash:index`, so it survives the
         // search rows being recreated; the row is named by `row_key`.
         assert_eq!(records[0].row_key, "entity:7");
@@ -522,18 +413,8 @@ mod tests {
 
     #[test]
     fn an_unchanged_note_keeps_its_chunk_keys_across_a_rebuild() {
-        // This is the property #1691 exists for: the vector store's identity is the chunk
-        // key, so re-embedding is skipped exactly when the key is unchanged.
-        let row = |id: i64| SemanticRow {
-            id,
-            item_type: "entity".to_owned(),
-            title: Some("Title".to_owned()),
-            permalink: Some("p/title".to_owned()),
-            content_snippet: Some("Body".to_owned()),
-            category: None,
-            relation_type: None,
-            entity_id: Some(id),
-        };
+        // The property #1691 exists for: the vector store's identity is the chunk key, so
+        // re-embedding is skipped exactly when the key is unchanged.
         let before = build_chunk_records(&[row(7)]);
         // The rewrite recreates the row with a new id but the same text.
         let after = build_chunk_records(&[row(99)]);

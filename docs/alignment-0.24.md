@@ -116,7 +116,7 @@ found by re-reading all 161 numbered entries against the code, and are now imple
 
 | Upstream | What is missing |
 |---|---|
-| #1335 | Entity-body chunks still come one per bullet. Splitting on headings and a size budget rewrites every entity-body chunk text, so the 0.23.2 vector capture — which holds vectors for the per-bullet texts — no longer covers entity search. The local ONNX runtime here does reproduce the reference vectors (`tests/embedding_runtime.rs` runs, and pins the drift at 5e-4 per component / 1e-5 cosine), so a replacement capture is possible; it is held because doing it properly means re-recording entity vectors *and* the expected rankings and scores in four golden files, and a ranking re-recorded from this port is a regression anchor rather than an independent check. That trade is recorded here rather than made silently. |
+| #1335 | Done. Entity-body chunks split on headings and the size budget instead of one per bullet; an oversized section breaks at line boundaries. The 0.23.2 capture holds vectors for the per-bullet texts, so `tests/golden/vector/embeddings-0.24.json` was captured from the local ONNX runtime (`examples/capture_vectors.rs`). That capture is not self-certified: for the 33 chunk texts both captures cover, the two agree to 4.24e-04 per component and 0.99999963 cosine, inside the 5e-4 / 1e-5 the runtime test pins against the reference. Observation and relation chunk texts are unchanged, so `vector_golden` still compares them against the 0.23.2 corpus exactly — the reference remains an independent oracle there. Entity-body rankings could not be replayed (the recordings name documents that no longer exist); they are now derived in-test from the capture, which checks scoring, threshold, aggregation and ordering without re-recording anything. |
 | #1788 | Chunk metadata updates are written per row rather than in one set-based statement. |
 
 ### Upstream items that do not arise in this design
@@ -176,11 +176,13 @@ Unit tests live beside the code they pin: `src/application/{lines,posix,ingest,w
 `src/search/{filters,ngram}.rs`, `src/markdown/sections.rs`, `src/domain/valid_time.rs`,
 `src/application/manual.rs`.
 
-The second pass added `tests/gaps_group_a.rs` (the #1259/#1495/#1744/#1422 journal
+The third pass added `examples/capture_vectors.rs` (the #1335 capture tool) and
+`tests/golden/vector/embeddings-0.24.json` (its output). The second pass added
+`tests/gaps_group_a.rs` (the #1259/#1495/#1744/#1422 journal
 behaviors) and `tests/gaps_group_b.rs` (#1537/#1539 walks and ignore patterns), plus unit
 tests beside `src/application/search_text.rs` (the two guidance branches) and
 `src/search/query.rs` (#1657's preparation).
 
-The suite is now **56 test binaries / 670 tests**, and
+The suite is now **57 test binaries / 669 tests**, and
 `./scripts/check-rust.sh` (format, clippy `-D warnings`, the full suite, the doc build and
 the DSH plugin check) is green.

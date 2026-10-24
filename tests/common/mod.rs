@@ -529,3 +529,21 @@ pub fn canonicalize_renames(input: &str) -> String {
     }
     out
 }
+
+/// The vector capture for the 0.24 chunk shape.
+///
+/// Upstream 0.24.0 (#1335) changed the entity-body chunk boundaries, so the 0.23.2 capture
+/// (`embeddings-reference.json`) no longer holds vectors for them. This capture was taken
+/// from the local ONNX runtime, and `tests/embedding_runtime.rs` pins that runtime to the
+/// reference model within 5e-4 per component. `vector_golden` additionally checks the
+/// overlap: for the chunk texts both captures cover, the two must agree.
+pub fn embeddings_0_24() -> String {
+    std::fs::read_to_string(repo_root().join("tests/golden/vector/embeddings-0.24.json"))
+        .expect("0.24 embeddings capture")
+}
+
+/// The 0.23.2 reference capture, kept for the chunk texts #1335 did not move.
+pub fn embeddings_reference() -> String {
+    std::fs::read_to_string(repo_root().join("tests/golden/vector/embeddings-reference.json"))
+        .expect("reference embeddings")
+}
