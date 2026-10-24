@@ -94,6 +94,23 @@ fn mcp_note_tools_replay_the_reference_session() {
                 ours["related_results"] = ours["related_results"].clone();
                 theirs["related_results"] = theirs["related_results"].clone();
             }
+            (Ok(mut ours), Ok(mut theirs)) => {
+                // Upstream 0.24.0 (#1586, #1683): `write_note` and `edit_note` report the
+                // note's real checksum instead of `null`/`checksum: unknown`, which is
+                // what makes `expected_checksum` usable. The 0.23.2 corpus keeps the old
+                // value, so the comparison drops the field here and
+                // `tests/mcp_revision_guard.rs` pins the new one.
+                for payload in [&mut ours, &mut theirs] {
+                    if let Some(object) = payload.as_object_mut() {
+                        object.remove("checksum");
+                        // `updated_at` is wall-clock state the corpus cannot capture, so
+                        // it is dropped here like every other timestamp in the golden
+                        // corpus (`tests/common/canonicalize_uuids`).
+                        object.remove("updated_at");
+                    }
+                }
+                assert_eq!(ours, theirs, "{} differs", case["id"]);
+            }
             _ => assert_eq!(actual, expected, "{} differs", case["id"]),
         }
     }

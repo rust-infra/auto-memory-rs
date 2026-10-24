@@ -13,11 +13,16 @@ use std::collections::BTreeSet;
 
 use serde_json::Value;
 
-/// Reference arguments this port deliberately does not advertise.
+/// Reference arguments this port deliberately does not advertise, plus the arguments
+/// this port advertises and the 0.23.2 corpus predates.
 ///
 /// `project`/`project_id`/`workspace` are the reference's routing arguments; this server
 /// is pinned to one project and ignores them. `search_notes`' three field aliases are
 /// covered by `search_type` here, and are stripped again by the reference's own schema.
+///
+/// The `NEW_IN_0_24` block below is the other direction: upstream 0.24.0 added these and
+/// the captured 0.23.2 `tools/list` cannot show them. They are pinned by
+/// `tests/mcp_revision_guard.rs` and `tests/mcp_line_reads.rs` instead of by the corpus.
 const PROPERTY_EXCEPTIONS: &[(&str, &str)] = &[
     ("*", "project"),
     ("*", "project_id"),
@@ -25,6 +30,11 @@ const PROPERTY_EXCEPTIONS: &[(&str, &str)] = &[
     ("search_notes", "permalink"),
     ("search_notes", "permalink_match"),
     ("search_notes", "title"),
+    // NEW_IN_0_24: revision guards (#1552, #1642).
+    ("write_note", "expected_checksum"),
+    ("edit_note", "expected_checksum"),
+    // NEW_IN_0_24: metadata-only reads (#1552).
+    ("read_note", "include_content"),
 ];
 
 /// Reference-required arguments this port treats as optional.

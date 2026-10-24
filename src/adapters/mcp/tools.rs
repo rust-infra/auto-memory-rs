@@ -25,6 +25,7 @@ impl ToolName {
                     "tags": { "type": "array", "items": { "type": "string" } },
                     "overwrite": { "type": "boolean" },
                     "metadata": { "type": "object" },
+                    "expected_checksum": { "type": "string" },
                     "output_format": { "type": "string", "enum": ["text", "json"] },
                 }),
             ),
@@ -37,6 +38,7 @@ impl ToolName {
                     "page_size": { "type": "integer" },
                     "output_format": { "type": "string", "enum": ["text", "json"] },
                     "include_frontmatter": { "type": "boolean" },
+                    "include_content": { "type": "boolean" },
                 }),
             ),
             Self::EditNote => (
@@ -51,6 +53,7 @@ impl ToolName {
                     "expected_replacements": { "type": "integer" },
                     "replace_subsections": { "type": "boolean" },
                     "metadata": { "type": "object" },
+                    "expected_checksum": { "type": "string" },
                     "output_format": { "type": "string", "enum": ["text", "json"] },
                 }),
             ),

@@ -570,15 +570,32 @@ impl<'a> McpServer<'a> {
                 self.note_text(&identifier, page, page_size).await?,
             ));
         }
+        let include_content = params.include_content.unwrap_or(true);
         match self.read_note_source(&identifier).await? {
             Some((document, raw)) => {
                 let (body, frontmatter) = parse_opening_frontmatter(&raw);
+                // Upstream 0.24.0 (#1552, #1683): every JSON read carries the revision
+                // and `updated_at`, so a caller can guard its next write with
+                // `expected_checksum`. `include_content=false` drops the body and
+                // frontmatter to keep a refresh cheap.
+                if !include_content {
+                    return json_result(json!({
+                        "title": document.title,
+                        "permalink": document.permalink,
+                        "file_path": document.file_path,
+                        "checksum": crate::storage::checksum_bytes(raw.as_bytes()),
+                        "updated_at": document.updated_at,
+                    }));
+                }
+                let checksum = crate::storage::checksum_bytes(raw.as_bytes());
                 json_result(json!({
                     "title": document.title,
                     "permalink": document.permalink,
                     "file_path": document.file_path,
                     "content": if include_frontmatter { raw } else { body },
                     "frontmatter": frontmatter,
+                    "checksum": checksum,
+                    "updated_at": document.updated_at,
                 }))
             }
             None => self.missing_note(&identifier, page, page_size).await,
@@ -814,14 +831,31 @@ impl<'a> McpServer<'a> {
         let written = {
             let mut notes = self.notes();
             notes
-                .write_note_with_type(
+                .write_note_guarded(
                     &file_path,
                     &content,
                     &metadata,
                     note_type.as_deref(),
                     overwrite,
+                    params.expected_checksum.as_deref(),
                 )
-                .await?
+                .await
+        };
+        let written = match written {
+            Ok(written) => written,
+            // Upstream 0.24.0 (#1642): a lost revision race writes nothing and answers
+            // with a conflict carrying the current checksum, as a tool error.
+            Err(Error::RevisionConflict { expected, current }) => {
+                return Ok(as_tool_error(revision_conflict_result(
+                    output_format,
+                    &title,
+                    &file_path,
+                    &expected,
+                    &current,
+                    &self.project_name,
+                )?));
+            }
+            Err(other) => return Err(other),
         };
         let action = if existed { "updated" } else { "created" };
         let entity = self
@@ -830,13 +864,15 @@ impl<'a> McpServer<'a> {
             .await?;
 
         if output_format.is_json() {
-            // note: the MCP write path intentionally returns a null checksum.
+            // Upstream 0.24.0 (#1586, #1683): the write reports the note's real
+            // checksum, which is the value `expected_checksum` compares against. It
+            // used to be `null`/`checksum: unknown`, so a guarded edit had nothing to
+            // send back.
             return json_result(json!({
                 "title": written.title,
                 "permalink": written.permalink,
                 "file_path": written.file_path,
-                // The reference's MCP write path never carries a checksum back.
-                "checksum": Value::Null,
+                "checksum": written.checksum,
                 "action": action,
             }));
         }
@@ -928,11 +964,34 @@ impl<'a> McpServer<'a> {
         }
         let metadata = NoteMetadata::from_pairs(metadata_pairs(params.metadata())?);
         let output_format = params.output_format();
-        let (document, file_created) = {
+        let edited = {
             let mut notes = self.notes();
             notes
-                .edit_note_with_status(&identifier, operation, &content, &options, &metadata)
-                .await?
+                .edit_note_guarded(
+                    &identifier,
+                    operation,
+                    &content,
+                    &options,
+                    &metadata,
+                    params.expected_checksum.as_deref(),
+                )
+                .await
+        };
+        let (document, file_created) = match edited {
+            Ok(result) => result,
+            // Upstream 0.24.0 (#1688): a refused edit is a tool error. A refusal comes
+            // only from a write that rolled back, so the append is not in the note.
+            Err(Error::RevisionConflict { expected, current }) => {
+                return Ok(as_tool_error(revision_conflict_result(
+                    output_format,
+                    &identifier,
+                    &identifier,
+                    &expected,
+                    &current,
+                    &self.project_name,
+                )?));
+            }
+            Err(other) => return Err(other),
         };
 
         if output_format.is_json() {
@@ -940,7 +999,9 @@ impl<'a> McpServer<'a> {
                 "title": document.title,
                 "permalink": document.permalink,
                 "file_path": document.file_path,
-                "checksum": Value::Null,
+                // Upstream 0.24.0 (#1586): the real checksum, so a caller can chain a
+                // guarded edit without a second read.
+                "checksum": document.checksum,
                 "operation": <&str>::from(operation),
                 "fileCreated": file_created,
             }));

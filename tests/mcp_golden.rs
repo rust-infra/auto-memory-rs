@@ -517,6 +517,21 @@ fn mcp_read_content_and_view_note_replay_the_reference_payloads() {
         // FastMCP's key order, so compare the decoded payload field by field.
         let ours: Value = serde_json::from_str(&ours).expect("read_content payload");
         let expected: Value = serde_json::from_str(&expected).expect("golden payload");
+        // The 0.23.2 corpus predates two fields the port now adds on purpose:
+        // `read_note`'s JSON payload carries `checksum` and `updated_at` since upstream
+        // 0.24.0 (#1552, #1683). The captured baseline stays untouched — the comparison
+        // strips exactly those keys instead of re-recording the corpus — and the
+        // 0.24 additions are asserted separately in `tests/mcp_revision_guard.rs`.
+        let ours = if id.starts_with("read-content") {
+            ours
+        } else {
+            let mut ours = ours;
+            if let Some(object) = ours.as_object_mut() {
+                object.remove("checksum");
+                object.remove("updated_at");
+            }
+            ours
+        };
         assert_eq!(ours, expected, "read_content payload differs for {id}");
         if id.starts_with("read-content") {
             assert_eq!(
@@ -525,11 +540,25 @@ fn mcp_read_content_and_view_note_replay_the_reference_payloads() {
                 "read_content is the one tool the reference does not nest under `result`"
             );
         } else {
-            // `read_note` returns `str | dict`, so FastMCP nests it under `result`.
+            // `read_note` returns `str | dict`, so FastMCP nests it under `result`. The
+            // structured payload keeps the two 0.24 additions, which is the whole point
+            // of comparing the text surface against the corpus and the structure against
+            // the live frame.
+            let structured =
+                &frame_of(&frames, request_id)["result"]["structuredContent"]["result"];
+            let mut structured = structured.clone();
+            if let Some(object) = structured.as_object_mut() {
+                object.remove("checksum");
+                object.remove("updated_at");
+            }
             assert_eq!(
-                frame_of(&frames, request_id)["result"]["structuredContent"]["result"],
-                ours,
+                structured, ours,
                 "read_note json payload should be nested under structuredContent.result"
+            );
+            assert!(
+                frame_of(&frames, request_id)["result"]["structuredContent"]["result"]["checksum"]
+                    .is_string(),
+                "the 0.24 read_note payload must carry the revision checksum"
             );
         }
     }

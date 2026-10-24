@@ -110,6 +110,11 @@ pub(crate) struct WriteNoteParams {
     /// Tags: a string, a list, or a comma-separated string (see `parse_tags`).
     #[serde(deserialize_with = "lax")]
     pub(crate) tags: Option<Value>,
+    /// Replace the note only while it is still this revision (upstream 0.24.0 #1642).
+    ///
+    /// The full `checksum` from a JSON `read_note`/`write_note`/`edit_note` result.
+    #[serde(deserialize_with = "lax")]
+    pub(crate) expected_checksum: Option<String>,
     #[serde(deserialize_with = "lax")]
     pub(crate) output_format: Option<String>,
 }
@@ -142,6 +147,11 @@ pub(crate) struct ReadNoteParams {
     /// Whether the JSON payload keeps the frontmatter block on `content`.
     #[serde(deserialize_with = "lax")]
     pub(crate) include_frontmatter: Option<bool>,
+    /// Return only the note's metadata, checksum and `updated_at`, without the body
+    /// (upstream 0.24.0 #1552). Use it to refresh a stale `expected_checksum` without
+    /// paying for the whole note.
+    #[serde(deserialize_with = "lax")]
+    pub(crate) include_content: Option<bool>,
     #[serde(deserialize_with = "lax")]
     pub(crate) page: Option<u64>,
     /// Older spelling of `page`.
@@ -208,6 +218,9 @@ pub(crate) struct EditNoteParams {
     /// Frontmatter pairs to merge in.
     #[serde(deserialize_with = "lax")]
     pub(crate) metadata: Option<Value>,
+    /// Edit the note only while it is still this revision (upstream 0.24.0 #1552).
+    #[serde(deserialize_with = "lax")]
+    pub(crate) expected_checksum: Option<String>,
     #[serde(deserialize_with = "lax")]
     pub(crate) output_format: Option<String>,
 }

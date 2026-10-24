@@ -52,6 +52,20 @@ pub enum Error {
         message: String,
     },
 
+    /// A guarded write or edit lost the race: the note is no longer the revision the
+    /// caller read.
+    ///
+    /// Upstream 0.24.0 (#1552, #1642) introduced this so a multi-agent workload can
+    /// write "only the revision I read". Nothing is written when it is returned; the
+    /// payload names the current revision so the caller can re-read and retry.
+    #[error("note revision conflict: expected {expected}, current {current}")]
+    RevisionConflict {
+        /// The checksum the caller supplied.
+        expected: String,
+        /// The checksum the note has now.
+        current: String,
+    },
+
     /// Filesystem failure.
     #[error("io error: {0}")]
     Io(#[from] std::io::Error),

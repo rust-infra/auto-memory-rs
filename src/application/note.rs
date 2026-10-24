@@ -41,6 +41,15 @@ pub struct NoteDocument {
     pub observation_count: usize,
     /// Relation count.
     pub relation_count: usize,
+    /// SHA-256 of the file's raw bytes — the revision an `expected_checksum` compares.
+    ///
+    /// Upstream 0.24.0 (#1552, #1642) exposes this as `checksum` on every JSON read and
+    /// write so a caller can overwrite or edit *only the revision it read*. It is the
+    /// same hash the index stores in `entity.checksum`, so a value read here compares
+    /// directly against what the indexer recorded.
+    pub checksum: String,
+    /// The file's last-modified time as a storage timestamp, when it has one.
+    pub updated_at: Option<String>,
 }
 
 /// Ordered frontmatter metadata supplied to note mutations.
@@ -139,8 +148,52 @@ impl<'a> NoteService<'a> {
         note_type: Option<&str>,
         overwrite: bool,
     ) -> Result<NoteDocument> {
+        self.write_note_guarded(relative_path, content, metadata, note_type, overwrite, None)
+            .await
+    }
+
+    /// Write a note, optionally only while it is still `expected_checksum`.
+    ///
+    /// Upstream 0.24.0 (#1642): `expected_checksum` with `overwrite` replaces the note
+    /// only while it is still that revision; otherwise nothing is written and the
+    /// caller gets [`Error::RevisionConflict`] carrying the current checksum. A
+    /// checksum for a path no note owns is also a conflict, so a note deleted since it
+    /// was read is not recreated.
+    pub async fn write_note_guarded(
+        &mut self,
+        relative_path: &str,
+        content: &str,
+        metadata: &NoteMetadata,
+        note_type: Option<&str>,
+        overwrite: bool,
+        expected_checksum: Option<&str>,
+    ) -> Result<NoteDocument> {
         let relative_path = normalize_path(relative_path)?;
         let absolute = self.root.join(&relative_path);
+        if let Some(expected) = expected_checksum {
+            // Read the current revision before deciding anything: the guard is about the
+            // file as it is now, not as the index remembers it.
+            let current = std::fs::read(&absolute)
+                .ok()
+                .map(|bytes| crate::storage::checksum_bytes(&bytes));
+            match current {
+                Some(current) if current == expected => {}
+                Some(current) => {
+                    return Err(Error::RevisionConflict {
+                        expected: expected.to_owned(),
+                        current,
+                    });
+                }
+                None => {
+                    // Nothing owns the path. Reporting a conflict (rather than creating)
+                    // is what keeps a note deleted since it was read from reappearing.
+                    return Err(Error::RevisionConflict {
+                        expected: expected.to_owned(),
+                        current: String::new(),
+                    });
+                }
+            }
+        }
         if absolute.exists() && !overwrite {
             return Err(Error::InvalidArgument {
                 message: format!("File already exists: {relative_path}"),
@@ -236,12 +289,38 @@ impl<'a> NoteService<'a> {
         options: &EditOptions,
         metadata: &NoteMetadata,
     ) -> Result<(NoteDocument, bool)> {
+        self.edit_note_guarded(identifier, operation, content, options, metadata, None)
+            .await
+    }
+
+    /// Edit a note, optionally only while it is still `expected_checksum`.
+    ///
+    /// Upstream 0.24.0 (#1552): a guarded `append` or `prepend` on a missing note is a
+    /// conflict, not an auto-create. A refusal comes only from a write that rolled
+    /// back, so a refused append is never in the note.
+    pub async fn edit_note_guarded(
+        &mut self,
+        identifier: &str,
+        operation: EditOperation,
+        content: &str,
+        options: &EditOptions,
+        metadata: &NoteMetadata,
+        expected_checksum: Option<&str>,
+    ) -> Result<(NoteDocument, bool)> {
         let existing = self.resolve(identifier).await;
         let relative_path = match existing {
             Ok(relative_path) => relative_path,
             Err(error) => {
                 if !matches!(error, Error::InvalidArgument { .. }) {
                     return Err(error);
+                }
+                // A guarded edit of a note that does not exist is a conflict, not an
+                // auto-create: the caller read a revision that is now gone.
+                if let Some(expected) = expected_checksum {
+                    return Err(Error::RevisionConflict {
+                        expected: expected.to_owned(),
+                        current: String::new(),
+                    });
                 }
                 let relative_path = create_path_for(identifier)?;
                 let edited = apply_edit_operation("", operation, content, options)?;
@@ -253,6 +332,15 @@ impl<'a> NoteService<'a> {
         };
         let absolute = self.root.join(&relative_path);
         let current = std::fs::read_to_string(&absolute)?;
+        if let Some(expected) = expected_checksum {
+            let actual = crate::storage::checksum_bytes(current.as_bytes());
+            if actual != expected {
+                return Err(Error::RevisionConflict {
+                    expected: expected.to_owned(),
+                    current: actual,
+                });
+            }
+        }
         let edited = apply_edit_operation(&current, operation, content, options)?;
         let merged = merge_metadata_into_markdown(&edited, metadata.as_pairs())?;
         write_atomic(&absolute, &merged)?;
@@ -341,11 +429,18 @@ impl<'a> NoteService<'a> {
             }
         })?;
         let document = parse_document(relative_path, &text)?;
-        let permalink = self
+        let entity = self
             .store
             .entity_by_file_path(self.project_id, relative_path)
-            .await?
-            .and_then(|entity| entity.permalink);
+            .await?;
+        let permalink = entity.as_ref().and_then(|entity| entity.permalink.clone());
+        // The index's own timestamp is the reference's `updated_at`; a file that has
+        // never been indexed still reports a checksum, which is what a guarded write
+        // needs to detect a concurrent edit.
+        let updated_at = self
+            .store
+            .entity_updated_at_by_path(self.project_id, relative_path)
+            .await?;
         Ok(NoteDocument {
             file_path: relative_path.to_owned(),
             permalink,
@@ -354,6 +449,8 @@ impl<'a> NoteService<'a> {
             content: document.content.clone(),
             observation_count: document.observations.len(),
             relation_count: document.relations.len(),
+            checksum: crate::storage::checksum_bytes(text.as_bytes()),
+            updated_at,
         })
     }
 

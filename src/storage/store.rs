@@ -856,6 +856,30 @@ impl Store {
         }).await
     }
 
+    /// The entity row's `updated_at` for one path, or `None` when it is not indexed.
+    ///
+    /// `NoteDocument::updated_at` reports this rather than the file's mtime: it is the
+    /// timestamp the index and every search row agree on, so a caller refreshing a
+    /// stale checksum sees the same value the search results carry.
+    pub async fn entity_updated_at_by_path(
+        &self,
+        project_id: i64,
+        file_path: &str,
+    ) -> Result<Option<String>> {
+        let file_path = file_path.to_owned();
+        self.call(move |conn| {
+            let value = conn
+                .query_row(
+                    "SELECT updated_at FROM entity WHERE project_id = ?1 AND file_path = ?2",
+                    params![project_id, file_path],
+                    |row| row.get::<_, String>(0),
+                )
+                .optional()?;
+            Ok(value)
+        })
+        .await
+    }
+
     /// Fetch one entity by project-relative file path.
     pub async fn entity_by_file_path(
         &self,

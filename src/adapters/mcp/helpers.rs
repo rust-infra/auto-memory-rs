@@ -251,6 +251,51 @@ pub(crate) fn move_result(
     ))))
 }
 
+/// The payload for a lost `expected_checksum` race.
+///
+/// Upstream 0.24.0 (#1552, #1642, #1719): JSON mode carries `error:
+/// "NOTE_REVISION_CONFLICT"` and `currentChecksum` — `checksum` is null because nothing
+/// was written — plus the note's title, permalink and file path while it still exists.
+/// Text mode renders the same refusal as markdown. Either way the caller re-reads and
+/// retries, which is the whole point of the guard.
+pub(crate) fn revision_conflict_result(
+    output_format: OutputFormat,
+    title: &str,
+    file_path: &str,
+    expected: &str,
+    current: &str,
+    project_name: &str,
+) -> Result<Value> {
+    let still_exists = !current.is_empty();
+    if output_format.is_json() {
+        return json_result(json!({
+            "title": title,
+            "permalink": Value::Null,
+            "file_path": if still_exists { json!(file_path) } else { Value::Null },
+            "checksum": Value::Null,
+            "action": "conflict",
+            "error": "NOTE_REVISION_CONFLICT",
+            "currentChecksum": if still_exists { json!(current) } else { Value::Null },
+        }));
+    }
+    let detail = if still_exists {
+        format!(
+            "The note changed since it was read.\n\n- expected: `{expected}`\n- current: \
+             `{current}`\n\nNothing was written. Re-read the note and retry."
+        )
+    } else {
+        format!(
+            "The note no longer exists, so the revision `{expected}` cannot be written.\n\n\
+             Nothing was written."
+        )
+    };
+    Ok(text_result(format!(
+        "# Edit Conflict\n\n\
+         Could not write **{title}** at `{file_path}`.\n\n{detail}\n\n\
+         <!-- Project: {project_name} -->"
+    )))
+}
+
 /// The reference's refusal when `write_note` would clobber an existing note.
 pub(crate) fn overwrite_error(title: &str, permalink: &str, project_name: &str) -> String {
     format!(
