@@ -74,7 +74,14 @@ pub fn prepare_single_term(term: &str, is_prefix: bool) -> String {
     if is_prefix { format!("{term}*") } else { term }
 }
 
-fn has_boolean_operators(term: &str) -> bool {
+/// Whether a query carries an FTS5 boolean operator.
+///
+/// Upstream 0.24.0 (#1683): such a query runs as **full text** even without an explicit
+/// `search_type`. The vector half of a hybrid search ignores Boolean operators, so a
+/// `NOT` used to exclude nothing and an `AND` used to rank as a bag of words — the query
+/// looked like it had been honored while it had not.
+#[must_use]
+pub fn has_boolean_operators(term: &str) -> bool {
     [" AND ", " OR ", " NOT "]
         .iter()
         .any(|op| format!(" {term} ").contains(op))

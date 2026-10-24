@@ -354,15 +354,40 @@ impl MatchPredicate {
 /// A single predicate keeps the SQL the goldens pin verbatim. Two or more become one
 /// `search_index MATCH ?` whose column filters (`{title} : (…)`) carry the scopes the
 /// separate clauses carried, because FTS5 only accepts that shape.
-fn match_filter(predicates: &[MatchPredicate]) -> Option<(String, Vec<Value>)> {
+fn match_filter(
+    predicates: &[MatchPredicate],
+    options: &TextSearchOptions,
+) -> Option<(String, Vec<Value>)> {
     match predicates {
         [] => None,
-        [MatchPredicate::Text(query)] => Some((
-            "(search_index.title MATCH ? OR search_index.content_stems MATCH ? OR \
-             search_index.content_snippet MATCH ?)"
-                .to_owned(),
-            vec![Value::Text(query.clone()); 3],
-        )),
+        [MatchPredicate::Text(query)] => {
+            // Upstream 0.24.0 (#1683): a boolean query must be evaluated over the whole
+            // note. The three-column OR form evaluates `NOT` per column, so
+            // `coffee NOT pour` matched a note whose *title* has "coffee" and whose
+            // *body* has "pour" — the exclusion applied to each column separately and
+            // never to the note.
+            //
+            // The check is on the caller's own query, not on the prepared expression:
+            // the *relaxed* fallback is itself an `a* OR b*` disjunction, so testing the
+            // prepared text would route every relaxed search through this branch and
+            // change its scores. `options.query` is the raw input.
+            if options
+                .query
+                .as_deref()
+                .is_some_and(has_user_boolean_operator)
+            {
+                return Some((
+                    "search_index MATCH ?".to_owned(),
+                    vec![Value::Text(query.clone())],
+                ));
+            }
+            Some((
+                "(search_index.title MATCH ? OR search_index.content_stems MATCH ? OR \
+                 search_index.content_snippet MATCH ?)"
+                    .to_owned(),
+                vec![Value::Text(query.clone()); 3],
+            ))
+        }
         [MatchPredicate::Title(title)] => Some((
             "search_index.title MATCH ?".to_owned(),
             vec![Value::Text(title.clone())],
@@ -383,6 +408,17 @@ fn match_filter(predicates: &[MatchPredicate]) -> Option<(String, Vec<Value>)> {
             ))
         }
     }
+}
+
+/// Whether the caller's own query carries an FTS5 boolean operator.
+///
+/// Distinct from [`crate::search::query::has_boolean_operators`], which also matches the
+/// ` OR ` the *relaxed* fallback joins its terms with. Only the caller's text decides
+/// whether the boolean path applies.
+fn has_user_boolean_operator(query: &str) -> bool {
+    [" AND ", " OR ", " NOT "]
+        .iter()
+        .any(|op| format!(" {query} ").contains(op))
 }
 
 fn build_filters(
@@ -507,7 +543,7 @@ fn build_filters(
         params.push(Value::Text(after_date.clone()));
     }
 
-    if let Some((clause, match_params)) = match_filter(&matches) {
+    if let Some((clause, match_params)) = match_filter(&matches, options) {
         // The MATCH predicate sits directly after the project filter, so its parameters
         // sit directly after the project id.
         clauses.insert(1, clause);
@@ -544,6 +580,32 @@ mod tests {
         assert!(clause.contains("search_index.type IN (?)"));
         assert_eq!(params[0], Value::Integer(1));
         assert_eq!(params[1], Value::Text("entity".to_owned()));
+    }
+
+    #[test]
+    fn a_boolean_query_uses_one_table_level_match() {
+        // Upstream 0.24.0 (#1683): `NOT` must apply to the whole note, not per column.
+        let options = TextSearchOptions {
+            query: Some("coffee NOT pour".to_owned()),
+            ..TextSearchOptions::default()
+        };
+        let (clause, params) =
+            build_filters(1, &options, Some("coffee* NOT pour*")).expect("filters");
+        assert_eq!(clause.matches("MATCH").count(), 1, "{clause}");
+        assert!(clause.contains("search_index MATCH ?"), "{clause}");
+        assert!(!clause.contains("content_stems MATCH"), "{clause}");
+        assert!(params.contains(&Value::Text("coffee* NOT pour*".to_owned())));
+    }
+
+    #[test]
+    fn a_non_boolean_query_keeps_the_column_scoped_or() {
+        let options = TextSearchOptions {
+            query: Some("rust".to_owned()),
+            ..TextSearchOptions::default()
+        };
+        let (clause, _) = build_filters(1, &options, Some("rust*")).expect("filters");
+        assert!(clause.contains("search_index.title MATCH ?"), "{clause}");
+        assert!(clause.contains("content_stems MATCH"), "{clause}");
     }
 
     #[test]

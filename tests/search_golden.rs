@@ -65,7 +65,16 @@ fn assert_ordered(case_name: &str, page: &SearchPage) {
         .iter()
         .map(|result| result["score"].as_f64().unwrap_or_default())
         .collect();
+    // Upstream 0.24.0 (#1683): a boolean query is evaluated with one table-level MATCH
+    // instead of a three-column OR, because the OR form applied `NOT` per column and
+    // never to the note. That changes the bm25 arithmetic — the same rows, a different
+    // score — so `text-boolean` compares membership and order but not the value the
+    // 0.23.2 corpus recorded. Every non-boolean case still pins its scores exactly.
+    let score_exempt = case_name == "text-boolean";
     for (index, (actual, expected)) in page.results.iter().zip(expected_scores).enumerate() {
+        if score_exempt {
+            continue;
+        }
         assert!(
             (actual.score as f64 - expected).abs() <= 1e-6,
             "{case_name}: score[{index}] expected {expected}, got {}",

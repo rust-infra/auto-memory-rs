@@ -1625,6 +1625,16 @@ impl<'a> McpServer<'a> {
             }
         }
 
+        // Upstream 0.24.0 (#1683): a query with AND/OR/NOT runs as full text unless the
+        // caller named a search_type. The vector half of a hybrid search ignores Boolean
+        // operators, so honoring one there silently answered a different question.
+        if raw_search_type == "text"
+            && !effective_query.is_empty()
+            && crate::search::query::has_boolean_operators(&effective_query)
+        {
+            mode = SearchMode::Text;
+        }
+
         if !has_search_criteria(&options, supplied_entity_types) {
             return Ok(SearchOutcome::Guidance(no_criteria_guidance().to_owned()));
         }
