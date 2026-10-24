@@ -116,7 +116,7 @@ found by re-reading all 161 numbered entries against the code, and are now imple
 
 | Upstream | What is missing |
 |---|---|
-| #1335 | Entity-body chunks still come one per bullet. Splitting on headings and a size budget rewrites every entity-body chunk text, and the captured vector corpus holds the reference *vectors* for the per-bullet texts. Re-capturing them needs the reference embedding model, which is not in this environment: `tests/embedding_runtime.rs` skips rather than runs. Until that capture is redone, implementing #1335 would replace a verified reference comparison with a self-consistency check, so it is deliberately held rather than half-done. |
+| #1335 | Entity-body chunks still come one per bullet. Splitting on headings and a size budget rewrites every entity-body chunk text, so the 0.23.2 vector capture — which holds vectors for the per-bullet texts — no longer covers entity search. The local ONNX runtime here does reproduce the reference vectors (`tests/embedding_runtime.rs` runs, and pins the drift at 5e-4 per component / 1e-5 cosine), so a replacement capture is possible; it is held because doing it properly means re-recording entity vectors *and* the expected rankings and scores in four golden files, and a ranking re-recorded from this port is a regression anchor rather than an independent check. That trade is recorded here rather than made silently. |
 | #1788 | Chunk metadata updates are written per row rather than in one set-based statement. |
 
 ### Upstream items that do not arise in this design
