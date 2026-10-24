@@ -22,6 +22,23 @@ pub fn render_search_markdown(
     query: Option<&str>,
     project_id: Option<&str>,
 ) -> String {
+    // The default assumes an indexed project: a caller that has not looked at the index
+    // cannot claim there is nothing in it, and the generic message is the safe one.
+    render_search_markdown_with_index_state(payload, project, query, project_id, false)
+}
+
+/// Render a search page, knowing whether the project has been indexed at all.
+///
+/// Upstream 0.24.0 (#1534): a project with no indexed notes answers with
+/// "Project Index Required" rather than "no results", because the two mean different
+/// things and only one of them is fixed by rephrasing the query.
+pub fn render_search_markdown_with_index_state(
+    payload: &Value,
+    project: &str,
+    query: Option<&str>,
+    project_id: Option<&str>,
+    project_is_unindexed: bool,
+) -> String {
     let results = payload["results"].as_array().cloned().unwrap_or_default();
     let query = query.unwrap_or_default();
 
@@ -41,6 +58,26 @@ pub fn render_search_markdown(
                  it will guide creating a first note"
             )
         };
+        // Upstream 0.24.0 (#1534): an empty result on a project that has never been
+        // indexed is not "no match" — it is "nothing to match against". Saying the former
+        // sends a caller off to rephrase a query that could never have worked.
+        if project_is_unindexed {
+            return format!(
+                "# Project Index Required\n\n\
+                 Project '{project}' has no indexed notes yet, so a search cannot answer. \
+                 Run `auto-memory reindex` (or `auto-memory project index {project}`) first, \
+                 then retry."
+            );
+        }
+        // Upstream 0.24.0 (#1533): an unspaced CJK compound that finds nothing usually means
+        // the caller guessed at a word boundary. Suggesting a shorter term or explicit
+        // spaces is more useful than "try broader terms", which is what the generic
+        // message already says.
+        if let Some(hint) = cjk_query_hint(query) {
+            return format!(
+                "No results found for '{query}' in project '{project}'. {hint} Or {suggestion}."
+            );
+        }
         return format!(
             "No results found for '{query}' in project '{project}'. Try broader or different \
              terms, or {suggestion}."
@@ -94,6 +131,38 @@ pub fn render_search_markdown(
     ));
 
     parts.join("\n")
+}
+
+/// A hint for an unspaced CJK compound that found nothing (upstream 0.24.0 #1533).
+///
+/// An unspaced compound is one run of unsegmented-script characters with no whitespace. When
+/// such a query finds nothing, the caller has almost always guessed a word boundary the
+/// index does not share — the index stores unigrams and bigrams, not words. Suggesting a
+/// shorter term or explicit spaces is actionable; "try broader terms" is not.
+#[must_use]
+pub fn cjk_query_hint(query: &str) -> Option<String> {
+    let trimmed = query.trim();
+    if trimmed.is_empty() || trimmed.split_whitespace().count() > 1 {
+        // A query that already has spaces is not an unspaced compound.
+        return None;
+    }
+    let grams = crate::search::ngram::ngrams(trimmed);
+    let bigrams: Vec<&String> = grams
+        .iter()
+        .filter(|gram| gram.chars().count() == 2)
+        .collect();
+    if bigrams.is_empty() {
+        return None;
+    }
+    // Suggest the first bigram, which is what the index actually holds.
+    let sample = bigrams
+        .first()
+        .map(|gram| gram.as_str())
+        .unwrap_or_default();
+    Some(format!(
+        "This looks like an unspaced compound; try a shorter word (for example '{sample}') \
+         or put spaces between the words."
+    ))
 }
 
 /// The reply when a semantic search type is requested without an embedding runtime.
@@ -184,7 +253,10 @@ impl SearchType {
 
 #[cfg(test)]
 mod tests {
-    use super::{render_search_markdown, search_failed_guidance, semantic_disabled_guidance};
+    use super::{
+        cjk_query_hint, render_search_markdown, render_search_markdown_with_index_state,
+        search_failed_guidance, semantic_disabled_guidance,
+    };
     use serde_json::json;
 
     #[test]
@@ -238,5 +310,59 @@ mod tests {
         let failed = search_failed_guidance("oracle", "rust", "Invalid search_type 'x'.");
         assert!(failed.starts_with("# Search Failed\n\nError searching for 'rust': "));
         assert!(failed.contains("- **Boolean variations**: `search_notes(\"oracle\",\"rust\")`"));
+    }
+    #[test]
+    fn an_unindexed_project_says_the_index_is_missing() {
+        // Upstream 0.24.0 (#1534): "no match" and "nothing to match against" are different
+        // answers, and only one of them is fixed by rephrasing the query.
+        let payload = json!({"results": [], "current_page": 1, "page_size": 10});
+        let text = render_search_markdown_with_index_state(
+            &payload,
+            "oracle",
+            Some("rust"),
+            Some("uuid-1"),
+            true,
+        );
+        assert!(text.starts_with("# Project Index Required"), "{text}");
+        assert!(text.contains("auto-memory reindex"), "{text}");
+        assert!(
+            !text.contains("No results found"),
+            "an unindexed project must not claim a miss: {text}"
+        );
+    }
+
+    #[test]
+    fn an_indexed_project_with_no_match_keeps_the_search_message() {
+        let payload = json!({"results": [], "current_page": 1, "page_size": 10});
+        let text = render_search_markdown_with_index_state(
+            &payload,
+            "oracle",
+            Some("rust"),
+            Some("uuid-1"),
+            false,
+        );
+        assert!(text.starts_with("No results found"), "{text}");
+    }
+
+    #[test]
+    fn an_unspaced_cjk_compound_suggests_a_shorter_term() {
+        // Upstream 0.24.0 (#1533): the index holds unigrams and bigrams, not words, so an
+        // unspaced compound that finds nothing usually means a guessed word boundary.
+        let hint = cjk_query_hint("中文测试文档").expect("hint");
+        assert!(hint.contains("shorter word"), "{hint}");
+        assert!(
+            hint.contains('中'),
+            "the sample comes from the query: {hint}"
+        );
+    }
+
+    #[test]
+    fn a_spaced_or_latin_query_gets_no_cjk_hint() {
+        // A query that already has spaces is not an unspaced compound, and a Latin query
+        // has no unsegmented characters to segment.
+        assert!(cjk_query_hint("中文 测试").is_none());
+        assert!(cjk_query_hint("rust search").is_none());
+        assert!(cjk_query_hint("").is_none());
+        assert!(cjk_query_hint("rust").is_none());
     }
 }

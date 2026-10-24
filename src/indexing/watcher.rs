@@ -123,6 +123,11 @@ impl IgnoreRules {
     ///
     /// Mirrors `should_ignore_path`: directory patterns match any path part, glob
     /// patterns match each part and the full relative path.
+    ///
+    /// Comment lines are removed by [`read_bmignore`], not here. That ordering is what
+    /// makes an escaped hash distinguishable from a comment (upstream 0.24.0 #1539): once
+    /// `\#*#` has been unescaped to `#*#`, re-checking the leading `#` at match time would
+    /// archive the very pattern the escape was there to keep.
     pub fn should_ignore(&self, relative: &str) -> bool {
         if relative.is_empty() {
             return false;
@@ -133,7 +138,7 @@ impl IgnoreRules {
             .collect();
         for pattern in &self.patterns {
             let pattern = pattern.trim();
-            if pattern.is_empty() || pattern.starts_with('#') {
+            if pattern.is_empty() {
                 continue;
             }
             let pattern = pattern.strip_prefix('/').unwrap_or(pattern);
@@ -161,8 +166,22 @@ fn read_bmignore(root: &Path) -> Vec<String> {
     };
     contents
         .lines()
-        .map(|line| line.trim().to_owned())
-        .filter(|line| !line.is_empty() && !line.starts_with('#'))
+        .map(str::trim_end)
+        .filter_map(|line| {
+            // Upstream 0.24.0 (#1539): an escaped hash (`\#*#`) means a literal `#`, so it
+            // is a pattern rather than a comment. Unescaping happens before the comment
+            // check, which is what makes the two spellings distinguishable.
+            let pattern = if let Some(rest) = line.strip_prefix("\\#") {
+                format!("#{rest}")
+            } else if line.trim_start().starts_with('#') {
+                // A bare `#` at the start is a comment.
+                return None;
+            } else {
+                line.to_owned()
+            };
+            let pattern = pattern.trim().to_owned();
+            (!pattern.is_empty()).then_some(pattern)
+        })
         .collect()
 }
 

@@ -164,6 +164,17 @@ pub fn markdown_files_honouring_ignore(root: &Path) -> Vec<(String, PathBuf)> {
         .collect()
 }
 
+/// Whether a file name is an editor's scratch copy rather than a note.
+///
+/// Upstream 0.24.0 (#1537) names Emacs autosave files (`#note.md#`) specifically; the same
+/// rule covers its lock files (`.#note.md`) and Vim's swap files, because indexing an
+/// editor's scratch state makes a vault look like it has notes it does not have.
+fn is_editor_scratch(file_name: &str) -> bool {
+    (file_name.starts_with('#') && file_name.ends_with('#'))
+        || file_name.starts_with(".#")
+        || (file_name.starts_with('.') && file_name.ends_with(".swp"))
+}
+
 /// Every markdown file in `root` as `(project-relative path, absolute path)`.
 ///
 /// This is the raw walk, without the ignore rules: indexing has its own entry point and
@@ -183,7 +194,12 @@ pub fn markdown_files(root: &Path) -> Vec<(String, PathBuf)> {
         })
         .filter_map(|entry| entry.ok())
         .filter(|entry| {
-            entry.file_type().is_file() && entry.path().extension().is_some_and(|ext| ext == "md")
+            entry.file_type().is_file()
+                && entry.path().extension().is_some_and(|ext| ext == "md")
+                // Upstream 0.24.0 (#1537): an Emacs autosave file is `#note.md#`, which has
+                // no `md` extension once the trailing hash is considered — but Emacs also
+                // writes `.#note.md`, which does. Both are editor scratch state, not notes.
+                && !is_editor_scratch(&entry.file_name().to_string_lossy())
         })
         .map(|entry| {
             let path = entry.path();

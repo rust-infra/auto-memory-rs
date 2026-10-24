@@ -1648,12 +1648,18 @@ impl<'a> McpServer<'a> {
                 if output_format.is_json() {
                     return json_result(payload);
                 }
-                Ok(text_result(render_search_markdown(
-                    &payload,
-                    &self.project_name,
-                    query.as_deref(),
-                    Some(&self.project_external_id),
-                )))
+                // Upstream 0.24.0 (#1534): tell "no match" from "nothing indexed". The
+                // count is cheap and already cached by SQLite.
+                let counts = self.store.counts(self.project_id).await?;
+                Ok(text_result(
+                    crate::application::search_text::render_search_markdown_with_index_state(
+                        &payload,
+                        &self.project_name,
+                        query.as_deref(),
+                        Some(&self.project_external_id),
+                        counts.entities == 0,
+                    ),
+                ))
             }
             // Guidance is returned as text whatever `output_format` asked for: the
             // reference only consults it on the success path.

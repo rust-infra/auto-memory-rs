@@ -452,10 +452,11 @@ impl<'a> NoteService<'a> {
         // the project root. Anything else falls through to the index, whose paths were
         // produced by walking the vault.
         let normalized = trimmed.replace('\\', "/");
-        if normalized.ends_with(".md")
-            && is_safe_relative_path(&normalized)
-            && self.root.join(&normalized).is_file()
-        {
+        // Upstream 0.24.0 (#1629): an identifier with a non-Markdown extension matches its
+        // exact file path *before* the extension-less permalink candidates. Without this,
+        // `notes/foo.txt` fell through to the index and resolved to the same-stem
+        // `notes/foo.md` — the caller asked for one file and got another.
+        if is_safe_relative_path(&normalized) && self.root.join(&normalized).is_file() {
             return Ok(normalized);
         }
         if let Some(entity) = resolve_entity_path(self.store, self.project_id, trimmed).await? {
