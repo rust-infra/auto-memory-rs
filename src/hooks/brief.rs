@@ -10,8 +10,6 @@
 //! guidance layout follow the reference because they are a prompt-injection
 //! boundary, not decoration.
 
-use std::collections::BTreeMap;
-
 use crate::domain::dateparser;
 use crate::domain::search::SearchResult;
 use crate::search::text::TextSearchOptions;
@@ -249,7 +247,14 @@ async fn query(
         // which is what the reference does with a `dateparser` miss.
         after_date: after_date.and_then(dateparser::parse_after_date),
         metadata_filters: repository
-            .map(|repository| BTreeMap::from([("repository".to_owned(), repository.to_owned())]))
+            .map(|repository| {
+                vec![crate::search::filters::FieldFilter {
+                    key: "repository".to_owned(),
+                    ops: vec![crate::search::filters::FilterOp::Eq(
+                        serde_json::Value::String(repository.to_owned()),
+                    )],
+                }]
+            })
             .unwrap_or_default(),
         page_size: QUERY_PAGE_SIZE,
         ..TextSearchOptions::default()

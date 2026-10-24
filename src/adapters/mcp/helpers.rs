@@ -233,6 +233,8 @@ pub(crate) fn vector_options(options: &TextSearchOptions) -> VectorSearchOptions
         tags: options.tags.clone(),
         status: options.status.clone(),
         metadata_filters: options.metadata_filters.clone(),
+        // The vector legs re-apply the same filters through the SQL path, so the
+        // typed filters travel with the options instead of being flattened here.
         after_date: options.after_date.clone(),
         ..VectorSearchOptions::default()
     }

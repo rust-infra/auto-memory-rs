@@ -87,11 +87,19 @@ fn rust_parser_matches_reference_parse_golden() {
             actual_frontmatter.and_then(|f| f.get("tags")),
             &mut mismatches,
         );
+        // Upstream 0.24.0 (#1455) keeps metadata's JSON types, so a numeric or boolean
+        // frontmatter value is a number/boolean rather than the 0.23.2 stringification.
+        // The captured corpus stays as recorded; the comparison normalizes only the
+        // *types* it disagrees on, so a changed value still fails.
+        let expected_metadata = expected.get("metadata").map(stringify_scalars);
+        let actual_metadata = actual_frontmatter
+            .and_then(|f| f.get("metadata"))
+            .map(stringify_scalars);
         compare_field(
             &rel,
             "metadata",
-            expected.get("metadata"),
-            actual_frontmatter.and_then(|f| f.get("metadata")),
+            expected_metadata.as_ref(),
+            actual_metadata.as_ref(),
             &mut mismatches,
         );
         compare_field(
@@ -121,6 +129,25 @@ fn rust_parser_matches_reference_parse_golden() {
         mismatches.len(),
         mismatches.join("\n")
     );
+}
+
+/// Render every scalar in a metadata object as the string the 0.23.2 corpus recorded.
+///
+/// The 0.24 parser keeps numbers and booleans typed; the corpus predates that. Comparing
+/// the stringified forms keeps the corpus authoritative about *values* while letting the
+/// typed representation through.
+fn stringify_scalars(value: &Value) -> Value {
+    match value {
+        Value::Object(map) => Value::Object(
+            map.iter()
+                .map(|(key, value)| (key.clone(), stringify_scalars(value)))
+                .collect(),
+        ),
+        Value::Array(items) => Value::Array(items.iter().map(stringify_scalars).collect()),
+        Value::Bool(flag) => Value::String(if *flag { "True" } else { "False" }.to_owned()),
+        Value::Number(number) => Value::String(number.to_string()),
+        other => other.clone(),
+    }
 }
 
 fn compare_field(

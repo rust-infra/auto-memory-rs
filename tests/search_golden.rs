@@ -4,8 +4,6 @@
 //! with no MATCH clause) are compared as multisets; score-bearing queries compare
 //! order and score.
 
-use std::collections::BTreeMap;
-
 use auto_memory::domain::search::{SearchItemType, SearchResult};
 use auto_memory::search::text::{SearchPage, TextSearchOptions};
 use serde_json::Value;
@@ -165,13 +163,16 @@ async fn title_type_tag_and_metadata_filters_match_reference() {
         .expect("tag search");
     assert_multiset("tag-rust", &tag);
 
-    let mut metadata_filters = BTreeMap::new();
-    metadata_filters.insert("status".to_owned(), "active".to_owned());
     let metadata = store
         .search_text(
             project_id,
             &TextSearchOptions {
-                metadata_filters,
+                metadata_filters: vec![auto_memory::search::filters::FieldFilter {
+                    key: "status".to_owned(),
+                    ops: vec![auto_memory::search::filters::FilterOp::Eq(
+                        serde_json::Value::String("active".to_owned()),
+                    )],
+                }],
                 ..TextSearchOptions::default()
             },
         )

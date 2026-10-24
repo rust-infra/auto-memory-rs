@@ -84,10 +84,10 @@ async fn write_then_read_round_trips_through_the_index() {
         entry.metadata.get("status"),
         Some(&serde_json::json!("active"))
     );
-    assert_eq!(
-        entry.metadata.get("priority"),
-        Some(&serde_json::json!("3"))
-    );
+    // Upstream 0.24.0 (#1455): metadata keeps its JSON types, so a numeric frontmatter
+    // value is a number. This is what makes `{"priority": {"$gte": 2}}` compare numbers
+    // instead of a string against a number.
+    assert_eq!(entry.metadata.get("priority"), Some(&serde_json::json!(3)));
 
     {
         let mut notes =

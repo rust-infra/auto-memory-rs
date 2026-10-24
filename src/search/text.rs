@@ -5,7 +5,7 @@
 //! cannot be combined with a join in the same query level. `entity`/`external_id`
 //! are filled in afterwards with a lookup.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 
 use rusqlite::types::Value;
 use rusqlite::{Connection, params_from_iter};
@@ -41,8 +41,11 @@ pub struct TextSearchOptions {
     pub tags: Vec<String>,
     /// Frontmatter `status` filter.
     pub status: Option<String>,
-    /// Additional frontmatter key/value filters.
-    pub metadata_filters: BTreeMap<String, String>,
+    /// Additional frontmatter filters, with operators (upstream 0.24.0 #1676).
+    ///
+    /// The legacy `key -> value` map is accepted too: every entry becomes an exact
+    /// match, which is what the pre-0.24 surface meant.
+    pub metadata_filters: Vec<crate::search::filters::FieldFilter>,
     /// Only rows updated after this timestamp.
     pub after_date: Option<String>,
     /// One-based page number.
@@ -63,7 +66,7 @@ impl Default for TextSearchOptions {
             categories: Vec::new(),
             tags: Vec::new(),
             status: None,
-            metadata_filters: BTreeMap::new(),
+            metadata_filters: Vec::new(),
             after_date: None,
             page: 1,
             page_size: 10,
@@ -138,7 +141,7 @@ fn run_query(
     page: u32,
     page_size: u32,
 ) -> Result<SearchPage> {
-    let (where_clause, mut params) = build_filters(project_id, options, match_query);
+    let (where_clause, mut params) = build_filters(project_id, options, match_query)?;
     let from_clause = "FROM search_index";
 
     let count_sql = format!("SELECT count(*) {from_clause} WHERE {where_clause}");
@@ -386,7 +389,7 @@ fn build_filters(
     project_id: i64,
     options: &TextSearchOptions,
     match_query: Option<&str>,
-) -> (String, Vec<Value>) {
+) -> Result<(String, Vec<Value>)> {
     let mut clauses = vec!["search_index.project_id = ?".to_owned()];
     let mut params: Vec<Value> = vec![Value::Integer(project_id)];
     let mut matches: Vec<MatchPredicate> = Vec::new();
@@ -459,15 +462,18 @@ fn build_filters(
         params.push(Value::Text(status.clone()));
     }
 
-    for (key, value) in &options.metadata_filters {
-        if key.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
-            clauses.push(format!(
-                "search_index.entity_id IN (SELECT id FROM entity WHERE project_id = ? \
-                 AND json_extract(entity_metadata, '$.{key}') = ?)"
-            ));
-            params.push(Value::Integer(project_id));
-            params.push(Value::Text(value.clone()));
-        }
+    // Upstream 0.24.0 (#1676): each field filter compiles to its own comparison, and
+    // several operators on one field AND together. The subquery keeps the filter scoped
+    // to this project and to entity rows.
+    for filter in &options.metadata_filters {
+        let compiled = crate::search::filters::compile_field_filter(filter)?;
+        clauses.push(format!(
+            "search_index.entity_id IN (SELECT id FROM entity WHERE project_id = ? \
+             AND {})",
+            compiled.sql
+        ));
+        params.push(Value::Integer(project_id));
+        params.extend(compiled.params);
     }
 
     if let Some(title) = &options.title {
@@ -508,7 +514,7 @@ fn build_filters(
         params.splice(1..1, match_params);
     }
 
-    (clauses.join(" AND "), params)
+    Ok((clauses.join(" AND "), params))
 }
 
 fn placeholders(count: usize) -> String {
@@ -521,32 +527,59 @@ fn placeholders(count: usize) -> String {
 mod tests {
     use super::*;
 
+    /// One exact-match filter, built the way the MCP layer builds it.
+    fn exact_filter(key: &str, value: &str) -> crate::search::filters::FieldFilter {
+        crate::search::filters::FieldFilter {
+            key: key.to_owned(),
+            ops: vec![crate::search::filters::FilterOp::Eq(
+                serde_json::Value::String(value.to_owned()),
+            )],
+        }
+    }
+
     #[test]
     fn filter_sql_defaults_to_entity_rows() {
-        let (clause, params) = build_filters(1, &TextSearchOptions::default(), None);
+        let (clause, params) =
+            build_filters(1, &TextSearchOptions::default(), None).expect("filters");
         assert!(clause.contains("search_index.type IN (?)"));
         assert_eq!(params[0], Value::Integer(1));
         assert_eq!(params[1], Value::Text("entity".to_owned()));
     }
 
     #[test]
-    fn metadata_filter_rejects_unsafe_keys() {
-        let mut options = TextSearchOptions::default();
-        options
-            .metadata_filters
-            .insert("status".to_owned(), "active".to_owned());
-        options
-            .metadata_filters
-            .insert("bad-key".to_owned(), "x".to_owned());
-        let (clause, params) = build_filters(1, &options, None);
-        assert!(clause.contains("$.status"));
-        assert!(!clause.contains("bad-key"));
+    fn a_metadata_filter_compiles_to_an_exact_match() {
+        let options = TextSearchOptions {
+            metadata_filters: vec![exact_filter("status", "active")],
+            ..TextSearchOptions::default()
+        };
+        let (clause, params) = build_filters(1, &options, None).expect("filters");
+        assert!(
+            clause.contains("json_extract(entity_metadata, ?) = ?"),
+            "{clause}"
+        );
+        // The path is a bound parameter, so the key never reaches the SQL text.
+        assert!(!clause.contains("status"), "{clause}");
+        assert!(params.contains(&Value::Text("$.status".to_owned())));
         assert!(params.contains(&Value::Text("active".to_owned())));
     }
 
     #[test]
+    fn an_unsafe_metadata_key_is_refused_before_sql_is_built() {
+        // The parser rejects a key that cannot be a frontmatter identifier, which is what
+        // keeps it out of the `json_extract` path.
+        let error =
+            crate::search::filters::parse_metadata_filters(&serde_json::json!({ "bad-key": "x" }))
+                .expect_err("unsafe key");
+        assert!(
+            error.to_string().contains("invalid metadata filter key"),
+            "{error}"
+        );
+    }
+
+    #[test]
     fn text_match_uses_column_scoped_or() {
-        let (clause, params) = build_filters(1, &TextSearchOptions::default(), Some("rust*"));
+        let (clause, params) =
+            build_filters(1, &TextSearchOptions::default(), Some("rust*")).expect("filters");
         assert!(clause.contains("content_stems MATCH"));
         assert_eq!(
             params
@@ -567,7 +600,7 @@ mod tests {
             title: Some("Alpha".to_owned()),
             ..TextSearchOptions::default()
         };
-        let (clause, params) = build_filters(1, &options, Some("rust*"));
+        let (clause, params) = build_filters(1, &options, Some("rust*")).expect("filters");
         assert_eq!(clause.matches("MATCH").count(), 1, "{clause}");
         assert!(clause.contains("search_index MATCH ?"), "{clause}");
         assert_eq!(params[0], Value::Integer(1));
@@ -585,7 +618,7 @@ mod tests {
             permalink_match: Some("alpha".to_owned()),
             ..TextSearchOptions::default()
         };
-        let (clause, params) = build_filters(1, &options, Some("rust*"));
+        let (clause, params) = build_filters(1, &options, Some("rust*")).expect("filters");
         assert_eq!(clause.matches("MATCH").count(), 1, "{clause}");
         assert_eq!(
             params[1],

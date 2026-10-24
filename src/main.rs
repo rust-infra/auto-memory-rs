@@ -2879,9 +2879,16 @@ async fn search_command(args: SearchArgs) -> ExitCode {
         // `note_type` is the model column name; the frontmatter key is `type` (the
         // reference aliases it the same way on the MCP path).
         let key = if key == "note_type" { "type" } else { key };
+        // `--meta` is the CLI's exact-match spelling; the operator forms are reachable
+        // through the MCP `metadata_filters` object, which is where agents use them.
         search
             .metadata_filters
-            .insert(key.to_owned(), value.to_owned());
+            .push(auto_memory::search::filters::FieldFilter {
+                key: key.to_owned(),
+                ops: vec![auto_memory::search::filters::FilterOp::Eq(
+                    serde_json::Value::String(value.to_owned()),
+                )],
+            });
     }
     if let Some(value) = after_date {
         // Search bounds go through `dateparser`, not the timeframe parser the context

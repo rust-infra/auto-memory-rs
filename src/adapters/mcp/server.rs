@@ -1734,14 +1734,13 @@ impl<'a> McpServer<'a> {
             // An unparsable bound means "no date filter", as in the reference.
             options.after_date = crate::domain::dateparser::parse_after_date(after);
         }
+        // Upstream 0.24.0 (#1676): the filter object is parsed into typed comparisons,
+        // so `$gte`, `$in`, `$contains`, `$exists`, bare operator names and several
+        // operators on one field all work. An unusable filter fails the call here
+        // rather than silently widening it.
         if let Some(filters) = params.metadata_filters() {
-            for (key, value) in filters {
-                let key = if key == "note_type" { "type" } else { key };
-                let value = value
-                    .as_str()
-                    .map_or_else(|| value.to_string(), str::to_owned);
-                options.metadata_filters.insert(key.to_owned(), value);
-            }
+            options.metadata_filters =
+                crate::search::filters::parse_metadata_filters(&Value::Object(filters.clone()))?;
         }
         Ok(options)
     }

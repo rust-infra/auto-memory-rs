@@ -2,6 +2,7 @@
 
 pub mod chunking;
 pub mod embedding;
+pub mod filters;
 pub mod index_rows;
 pub mod query;
 pub mod relaxation;

@@ -170,8 +170,24 @@ pub fn normalize_value(value: &serde_yaml_ng::Value) -> Value {
     use serde_yaml_ng::Value as Yaml;
     match value {
         Yaml::Null => Value::Null,
-        Yaml::Bool(flag) => Value::String(if *flag { "True" } else { "False" }.to_owned()),
-        Yaml::Number(number) => Value::String(number.to_string()),
+        // Upstream 0.24.0 (#1455): metadata keeps its JSON types. Numbers and booleans
+        // used to be stringified (`priority: 3` became `"3"`, `true` became `"True"`),
+        // which made `{"priority": {"$gte": 2}}` compare a string against a number and
+        // silently match nothing. Typed metadata is what the operator filters need, and
+        // it is also what a caller reading `metadata` back expects.
+        Yaml::Bool(flag) => Value::Bool(*flag),
+        Yaml::Number(number) => {
+            if let Some(integer) = number.as_i64() {
+                Value::Number(integer.into())
+            } else if let Some(unsigned) = number.as_u64() {
+                Value::Number(unsigned.into())
+            } else if let Some(float) = number.as_f64() {
+                serde_json::Number::from_f64(float)
+                    .map_or_else(|| Value::String(number.to_string()), Value::Number)
+            } else {
+                Value::String(number.to_string())
+            }
+        }
         Yaml::String(text) => Value::String(text.clone()),
         Yaml::Sequence(items) => Value::Array(items.iter().map(normalize_value).collect()),
         Yaml::Mapping(map) => {

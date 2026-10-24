@@ -230,7 +230,7 @@ pub struct VectorSearchOptions {
     /// Frontmatter `status` filter.
     pub status: Option<String>,
     /// Additional frontmatter key/value filters.
-    pub metadata_filters: BTreeMap<String, String>,
+    pub metadata_filters: Vec<crate::search::filters::FieldFilter>,
     /// Only rows updated after this timestamp.
     pub after_date: Option<String>,
 }
@@ -249,7 +249,7 @@ impl Default for VectorSearchOptions {
             categories: Vec::new(),
             tags: Vec::new(),
             status: None,
-            metadata_filters: BTreeMap::new(),
+            metadata_filters: Vec::new(),
             after_date: None,
         }
     }
