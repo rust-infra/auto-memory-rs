@@ -45,6 +45,8 @@ const PROPERTY_EXCEPTIONS: &[(&str, &str)] = &[
     ("search_notes", "valid_at"),
     ("search_notes", "valid_overlaps"),
     ("search_notes", "time_kind"),
+    // NEW_IN_0_24: cross-project scoping (#1558).
+    ("search_notes", "projects"),
 ];
 
 /// Reference-required arguments this port treats as optional.

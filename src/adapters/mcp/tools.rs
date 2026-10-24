@@ -89,6 +89,7 @@ impl ToolName {
                         "enum": ["hybrid", "permalink", "semantic", "text", "title", "vector"],
                     },
                     "search_all_projects": { "type": "boolean" },
+                    "projects": { "type": "array", "items": { "type": "string" } },
                     "page": { "type": "integer" },
                     "page_size": { "type": "integer" },
                     "title": { "type": "string" },

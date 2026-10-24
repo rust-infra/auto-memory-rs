@@ -1419,7 +1419,15 @@ impl<'a> McpServer<'a> {
     async fn search_notes(&mut self, params: &SearchNotesParams) -> Result<Value> {
         let query = params.query.clone();
         let output_format = params.output_format();
-        if params.search_all_projects.unwrap_or(false) {
+        // `projects` implies the cross-project path even without `search_all_projects`:
+        // naming any project has to be honored through the merge, and an unknown name must
+        // fail the call rather than be ignored.
+        let spans_projects = params.search_all_projects.unwrap_or(false)
+            || params
+                .projects
+                .as_ref()
+                .is_some_and(|projects| !projects.is_empty());
+        if spans_projects {
             return self.search_all_projects(params, output_format).await;
         }
         let compact = params.compact.unwrap_or(false);
@@ -1480,7 +1488,35 @@ impl<'a> McpServer<'a> {
             .max(1)
             .min(u64::from(u32::MAX)) as u32;
         let per_project_page_size = page.saturating_mul(page_size);
-        let projects = self.store.projects().await?;
+        let all_projects = self.store.projects().await?;
+        // Upstream 0.24.0 (#1558): `projects` narrows the search to a chosen subset, by
+        // name or external id. An unknown name is an error, not a silently narrower
+        // search — a typo would otherwise read as "that project has nothing".
+        let projects: Vec<crate::storage::records::ProjectRow> = match &params.projects {
+            Some(wanted) if !wanted.is_empty() => {
+                let mut selected = Vec::with_capacity(wanted.len());
+                for name in wanted {
+                    let found = all_projects
+                        .iter()
+                        .find(|project| project.name == *name || project.external_id == *name);
+                    let Some(found) = found else {
+                        return Err(Error::InvalidArgument {
+                            message: format!(
+                                "unknown project '{name}'. Known projects: {}",
+                                all_projects
+                                    .iter()
+                                    .map(|project| project.name.as_str())
+                                    .collect::<Vec<_>>()
+                                    .join(", ")
+                            ),
+                        });
+                    };
+                    selected.push(found.clone());
+                }
+                selected
+            }
+            _ => all_projects,
+        };
 
         let mut merged: Vec<Value> = Vec::new();
         let mut total = 0usize;
@@ -1515,7 +1551,16 @@ impl<'a> McpServer<'a> {
             };
             total_is_exact &= payload["total_is_exact"] == json!(true);
             any_project_has_more |= payload["has_more"] == json!(true);
-            merged.extend(rows);
+            // Upstream 0.24.0 (#1558): every row on a page that spans projects says which
+            // project it came from, so the next call can be routed to the right one.
+            for row in rows {
+                let mut row = row;
+                if let Some(object) = row.as_object_mut() {
+                    object.insert("project".to_owned(), json!(project.name));
+                    object.insert("project_id".to_owned(), json!(project.external_id));
+                }
+                merged.push(row);
+            }
         }
 
         // Stable descending sort: ties keep project order, then result order.

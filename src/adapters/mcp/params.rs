@@ -361,6 +361,12 @@ pub(crate) struct SearchNotesParams {
     /// Search every registered project and merge the pages.
     #[serde(deserialize_with = "lax")]
     pub(crate) search_all_projects: Option<bool>,
+    /// Search only these projects, by name or external id (upstream 0.24.0 #1558).
+    ///
+    /// An unknown name is an error rather than a silently narrower search, because a
+    /// typo would otherwise look like "that project has nothing".
+    #[serde(deserialize_with = "lax_strings")]
+    pub(crate) projects: Option<Vec<String>>,
     /// Return identifiers, metadata, relation targets and pagination without note
     /// content, so an agent can pick what to read before paying for the bodies
     /// (upstream 0.24.0 #686).

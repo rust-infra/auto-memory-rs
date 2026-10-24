@@ -235,6 +235,26 @@ pub struct VectorSearchOptions {
     pub after_date: Option<String>,
 }
 
+impl VectorSearchOptions {
+    /// Whether any structured filter narrows the result set.
+    ///
+    /// Used to decide whether the candidate window needs over-fetching (upstream 0.24.0
+    /// #1558): an unfiltered search reads its window once, because every row the vector
+    /// index returns is admissible.
+    #[must_use]
+    pub fn has_structured_filters(&self) -> bool {
+        self.permalink.is_some()
+            || self.permalink_match.is_some()
+            || self.title.is_some()
+            || !self.note_types.is_empty()
+            || !self.categories.is_empty()
+            || !self.tags.is_empty()
+            || self.status.is_some()
+            || !self.metadata_filters.is_empty()
+            || self.after_date.is_some()
+    }
+}
+
 impl Default for VectorSearchOptions {
     fn default() -> Self {
         Self {
@@ -527,26 +547,44 @@ pub async fn search_vector(
         ),
         None => candidate_limit(limit, offset) as usize,
     };
-    // the vector search matches are ranked by similarity, so we need to hydrate
-    // the candidate pool before reranking to get the full set of results.
-    // 向量数据
-    let matches = ranked_matches(
-        store,
-        project_id, // filter
-        query_vector,
-        model,
-        candidate_chunks,
-        options.min_similarity,
-    )
-    .await?;
-    // matches: the vector search matches are ranked by similarity, so we need to
-    // apply row filters to the candidate pool before reranking to get the full set of results.
-    // 向量数据经过相似度排序后，应用行过滤器获取完整结果集（全文检索）
-    let matches = apply_row_filters(store, project_id, matches, options).await?;
-    let matches: Vec<RowMatch> = matches
-        .into_iter()
-        .filter(|row| type_allowed(&row.key.item_type, options))
-        .collect();
+    // Upstream 0.24.0 (#1558): a filtered vector search over-fetches until the window
+    // holds enough admitted rows. The vector index ranks by similarity alone, so a window
+    // taken straight from it and filtered afterwards can hold few admitted rows while more
+    // sit just past it — and the page comes back short although matches exist.
+    //
+    // The growth is bounded (a geometric ladder, the ranking exhausted, or the tail below
+    // the similarity threshold), so an over-selective filter costs a few extra reads, not
+    // a scan of the vault.
+    let filtered = options.has_structured_filters();
+    let mut window = candidate_chunks;
+    let mut matches = loop {
+        let raw = ranked_matches(
+            store,
+            project_id,
+            query_vector,
+            model,
+            window,
+            options.min_similarity,
+        )
+        .await?;
+        let exhausted = raw.len() < window;
+        let admitted = apply_row_filters(store, project_id, raw, options).await?;
+        let admitted: Vec<RowMatch> = admitted
+            .into_iter()
+            .filter(|row| type_allowed(&row.key.item_type, options))
+            .collect();
+        // An unfiltered search reads its window once, as before. A filtered one stops when
+        // it has enough rows, the ranking ran out, or the next doubling is pointless.
+        if !filtered
+            || admitted.len() >= limit as usize + offset as usize
+            || exhausted
+            || window >= VECTOR_FILTER_SCAN_LIMIT as usize
+        {
+            break admitted;
+        }
+        window = (window * 2).min(VECTOR_FILTER_SCAN_LIMIT as usize);
+    };
+    let _ = &mut matches;
 
     let entries: Vec<HydrationEntry> = matches
         .into_iter()
