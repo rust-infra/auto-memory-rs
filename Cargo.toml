@@ -79,6 +79,17 @@ tokio-rusqlite = { version = "0.6", features = ["bundled"] }
 [profile.release]
 lto = "thin"
 
+# Lints that encode a decision the codebase has already made, so a regression fails the
+# build instead of surviving review. `cargo clippy -- -D warnings` (which CI and
+# `scripts/check-rust.sh` run) turns these into errors.
+[lints.clippy]
+# A glob import hides what a module actually depends on and defeats tooling-driven
+# renames: a function renamed in `helpers.rs` cannot be traced to its callers. The guide
+# allows exactly three cases (an inline test module's `use super::*`, `use enum::*` inside
+# that enum's methods, and a non-leaf module's `pub use submodule::*`); this lint's
+# default already permits the first, so it flags only the ones worth flagging.
+wildcard_imports = "warn"
+
 [dev-dependencies]
 tempfile = "3.27.0"
 # Golden tests anchor wall-clock-relative windows (the `since_days` bounds of the
