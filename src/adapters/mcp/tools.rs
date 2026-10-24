@@ -285,7 +285,65 @@ impl ToolName {
                 }),
             ),
         };
-        tool(self.into(), description, required, properties)
+        let mut definition = tool(self.into(), description, required, properties);
+        definition["annotations"] = self.annotations();
+        definition
+    }
+
+    /// MCP behavior hints for this tool.
+    ///
+    /// Upstream 0.24.0 (#1031, #1036, #1037): every tool carries `readOnlyHint`,
+    /// `destructiveHint`, `idempotentHint` and `openWorldHint` so an agent can pick the
+    /// right tool on demand instead of trying them to see what they do. The hints are
+    /// derived from [`ToolName::is_mutating`] and a small table of the destructive and
+    /// non-idempotent cases, so a tool cannot ship with hints that disagree with its
+    /// read-only enforcement.
+    pub(crate) fn annotations(self) -> Value {
+        let read_only = !self.is_mutating();
+        // Destructive: it can remove or replace what the user wrote. A `write_note`
+        // create is not destructive, but `overwrite=True` is, so the hint is set on the
+        // tool rather than the call.
+        let destructive = matches!(
+            self,
+            Self::DeleteNote | Self::DeleteProject | Self::WriteNote | Self::EditNote
+        );
+        // Idempotent: repeating the same call reaches the same state.
+        let idempotent = matches!(
+            self,
+            Self::ReadNote
+                | Self::SearchNotes
+                | Self::Search
+                | Self::Fetch
+                | Self::BuildContext
+                | Self::ListDirectory
+                | Self::ReadContent
+                | Self::ViewNote
+                | Self::RecentActivity
+                | Self::ListMemoryProjects
+                | Self::SchemaValidate
+                | Self::SchemaInfer
+                | Self::SchemaDiff
+                | Self::AutoMemoryDiagnostics
+                | Self::Cat
+                | Self::Grep
+                | Self::Ls
+                | Self::Find
+                | Self::Tail
+                | Self::Man
+                | Self::MoveNote
+                | Self::DeleteNote
+                | Self::DeleteProject
+        );
+        // Open world: the tool reaches beyond this vault. Only the ChatGPT `fetch`
+        // resolves arbitrary ids, and `write_note` accepts free-form content, so both are
+        // marked; everything else is closed over the local project.
+        let open_world = matches!(self, Self::Fetch | Self::WriteNote | Self::EditNote);
+        json!({
+            "readOnlyHint": read_only,
+            "destructiveHint": destructive,
+            "idempotentHint": idempotent,
+            "openWorldHint": open_world,
+        })
     }
 }
 

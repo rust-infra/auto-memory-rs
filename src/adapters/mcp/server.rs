@@ -59,6 +59,17 @@ pub const MCP_PROTOCOL_VERSION: &str = "2024-11-05";
 /// Server name reported in `initialize`.
 pub const SERVER_NAME: &str = "auto-memory-rs";
 
+/// One `resources/read` result.
+fn resource_contents(uri: &str, mime_type: &str, text: String) -> Value {
+    json!({
+        "contents": [{
+            "uri": uri,
+            "mimeType": mime_type,
+            "text": text,
+        }]
+    })
+}
+
 /// The tools `tools/list` advertises and `tools/call` accepts.
 ///
 /// The wire names are the compatibility contract (`specs/mcp-spec.md` §3–5); the
@@ -445,7 +456,14 @@ impl<'a> McpServer<'a> {
                 self.client_info = ClientInfo::from_initialize(&request["params"]);
                 Ok(json!({
                     "protocolVersion": MCP_PROTOCOL_VERSION,
-                    "capabilities": { "tools": {} },
+                    // Upstream 0.24.0 (#610): notes answer `resources/read`, and the
+                    // manual is served beside them. `prompts` advertises the one
+                    // onboarding prompt.
+                    "capabilities": {
+                        "tools": {},
+                        "resources": { "subscribe": false, "listChanged": false },
+                        "prompts": { "listChanged": false },
+                    },
                     "serverInfo": {
                         "name": SERVER_NAME,
                         "version": env!("CARGO_PKG_VERSION"),
@@ -455,6 +473,10 @@ impl<'a> McpServer<'a> {
             "ping" => Ok(json!({})),
             "tools/list" => Ok(json!({ "tools": self.tools() })),
             "tools/call" => self.call_tool(&request["params"]).await,
+            "resources/list" => Ok(self.resources_list()),
+            "resources/read" => self.resources_read(&request["params"]).await,
+            "prompts/list" => Ok(self.prompts_list()),
+            "prompts/get" => self.prompts_get(&request["params"]),
             other => Err(Error::InvalidArgument {
                 message: format!("unsupported method: {other}"),
             }),
@@ -1929,6 +1951,177 @@ impl<'a> McpServer<'a> {
         Ok(text_result(render_directory_text(
             &listing, &options, &dir_name,
         )))
+    }
+
+    /// `resources/list` — the note resources plus the manual.
+    ///
+    /// Upstream 0.24.0 (#610): every `memory://` URL the server hands out answers
+    /// `resources/read`, and each manual page is a concrete resource so a client that
+    /// browses `resources/list` sees it with its summary.
+    fn resources_list(&self) -> Value {
+        let mut resources: Vec<Value> = Vec::new();
+        // The project info resource, which is what a client asks for first.
+        resources.push(json!({
+            "uri": format!("memory://{}/{}/info", self.project_name, self.project_name),
+            "name": format!("{} project info", self.project_name),
+            "description": "Project name, permalink, and index counts.",
+            "mimeType": "application/json",
+        }));
+        // The manual index and one resource per page.
+        resources.push(json!({
+            "uri": "memory://man",
+            "name": "Auto Memory manual",
+            "description": "One section-3 page per MCP tool.",
+            "mimeType": "text/markdown",
+        }));
+        for page in crate::application::manual::pages() {
+            resources.push(json!({
+                "uri": format!("memory://man/{}", page.name),
+                "name": format!("{}(3)", page.name),
+                "description": page.summary,
+                "mimeType": "text/markdown",
+            }));
+        }
+        json!({ "resources": resources })
+    }
+
+    /// `resources/read` — the note's raw markdown, or a manual page.
+    ///
+    /// `memory://<project>/<path>` returns the note's raw markdown with its frontmatter,
+    /// accepting a permalink, title, or file path. A miss points at `search_notes`; a
+    /// binary file points at `read_content`.
+    async fn resources_read(&mut self, params: &Value) -> Result<Value> {
+        let uri = params["uri"].as_str().unwrap_or_default();
+        let Some(rest) = uri.strip_prefix("memory://") else {
+            return Err(Error::InvalidArgument {
+                message: format!("unsupported resource URI '{uri}'. Expected memory://"),
+            });
+        };
+        // The manual is matched first: `memory://man/...` would otherwise look like a
+        // project named `man`.
+        if rest == "man" {
+            return Ok(resource_contents(
+                uri,
+                "text/markdown",
+                crate::application::manual::render_index(),
+            ));
+        }
+        if let Some(page) = rest.strip_prefix("man/") {
+            return match crate::application::manual::find(page) {
+                Some(page) => Ok(resource_contents(
+                    uri,
+                    "text/markdown",
+                    page.body.to_owned(),
+                )),
+                None => Ok(resource_contents(
+                    uri,
+                    "text/markdown",
+                    format!("No manual entry for '{page}'. Try memory://man."),
+                )),
+            };
+        }
+        // `<project>/<path>`: strip the project prefix, then resolve inside it.
+        let trimmed = rest.trim_matches('/');
+        let (project, path) = match trimmed.split_once('/') {
+            Some((project, path)) => (project, path),
+            None => (trimmed, ""),
+        };
+        // `<project>/<project>/info` is the canonical form, and `<project>/info` the
+        // shorthand a caller writes when it already knows which project it means.
+        if path.is_empty() || path == "info" || path == format!("{project}/info") {
+            let counts = self.store.counts(self.project_id).await?;
+            return Ok(resource_contents(
+                uri,
+                "application/json",
+                serde_json::to_string_pretty(&json!({
+                    "name": self.project_name,
+                    "permalink": self.permalink,
+                    "external_id": self.project_external_id,
+                    "entities": counts.entities,
+                    "observations": counts.observations,
+                    "relations": counts.relations,
+                }))?,
+            ));
+        }
+        if project != self.project_name {
+            return Ok(resource_contents(
+                uri,
+                "text/markdown",
+                format!(
+                    "# Not Found\n\nNo project named '{project}' in this server. This \
+                     server is pinned to '{}'.",
+                    self.project_name
+                ),
+            ));
+        }
+        match self.read_note_source(path).await? {
+            Some((_, raw)) => Ok(resource_contents(uri, "text/markdown", raw)),
+            None => Ok(resource_contents(
+                uri,
+                "text/markdown",
+                format!(
+                    "# Not Found\n\nNo note at '{path}'. Try search_notes to find it, or \
+                     read_content for a binary file."
+                ),
+            )),
+        }
+    }
+
+    /// `prompts/list` — the one onboarding prompt.
+    fn prompts_list(&self) -> Value {
+        json!({
+            "prompts": [{
+                "name": "getting_started",
+                "description": "How to use this knowledge base: what to write, how to search, \
+                                and which tool to reach for.",
+                "arguments": [],
+            }]
+        })
+    }
+
+    /// `prompts/get` — the onboarding prompt's text.
+    fn prompts_get(&self, params: &Value) -> Result<Value> {
+        let name = params["name"].as_str().unwrap_or_default();
+        if name != "getting_started" {
+            return Err(Error::InvalidArgument {
+                message: format!("unknown prompt '{name}'. Available: getting_started"),
+            });
+        }
+        Ok(json!({
+            "description": "How to use this knowledge base",
+            "messages": [{
+                "role": "user",
+                "content": {
+                    "type": "text",
+                    "text": format!(
+                        "# Getting started with {project}\n\n\
+                         This server exposes a Markdown knowledge base. The notes are the \
+                         source of truth; the index is derived from them.\n\n\
+                         ## Writing\n\n\
+                         - `write_note` creates a note. Pass `expected_checksum` with \
+                         `overwrite=True` to replace only the revision you read.\n\
+                         - `edit_note` appends, prepends, or replaces part of a note.\
+                         - An observation is a line like `- [decision] text`; a relation is \
+                         `- relates_to [[Other Note]]`. Those two patterns are what make \
+                         the note searchable as knowledge rather than text.\n\
+                         - An observation may say when it holds: \
+                         `- [decision] @effective:2026-06-10 text`.\n\n\
+                         ## Reading\n\n\
+                         - `search_notes` first; it is the fastest way to find out whether \
+                         something is already known. `compact=True` returns identifiers \
+                         without bodies.\n\
+                         - `read_note` for one note, `build_context` to traverse its \
+                         relations.\n\
+                         - `cat`, `grep`, `ls`, `find`, `tail` for shell-shaped access.\n\
+                         - `man` for any tool's full contract before first use.\n\n\
+                         ## Before writing\n\n\
+                         Search first. If the knowledge exists, extend that note with \
+                         `edit_note` rather than creating a near-duplicate.",
+                        project = self.project_name
+                    ),
+                },
+            }],
+        }))
     }
 
     /// Every markdown note in this project as `(relative path, body)`.
