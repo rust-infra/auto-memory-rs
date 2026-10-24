@@ -95,9 +95,127 @@ enum Command {
     Hook(HookArgs),
     /// Search the index (text, `--vector`, or `--hybrid`).
     Search(SearchArgs),
+    /// Print a note, one section of it, or a line range.
+    Cat(CatArgs),
+    /// Find lines matching a pattern across notes.
+    Grep(GrepArgs),
+    /// List a directory; `/` lists the project mount points.
+    Ls(LsArgs),
+    /// Find notes by metadata predicates.
+    Find(FindArgs),
+    /// Print the last lines of recently updated notes.
+    Tail(TailArgs),
+    /// Print a manual page, or list the available ones.
+    Man(ManArgs),
     /// Read or write the user configuration file.
     #[command(subcommand)]
     Config(ConfigCommand),
+}
+
+/// Shared flags for the POSIX-style read verbs: which index and project to read.
+#[derive(Args, Clone)]
+struct PosixArgs {
+    /// Index database (defaults to `AUTO_MEMORY_INDEX`, the user config file, then
+    /// the standard path).
+    #[arg(long, value_name = "DB")]
+    index: Option<PathBuf>,
+    /// Project name (defaults to `default_project`, else the single registered one).
+    #[arg(long, value_name = "NAME")]
+    project: Option<String>,
+}
+
+/// `auto-memory cat <path> [--section H] [--start-line N] [--end-line N]`.
+#[derive(Args)]
+struct CatArgs {
+    /// Note path inside its project.
+    path: String,
+    /// Read only this heading's section.
+    #[arg(long, value_name = "HEADING")]
+    section: Option<String>,
+    /// First line to return, 1-based.
+    #[arg(long, value_name = "N")]
+    start_line: Option<usize>,
+    /// Last line to return, inclusive.
+    #[arg(long, value_name = "N")]
+    end_line: Option<usize>,
+    /// Stop after roughly this many characters.
+    #[arg(long, value_name = "N")]
+    max_chars: Option<usize>,
+    #[command(flatten)]
+    posix: PosixArgs,
+}
+
+/// `auto-memory grep <pattern> [-C N] [--path PATH]`.
+#[derive(Args)]
+struct GrepArgs {
+    /// Text to find, case-insensitively.
+    pattern: String,
+    /// Widen each match into a window of this many lines.
+    #[arg(short = 'C', long = "context", value_name = "N", default_value_t = 0)]
+    context_lines: usize,
+    /// Bound the number of returned lines.
+    #[arg(long, value_name = "N", default_value_t = 100)]
+    max_matches: usize,
+    /// Restrict the search to this path.
+    #[arg(long, value_name = "PATH")]
+    path: Option<String>,
+    #[command(flatten)]
+    posix: PosixArgs,
+}
+
+/// `auto-memory ls [path]`.
+#[derive(Args)]
+struct LsArgs {
+    /// Directory to list; `/` lists the project mount points.
+    #[arg(default_value = "/")]
+    path: String,
+    /// Recurse into subdirectories.
+    #[arg(long)]
+    tree: bool,
+    #[command(flatten)]
+    posix: PosixArgs,
+}
+
+/// `auto-memory find [predicate ...] [--fields a,b]`.
+#[derive(Args)]
+struct FindArgs {
+    /// Predicates such as `status=active` or `confidence>0.6`.
+    predicate: Vec<String>,
+    /// Comma-separated frontmatter fields to project.
+    #[arg(long, value_name = "LIST")]
+    fields: Option<String>,
+    /// Restrict the search to this path.
+    #[arg(long, value_name = "PATH")]
+    path: Option<String>,
+    #[command(flatten)]
+    posix: PosixArgs,
+}
+
+/// `auto-memory tail [path] [--count N]`.
+#[derive(Args)]
+struct TailArgs {
+    /// Restrict to this path.
+    #[arg(default_value = "")]
+    path: String,
+    /// How many lines per note.
+    #[arg(long, value_name = "N", default_value_t = 10)]
+    count: usize,
+    #[command(flatten)]
+    posix: PosixArgs,
+}
+
+/// `auto-memory man [topic] [--list]`.
+#[derive(Args)]
+struct ManArgs {
+    /// Page name, such as `search-notes` or `3/search-notes`.
+    topic: Option<String>,
+    /// List the available pages.
+    #[arg(long)]
+    list: bool,
+    /// Accepted for symmetry with the other read verbs; the manual is static, so it is
+    /// not used. Taking the flag keeps one command line usable for every verb.
+    #[command(flatten)]
+    posix: PosixArgs,
 }
 
 /// `auto-memory config <show|set|unset>`.
@@ -567,6 +685,12 @@ fn main() -> ExitCode {
         Command::Doctor(args) => async_command(doctor_command(args)),
         Command::Project(command) => async_command(project_command(command)),
         Command::Search(args) => async_command(search_command(args)),
+        Command::Cat(args) => async_command(cat_command(args)),
+        Command::Grep(args) => async_command(grep_command(args)),
+        Command::Ls(args) => async_command(ls_command(args)),
+        Command::Find(args) => async_command(find_command(args)),
+        Command::Tail(args) => async_command(tail_command(args)),
+        Command::Man(args) => man_command(args),
         Command::Context(args) => async_command(context_command(args)),
         Command::Schema(command) => async_command(schema_command(command)),
         Command::Hook(args) => async_command(hook_command(args)),
@@ -2787,6 +2911,346 @@ async fn context_command(args: ContextArgs) -> ExitCode {
             eprintln!("Error: failed to serialize output: {error}");
             ExitCode::FAILURE
         }
+    }
+}
+
+/// Open the index and resolve the project a POSIX verb should read.
+///
+/// The verbs default to `default_project`, then to the single registered project, so a
+/// one-project install never has to pass `--project`.
+async fn posix_target(
+    index: Option<PathBuf>,
+    project: Option<String>,
+) -> std::result::Result<(Store, String, PathBuf), String> {
+    let Some((index, user)) = cli_index(index) else {
+        return Err("could not resolve the index".to_owned());
+    };
+    let store = Store::open(&index)
+        .await
+        .map_err(|error| format!("failed to open index {}: {error}", index.display()))?;
+    let projects = store
+        .projects()
+        .await
+        .map_err(|error| format!("failed to read projects: {error}"))?;
+    let wanted = match project {
+        Some(name) => Some(name),
+        None => match auto_memory::config::resolve_project(None, None, &user) {
+            Some(resolved) => Some(resolved.value),
+            None if projects.len() == 1 => projects.first().map(|row| row.name.clone()),
+            None if projects.is_empty() => {
+                return Err("no projects registered; run `auto-memory project add`".to_owned());
+            }
+            None => {
+                return Err(format!(
+                    "several projects are registered ({}); pass --project",
+                    projects
+                        .iter()
+                        .map(|row| row.name.as_str())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ));
+            }
+        },
+    };
+    let name = wanted.unwrap_or_default();
+    let Some(row) = projects.iter().find(|row| row.name == name) else {
+        return Err(format!("project not found: {name}"));
+    };
+    let vault = PathBuf::from(&row.path);
+    Ok((store, row.name.clone(), vault))
+}
+
+/// Every markdown note in `vault` as `(relative path, body)`.
+fn vault_notes(vault: &Path) -> std::result::Result<Vec<(String, String)>, String> {
+    let mut notes = Vec::new();
+    for (relative, path) in auto_memory::indexing::document::markdown_files(vault) {
+        let raw = std::fs::read_to_string(&path)
+            .map_err(|error| format!("could not read {}: {error}", path.display()))?;
+        let body = auto_memory::markdown::serialize::split_frontmatter(&raw)
+            .ok()
+            .flatten()
+            .map_or(raw.clone(), |(_, rest)| rest.to_owned());
+        notes.push((relative, body));
+    }
+    notes.sort_by(|left, right| left.0.cmp(&right.0));
+    Ok(notes)
+}
+
+/// `auto-memory cat` — print a note, one section, or a line range.
+async fn cat_command(args: CatArgs) -> ExitCode {
+    let CatArgs {
+        path,
+        section,
+        start_line,
+        end_line,
+        max_chars,
+        posix,
+    } = args;
+    let (store, project, vault) = match posix_target(posix.index, posix.project).await {
+        Ok(target) => target,
+        Err(message) => return usage(&message),
+    };
+    let resolved =
+        match auto_memory::application::posix::resolve_path(&store, &project, &path).await {
+            Ok(resolved) => resolved,
+            Err(error) => return usage(&error.to_string()),
+        };
+    let file_path = if resolved.relative.is_empty() {
+        path.clone()
+    } else {
+        resolved.relative.clone()
+    };
+    let absolute = vault.join(&file_path);
+    let Ok(raw) = std::fs::read_to_string(&absolute) else {
+        return usage(&format!("no such note: {file_path}"));
+    };
+    let body = auto_memory::markdown::serialize::split_frontmatter(&raw)
+        .ok()
+        .flatten()
+        .map_or(raw.clone(), |(_, rest)| rest.to_owned());
+    let options = auto_memory::application::posix::CatOptions {
+        section,
+        start_line,
+        end_line,
+        max_chars,
+    };
+    match auto_memory::application::posix::cat(&file_path, &body, &options) {
+        Ok(result) => {
+            print!("{}", auto_memory::application::posix::render_cat(&result));
+            ExitCode::SUCCESS
+        }
+        Err(error) => usage(&error.to_string()),
+    }
+}
+
+/// `auto-memory grep` — find matching lines.
+async fn grep_command(args: GrepArgs) -> ExitCode {
+    let GrepArgs {
+        pattern,
+        context_lines,
+        max_matches,
+        path,
+        posix,
+    } = args;
+    let (_store, _project, vault) = match posix_target(posix.index, posix.project).await {
+        Ok(target) => target,
+        Err(message) => return usage(&message),
+    };
+    let notes = match vault_notes(&vault) {
+        Ok(notes) => notes,
+        Err(message) => return usage(&message),
+    };
+    let scoped: Vec<(String, String)> = match path.as_deref() {
+        None => notes,
+        Some(path) => {
+            let wanted = path
+                .trim_start_matches('/')
+                .trim_end_matches('/')
+                .to_owned();
+            notes
+                .into_iter()
+                .filter(|(file_path, _)| {
+                    file_path == &wanted || file_path.starts_with(&format!("{wanted}/"))
+                })
+                .collect()
+        }
+    };
+    let found =
+        auto_memory::application::posix::grep(&scoped, &pattern, context_lines, max_matches);
+    if found.is_empty() {
+        // A grep that finds nothing prints nothing and exits 1, the way a shell tool does,
+        // so a pipeline can branch on it.
+        return ExitCode::FAILURE;
+    }
+    println!("{}", auto_memory::application::posix::render_grep(&found));
+    ExitCode::SUCCESS
+}
+
+/// `auto-memory ls` — list a directory.
+async fn ls_command(args: LsArgs) -> ExitCode {
+    let LsArgs { path, tree, posix } = args;
+    let (store, _project, vault) = match posix_target(posix.index, posix.project).await {
+        Ok(target) => target,
+        Err(message) => return usage(&message),
+    };
+    let trimmed = path.trim().trim_start_matches('/').trim_end_matches('/');
+    if trimmed.is_empty() {
+        let mounts = match auto_memory::application::posix::mounts(&store).await {
+            Ok(mounts) => mounts,
+            Err(error) => return usage(&error.to_string()),
+        };
+        if mounts.is_empty() {
+            return usage("no projects registered");
+        }
+        for mount in mounts {
+            println!("{}/  {}", mount.name, mount.path);
+        }
+        return ExitCode::SUCCESS;
+    }
+    let notes = match vault_notes(&vault) {
+        Ok(notes) => notes,
+        Err(message) => return usage(&message),
+    };
+    if tree {
+        // `--tree` is the recursive spelling: every path under the prefix, indented.
+        let prefix = format!("{trimmed}/");
+        let mut paths: Vec<&String> = notes
+            .iter()
+            .map(|(file_path, _)| file_path)
+            .filter(|file_path| file_path.starts_with(&prefix))
+            .collect();
+        paths.sort();
+        for file_path in paths {
+            println!("{}", file_path.strip_prefix(&prefix).unwrap_or(file_path));
+        }
+        return ExitCode::SUCCESS;
+    }
+    let entries = auto_memory::application::posix::ls(&notes, trimmed);
+    if entries.is_empty() {
+        return usage(&format!("no files in '{trimmed}'"));
+    }
+    for entry in entries {
+        if entry.is_directory {
+            println!("{}/", entry.name);
+        } else {
+            println!("{}", entry.name);
+        }
+    }
+    ExitCode::SUCCESS
+}
+
+/// `auto-memory find` — find notes by metadata predicates.
+async fn find_command(args: FindArgs) -> ExitCode {
+    let FindArgs {
+        predicate,
+        fields,
+        path,
+        posix,
+    } = args;
+    let (store, project, _vault) = match posix_target(posix.index, posix.project).await {
+        Ok(target) => target,
+        Err(message) => return usage(&message),
+    };
+    let Some(row) = (match store.projects().await {
+        Ok(rows) => rows,
+        Err(error) => return usage(&error.to_string()),
+    })
+    .into_iter()
+    .find(|row| row.name == project) else {
+        return usage(&format!("project not found: {project}"));
+    };
+    let mut predicates = Vec::new();
+    for expression in &predicate {
+        match auto_memory::application::posix::MetadataPredicate::parse(expression) {
+            Ok(parsed) => predicates.push(parsed),
+            Err(error) => return usage(&error.to_string()),
+        }
+    }
+    let fields: Vec<String> = fields
+        .as_deref()
+        .map(|list| {
+            list.split(',')
+                .map(|field| field.trim().to_owned())
+                .collect()
+        })
+        .unwrap_or_default();
+    let rows = match store.entities_with_metadata(row.id).await {
+        Ok(rows) => rows,
+        Err(error) => return usage(&error.to_string()),
+    };
+    let notes: Vec<auto_memory::application::posix::FindNote<'_>> = rows
+        .iter()
+        .map(|row| auto_memory::application::posix::FindNote {
+            file_path: &row.file_path,
+            title: &row.title,
+            metadata: row.metadata.clone(),
+        })
+        .collect();
+    let scoped: Vec<auto_memory::application::posix::FindNote<'_>> = match path.as_deref() {
+        None => notes,
+        Some(path) => {
+            let wanted = path
+                .trim_start_matches('/')
+                .trim_end_matches('/')
+                .to_owned();
+            notes
+                .into_iter()
+                .filter(|note| {
+                    note.file_path == wanted || note.file_path.starts_with(&format!("{wanted}/"))
+                })
+                .collect()
+        }
+    };
+    let hits = auto_memory::application::posix::find(&scoped, &predicates, &fields);
+    if hits.is_empty() {
+        return ExitCode::FAILURE;
+    }
+    println!("{}", auto_memory::application::posix::render_find(&hits));
+    ExitCode::SUCCESS
+}
+
+/// `auto-memory tail` — the last lines of recently updated notes.
+async fn tail_command(args: TailArgs) -> ExitCode {
+    let TailArgs { path, count, posix } = args;
+    let (_store, _project, vault) = match posix_target(posix.index, posix.project).await {
+        Ok(target) => target,
+        Err(message) => return usage(&message),
+    };
+    let mut notes = match vault_notes(&vault) {
+        Ok(notes) => notes,
+        Err(message) => return usage(&message),
+    };
+    if !path.is_empty() {
+        let wanted = path
+            .trim_start_matches('/')
+            .trim_end_matches('/')
+            .to_owned();
+        notes.retain(|(file_path, _)| {
+            file_path == &wanted || file_path.starts_with(&format!("{wanted}/"))
+        });
+    }
+    notes.sort_by(|left, right| {
+        let left_time = std::fs::metadata(vault.join(&left.0))
+            .and_then(|metadata| metadata.modified())
+            .ok();
+        let right_time = std::fs::metadata(vault.join(&right.0))
+            .and_then(|metadata| metadata.modified())
+            .ok();
+        right_time.cmp(&left_time)
+    });
+    let mut printed = 0usize;
+    for (file_path, body) in notes.iter().take(20) {
+        let lines = auto_memory::application::posix::tail(body, count);
+        if lines.is_empty() {
+            continue;
+        }
+        println!("==> {file_path} <==");
+        for (_, line) in lines {
+            println!("{line}");
+        }
+        printed += 1;
+    }
+    if printed == 0 {
+        return usage("no notes");
+    }
+    ExitCode::SUCCESS
+}
+
+/// `auto-memory man` — print a manual page.
+fn man_command(args: ManArgs) -> ExitCode {
+    if args.list || args.topic.is_none() {
+        print!("{}", auto_memory::application::manual::render_index());
+        return ExitCode::SUCCESS;
+    }
+    let topic = args.topic.unwrap_or_default();
+    match auto_memory::application::manual::find(&topic) {
+        Some(page) => {
+            print!("{}", page.body);
+            ExitCode::SUCCESS
+        }
+        None => usage(&format!(
+            "no manual entry for '{topic}'; try `auto-memory man --list`"
+        )),
     }
 }
 
