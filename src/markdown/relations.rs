@@ -37,8 +37,90 @@ pub fn parse_relations(body: &str) -> Vec<Relation> {
                 });
             }
         }
+        // Upstream 0.24.0 (#1246): an ordinary Markdown link to a file in the project is a
+        // `links_to` relation, the way a wikilink is. External URLs, images, fragment-only
+        // links and paths outside the project are ignored, and the authored Markdown is
+        // never rewritten.
+        for target in find_markdown_links(content) {
+            if let Ok(relation_type) = RelationType::new("links_to") {
+                relations.push(Relation {
+                    relation_type,
+                    target,
+                    context: None,
+                });
+            }
+        }
     }
     relations
+}
+
+/// Project-relative targets of the Markdown links on one line.
+///
+/// Handles `[text](path)`, `[text](../path.md)` and reference-style `[text][label]` bodies
+/// only insofar as the inline form goes; the resolution against the note's own path
+/// happens in the graph, so the target is stored as authored (upstream 0.24.0 #1514).
+fn find_markdown_links(line: &str) -> Vec<String> {
+    let mut targets = Vec::new();
+    let mut rest = line;
+    while let Some(open) = rest.find("](") {
+        let before = &rest[..open];
+        // The link text must start with a `[` on this line, otherwise this is prose.
+        let Some(text_start) = before.rfind('[') else {
+            rest = &rest[open + 2..];
+            continue;
+        };
+        let after = &rest[open + 2..];
+        let Some(close) = after.find(')') else {
+            break;
+        };
+        let target = after[..close].trim();
+        rest = &after[close + 1..];
+        // A title in the target (`path "title"`) is not part of the path.
+        let target = target.split_whitespace().next().unwrap_or_default();
+        if is_project_relative_link(target) {
+            let _ = text_start;
+            targets.push(target.to_owned());
+        }
+    }
+    targets
+}
+
+/// Whether a Markdown link target names a file inside the project.
+///
+/// Ignored, per upstream: an absolute URL with a scheme, an image, a bare fragment, and a
+/// path that climbs out of the project.
+fn is_project_relative_link(target: &str) -> bool {
+    if target.is_empty() || target.starts_with('#') {
+        return false;
+    }
+    // A scheme (`https:`, `mailto:`) means the target is not a project file.
+    if let Some((scheme, _)) = target.split_once(':')
+        && !scheme.contains('/')
+        && scheme
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '+')
+    {
+        return false;
+    }
+    // An image target is not a note.
+    if target.starts_with("data:") {
+        return false;
+    }
+    // A path that climbs out of the project is not a link to a note in it.
+    let mut depth: i32 = 0;
+    for segment in target.split('/') {
+        match segment {
+            ".." => {
+                depth -= 1;
+                if depth < 0 {
+                    return false;
+                }
+            }
+            "." | "" => {}
+            _ => depth += 1,
+        }
+    }
+    true
 }
 
 fn split_line(line: &str) -> (bool, &str) {

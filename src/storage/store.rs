@@ -525,17 +525,24 @@ impl Store {
                     id
                 }
                 None => {
+                    // Upstream 0.24.0 (#1455): record the file's media type and format, so
+                    // a listing can say what a file is instead of calling everything
+                    // `text/markdown`.
+                    let (content_type, format) = media_type_for(&document.file_path);
                     tx.execute(
                         "INSERT INTO entity
                         (external_id, project_id, title, note_type, entity_metadata,
-                         content_type, permalink, file_path, checksum, created_at, updated_at)
-                     VALUES (?1, ?2, ?3, ?4, ?5, 'text/markdown', ?6, ?7, ?8, ?9, ?10)",
+                         content_type, format, permalink, file_path, checksum, created_at,
+                         updated_at)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
                         params![
                             external_id,
                             project_id,
                             document.frontmatter.title,
                             document.frontmatter.note_type,
                             metadata,
+                            content_type,
+                            format,
                             permalink,
                             document.file_path,
                             checksum,
@@ -1658,6 +1665,36 @@ pub fn deterministic_uuid(key: &str) -> String {
         &hex[16..20],
         &hex[20..32]
     )
+}
+
+/// The media type and short format for a project-relative path.
+///
+/// Upstream 0.24.0 (#1455) pins the MIME types for the extensions it supports before
+/// falling back to a guess, so a slim image without `/etc/mime.types` does not record an
+/// Office file as `text/plain`.
+fn media_type_for(file_path: &str) -> (String, String) {
+    let extension = file_path
+        .rsplit_once('.')
+        .map(|(_, extension)| extension.to_ascii_lowercase())
+        .unwrap_or_default();
+    let media_type = match extension.as_str() {
+        "md" | "markdown" => "text/markdown",
+        "canvas" => "application/json",
+        "json" => "application/json",
+        "txt" => "text/plain",
+        "csv" => "text/csv",
+        "pdf" => "application/pdf",
+        "docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "pptx" => "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
+        "svg" => "image/svg+xml",
+        _ => "application/octet-stream",
+    };
+    (media_type.to_owned(), extension)
 }
 
 /// SHA-256 checksum of raw file bytes (lowercase hex).

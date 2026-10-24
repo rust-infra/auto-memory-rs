@@ -66,6 +66,16 @@ pub enum Error {
         current: String,
     },
 
+    /// The note is read-only: its frontmatter sets `locked: true`.
+    ///
+    /// Upstream 0.24.0 (#993). The reference answers HTTP 423; the MCP surface reports it
+    /// as a tool error, and no API call can unlock the note.
+    #[error("note is locked: {path}")]
+    Locked {
+        /// Project-relative path of the locked note.
+        path: String,
+    },
+
     /// Filesystem failure.
     #[error("io error: {0}")]
     Io(#[from] std::io::Error),

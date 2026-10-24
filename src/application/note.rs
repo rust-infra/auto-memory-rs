@@ -64,6 +64,32 @@ impl NoteMetadata {
         Self { entries }
     }
 
+    /// Stamp `created_by` and `updated_by` when the runtime supplies an author.
+    ///
+    /// Upstream 0.24.0 (#1608): the keys are server-stamped, so whatever a writer submits
+    /// for them is overwritten. `created_by` is set once and carried forward — a note
+    /// written before this change never gains one — while `updated_by` follows the latest
+    /// write. A local runtime supplies no author, so both keys stay untouched.
+    #[must_use]
+    pub fn with_author(mut self, author: Option<&str>, existing: Option<&Mapping>) -> Self {
+        let Some(author) = author else {
+            return self;
+        };
+        self.entries
+            .retain(|(key, _)| key != "created_by" && key != "updated_by");
+        // The first author wins: a later write must not rewrite who created the note.
+        let created_by = existing
+            .and_then(|frontmatter| frontmatter.get(Value::String("created_by".to_owned())))
+            .and_then(|value| value.as_str())
+            .map(str::to_owned)
+            .unwrap_or_else(|| author.to_owned());
+        self.entries
+            .push(("created_by".to_owned(), Value::String(created_by)));
+        self.entries
+            .push(("updated_by".to_owned(), Value::String(author.to_owned())));
+        self
+    }
+
     /// Append explicit tags after the base metadata.
     ///
     /// Entries retain insertion order, so an explicit `tags` value wins over the same
@@ -199,6 +225,16 @@ impl<'a> NoteService<'a> {
                 message: format!("File already exists: {relative_path}"),
             });
         }
+        // Upstream 0.24.0 (#993): `locked: true` makes a note read-only to the API. The
+        // check reads the file, not the index, so a stale index cannot defeat the lock.
+        if absolute.exists()
+            && let Ok(existing) = std::fs::read_to_string(&absolute)
+            && crate::markdown::frontmatter::text_is_locked(&existing)
+        {
+            return Err(Error::Locked {
+                path: relative_path.clone(),
+            });
+        }
         if let Some(parent) = absolute.parent() {
             std::fs::create_dir_all(parent)?;
         }
@@ -332,6 +368,11 @@ impl<'a> NoteService<'a> {
         };
         let absolute = self.root.join(&relative_path);
         let current = std::fs::read_to_string(&absolute)?;
+        if crate::markdown::frontmatter::text_is_locked(&current) {
+            return Err(Error::Locked {
+                path: relative_path.clone(),
+            });
+        }
         if let Some(expected) = expected_checksum {
             let actual = crate::storage::checksum_bytes(current.as_bytes());
             if actual != expected {
@@ -353,6 +394,11 @@ impl<'a> NoteService<'a> {
         let from = self.resolve(from).await?;
         let to = normalize_path(to)?;
         let source = self.root.join(&from);
+        if let Ok(existing) = std::fs::read_to_string(&source)
+            && crate::markdown::frontmatter::text_is_locked(&existing)
+        {
+            return Err(Error::Locked { path: from.clone() });
+        }
         let target = self.root.join(&to);
         if target.exists() {
             return Err(Error::InvalidArgument {
@@ -374,6 +420,13 @@ impl<'a> NoteService<'a> {
     pub async fn delete_note(&mut self, identifier: &str) -> Result<String> {
         let relative_path = self.resolve(identifier).await?;
         let absolute = self.root.join(&relative_path);
+        if let Ok(existing) = std::fs::read_to_string(&absolute)
+            && crate::markdown::frontmatter::text_is_locked(&existing)
+        {
+            return Err(Error::Locked {
+                path: relative_path.clone(),
+            });
+        }
         if absolute.exists() {
             std::fs::remove_file(&absolute)?;
         }

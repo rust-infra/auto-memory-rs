@@ -39,6 +39,9 @@ CREATE TABLE IF NOT EXISTS entity (
     permalink       TEXT,
     file_path       TEXT NOT NULL,
     checksum        TEXT,
+    -- Upstream 0.24.0 (#1455): a non-Markdown file records the media type it was indexed
+    -- with, so a listing can say what a file is instead of calling everything text.
+    format          TEXT,
     created_at      TEXT NOT NULL,
     updated_at      TEXT NOT NULL
 );
@@ -76,7 +79,11 @@ CREATE TABLE IF NOT EXISTS relation (
     id            INTEGER PRIMARY KEY,
     project_id    INTEGER NOT NULL REFERENCES project(id) ON DELETE CASCADE,
     from_id       INTEGER NOT NULL REFERENCES entity(id) ON DELETE CASCADE,
-    to_id         INTEGER REFERENCES entity(id) ON DELETE CASCADE,
+    -- Upstream 0.24.0 (#1344): deleting a target leaves its inbound relations in the
+    -- unresolved state the indexer already produces for a forward reference, instead of
+    -- erasing them. `from_id` keeps CASCADE because an entity does own the relations it
+    -- declares.
+    to_id         INTEGER REFERENCES entity(id) ON DELETE SET NULL,
     to_name       TEXT NOT NULL,
     relation_type TEXT NOT NULL,
     context       TEXT,

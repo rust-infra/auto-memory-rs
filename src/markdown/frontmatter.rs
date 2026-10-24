@@ -205,6 +205,34 @@ pub fn normalize_value(value: &serde_yaml_ng::Value) -> Value {
     }
 }
 
+/// Whether a note's frontmatter marks it read-only.
+///
+/// Upstream 0.24.0 (#993): `locked: true` makes a note read-only to the note API. Edits,
+/// overwrites and deletes are refused, and no API call can unlock it — only a direct
+/// filesystem edit (which the user owns) can change the flag.
+///
+/// Only the YAML boolean `true` counts: the string `"true"` is a typo, and honoring it
+/// would let a caller lock a note by accident.
+#[must_use]
+pub fn is_locked(frontmatter: &serde_yaml_ng::Mapping) -> bool {
+    matches!(
+        frontmatter.get(serde_yaml_ng::Value::String("locked".to_owned())),
+        Some(serde_yaml_ng::Value::Bool(true))
+    )
+}
+
+/// Whether a note's raw text marks it locked.
+///
+/// Reads the frontmatter from the file itself, which is what a mutation has to check: the
+/// index could be stale, and honoring a stale `locked: false` would defeat the lock.
+#[must_use]
+pub fn text_is_locked(content: &str) -> bool {
+    crate::markdown::serialize::split_frontmatter(content)
+        .ok()
+        .flatten()
+        .is_some_and(|(mapping, _)| is_locked(&mapping))
+}
+
 /// Coerce a normalized value to a string (lists join with `, `, like the reference).
 pub fn coerce_to_string(value: &Value) -> String {
     match value {

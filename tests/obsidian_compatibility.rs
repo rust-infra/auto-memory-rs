@@ -551,17 +551,25 @@ async fn deleting_a_note_drops_derived_state_and_a_full_reindex_restores_the_vau
         .await
         .expect("search");
     assert_eq!(page.total, 0, "its search rows are gone");
-    // `relation.to_id` is `ON DELETE CASCADE` in the reference schema too, so the
-    // stranded link disappears with the target until the source is re-read.
-    assert_eq!(
-        store
-            .relations(project_id)
-            .await
-            .expect("relations")
-            .iter()
-            .filter(|relation| relation.to_name == "notes/simple")
-            .count(),
-        0
+    // Upstream 0.24.0 (#1344): deleting a target no longer erases its inbound relations.
+    // `relation.to_id` is `ON DELETE SET NULL`, so the link survives in the unresolved
+    // state the indexer already produces for a forward reference — `to_id` null and
+    // `to_name` holding the source's original link text. Erasing it would make a
+    // broken-link report come back clean over a vault full of them.
+    let stranded: Vec<_> = store
+        .relations(project_id)
+        .await
+        .expect("relations")
+        .into_iter()
+        .filter(|relation| relation.to_name == "notes/simple")
+        .collect();
+    assert!(
+        !stranded.is_empty(),
+        "the inbound link must survive its target's deletion"
+    );
+    assert!(
+        stranded.iter().all(|relation| relation.to_id.is_none()),
+        "a surviving link to a deleted note must be unresolved: {stranded:?}"
     );
 
     // The vault is the only durable state: a full rebuild restores the link, now
