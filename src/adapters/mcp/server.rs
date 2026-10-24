@@ -1728,15 +1728,6 @@ impl<'a> McpServer<'a> {
         for value in params.tags() {
             options.tags.push(value.clone());
         }
-        // The reference's implicit default: a category filter scopes the search to
-        // observation rows, because categories only exist there.
-        let entity_types = params.entity_types();
-        options.entity_types = if entity_types.is_empty() {
-            crate::search::default_entity_types(&options.categories)
-        } else {
-            let names: Vec<&str> = entity_types.iter().map(String::as_str).collect();
-            parse_entity_type_names(&names)?
-        };
         if let Some(status) = params.status.as_deref() {
             options.status = Some(status.to_owned());
         }
@@ -1752,6 +1743,60 @@ impl<'a> McpServer<'a> {
             options.metadata_filters =
                 crate::search::filters::parse_metadata_filters(&Value::Object(filters.clone()))?;
         }
+        // Upstream 0.24.0 (#1426): valid-time filters. A malformed value is refused rather
+        // than ignored — silently dropping a time bound answers a different question.
+        if let Some(instant) = params.valid_at.as_deref() {
+            let Some(date) = crate::domain::valid_time::normalize_date(instant) else {
+                return Err(Error::InvalidArgument {
+                    message: format!("valid_at is not a date: '{instant}'. Use YYYY-MM-DD."),
+                });
+            };
+            options.valid_at = Some(date);
+        }
+        if let Some((start, end)) = params.valid_overlaps() {
+            let (Some(start), Some(end)) = (
+                crate::domain::valid_time::normalize_date(&start),
+                crate::domain::valid_time::normalize_date(&end),
+            ) else {
+                return Err(Error::InvalidArgument {
+                    message: "valid_overlaps needs two dates: [start, end]".to_owned(),
+                });
+            };
+            if start >= end {
+                return Err(Error::InvalidArgument {
+                    message: format!("valid_overlaps start {start} must be before end {end}"),
+                });
+            }
+            options.valid_overlaps = Some((start, end));
+        }
+        if let Some(raw) = params.time_kind.as_deref() {
+            let Some(kind) = crate::domain::valid_time::TimeKind::parse(raw) else {
+                return Err(Error::InvalidArgument {
+                    message: format!(
+                        "invalid time_kind '{raw}'. Valid options: effective, valid, \
+                         occurred, due, mentioned"
+                    ),
+                });
+            };
+            options.time_kind = Some(kind);
+        }
+        // The reference's implicit default: a category filter scopes the search to
+        // observation rows, because categories only exist there. A valid-time filter does
+        // the same for the same reason (upstream 0.24.0 #1426) — and it is resolved here,
+        // after the time filters are known, so the scope sees them. An explicit
+        // `entity_types` always wins.
+        let entity_types = params.entity_types();
+        options.entity_types = if entity_types.is_empty() {
+            crate::search::implicit_entity_types(
+                &options.categories,
+                options.valid_at.as_deref(),
+                options.valid_overlaps.as_ref(),
+                options.time_kind,
+            )
+        } else {
+            let names: Vec<&str> = entity_types.iter().map(String::as_str).collect();
+            parse_entity_type_names(&names)?
+        };
         Ok(options)
     }
 

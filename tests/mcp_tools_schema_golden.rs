@@ -41,6 +41,10 @@ const PROPERTY_EXCEPTIONS: &[(&str, &str)] = &[
     // NEW_IN_0_24: content-free pages (#686).
     ("search_notes", "compact"),
     ("build_context", "compact"),
+    // NEW_IN_0_24: valid-time filters (#1426).
+    ("search_notes", "valid_at"),
+    ("search_notes", "valid_overlaps"),
+    ("search_notes", "time_kind"),
 ];
 
 /// Reference-required arguments this port treats as optional.

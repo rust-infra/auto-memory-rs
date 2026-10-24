@@ -48,6 +48,13 @@ pub struct TextSearchOptions {
     pub metadata_filters: Vec<crate::search::filters::FieldFilter>,
     /// Only rows updated after this timestamp.
     pub after_date: Option<String>,
+    /// Only observations whose valid-time range covers this instant (upstream 0.24.0
+    /// #1426).
+    pub valid_at: Option<String>,
+    /// Only observations whose valid-time range overlaps `[start, end)`.
+    pub valid_overlaps: Option<(String, String)>,
+    /// Only observations of this time kind (`effective`, `valid`, ...).
+    pub time_kind: Option<crate::domain::valid_time::TimeKind>,
     /// One-based page number.
     pub page: u32,
     /// Page size.
@@ -68,6 +75,9 @@ impl Default for TextSearchOptions {
             status: None,
             metadata_filters: Vec::new(),
             after_date: None,
+            valid_at: None,
+            valid_overlaps: None,
+            time_kind: None,
             page: 1,
             page_size: 10,
         }
@@ -85,6 +95,30 @@ pub fn default_entity_types(categories: &[String]) -> Vec<SearchItemType> {
         vec![SearchItemType::Entity]
     } else {
         vec![SearchItemType::Observation]
+    }
+}
+
+/// The implicit row scope for a search, given its filters.
+///
+/// Upstream 0.24.0 (#1426): a category filter scopes to observation rows because
+/// categories only exist there, and a valid-time filter does the same for the same reason —
+/// an observation's range lives on the observation row. Any explicit `entity_types` still
+/// wins.
+#[must_use]
+pub fn implicit_entity_types(
+    categories: &[String],
+    valid_at: Option<&str>,
+    valid_overlaps: Option<&(String, String)>,
+    time_kind: Option<crate::domain::valid_time::TimeKind>,
+) -> Vec<SearchItemType> {
+    if !categories.is_empty()
+        || valid_at.is_some()
+        || valid_overlaps.is_some()
+        || time_kind.is_some()
+    {
+        vec![SearchItemType::Observation]
+    } else {
+        vec![SearchItemType::Entity]
     }
 }
 
@@ -499,15 +533,24 @@ fn build_filters_with_column(
         matches.push(MatchPredicate::Text(query.to_owned()));
     }
 
-    let entity_types: Vec<&str> = if options.entity_types.is_empty() {
-        vec!["entity"]
-    } else {
+    // Upstream 0.24.0 (#1426): a valid-time filter can only match observation rows, so it
+    // implies them the same way a category filter does. Without this the default
+    // `entity`-only scope would make every time filter match nothing.
+    let time_filtered = options.valid_at.is_some()
+        || options.valid_overlaps.is_some()
+        || options.time_kind.is_some();
+    let entity_types: Vec<&str> = if !options.entity_types.is_empty() {
         options
             .entity_types
             .iter()
             .map(|item| <&str>::from(*item))
             .collect()
+    } else if time_filtered {
+        vec!["observation"]
+    } else {
+        vec!["entity"]
     };
+
     clauses.push(format!(
         "search_index.type IN ({})",
         placeholders(entity_types.len())
@@ -606,6 +649,41 @@ fn build_filters_with_column(
     if let Some(after_date) = &options.after_date {
         clauses.push("datetime(search_index.updated_at) > datetime(?)".to_owned());
         params.push(Value::Text(after_date.clone()));
+    }
+
+    // Upstream 0.24.0 (#1426): valid-time filters apply to observation rows, whose range
+    // lives in the `observation` table. A search that filters by time therefore implies
+    // observation rows, the same way a category filter does.
+    if options.valid_at.is_some() || options.valid_overlaps.is_some() || options.time_kind.is_some()
+    {
+        // The row type is already constrained to `observation` above, so these predicates
+        // only have to match the observation's own range.
+        if let Some(instant) = &options.valid_at {
+            // Half-open: `start <= instant < end`. An instant-valued qualifier stores the
+            // same value twice, so it covers exactly that one day.
+            clauses.push(
+                "search_index.id IN (SELECT id FROM observation \
+                 WHERE valid_start IS NOT NULL AND valid_start <= ? AND valid_end > ?)"
+                    .to_owned(),
+            );
+            params.push(Value::Text(instant.clone()));
+            params.push(Value::Text(instant.clone()));
+        }
+        if let Some((start, end)) = &options.valid_overlaps {
+            clauses.push(
+                "search_index.id IN (SELECT id FROM observation \
+                 WHERE valid_start IS NOT NULL AND valid_start < ? AND valid_end > ?)"
+                    .to_owned(),
+            );
+            params.push(Value::Text(end.clone()));
+            params.push(Value::Text(start.clone()));
+        }
+        if let Some(kind) = options.time_kind {
+            clauses.push(
+                "search_index.id IN (SELECT id FROM observation WHERE time_kind = ?)".to_owned(),
+            );
+            params.push(Value::Text(kind.as_str().to_owned()));
+        }
     }
 
     if let Some((clause, match_params)) = match_filter_with_column(&matches, options, match_column)

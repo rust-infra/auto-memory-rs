@@ -2,6 +2,8 @@
 
 use serde::Serialize;
 
+use crate::domain::valid_time::ValidTime;
+
 /// One observation extracted from a note body.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Observation {
@@ -14,6 +16,13 @@ pub struct Observation {
     pub tags: Vec<String>,
     /// Optional trailing `(context)`.
     pub context: Option<String>,
+    /// When the claim holds, from a leading `@effective`/`@valid`/... qualifier
+    /// (upstream 0.24.0 #1426).
+    ///
+    /// `None` when the observation carries no qualifier, or when the qualifier did not
+    /// parse — in which case it stays part of `content` so a typo is visible.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub valid_time: Option<ValidTime>,
 }
 
 impl Observation {

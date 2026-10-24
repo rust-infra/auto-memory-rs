@@ -287,6 +287,12 @@ impl VectorSearchOptions {
             status: self.status.clone(),
             metadata_filters: self.metadata_filters.clone(),
             after_date: self.after_date.clone(),
+            // The valid-time filters apply to the text leg only: a vector hit is a chunk of
+            // a note body, and the reference intersects the semantic legs with a
+            // filter-only scan whose rows carry no observation time.
+            valid_at: None,
+            valid_overlaps: None,
+            time_kind: None,
             page: 1,
             page_size: VECTOR_FILTER_SCAN_LIMIT,
             query: None,

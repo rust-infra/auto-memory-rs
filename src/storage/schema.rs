@@ -51,17 +51,26 @@ CREATE INDEX IF NOT EXISTS ix_entity_project_id ON entity (project_id);
 CREATE INDEX IF NOT EXISTS ix_entity_note_type ON entity (note_type);
 
 CREATE TABLE IF NOT EXISTS observation (
-    id         INTEGER PRIMARY KEY,
-    project_id INTEGER NOT NULL REFERENCES project(id) ON DELETE CASCADE,
-    entity_id  INTEGER NOT NULL REFERENCES entity(id) ON DELETE CASCADE,
-    category   TEXT NOT NULL DEFAULT 'note',
-    content    TEXT NOT NULL,
-    context    TEXT,
-    tags       TEXT NOT NULL DEFAULT '[]'
+    id          INTEGER PRIMARY KEY,
+    project_id  INTEGER NOT NULL REFERENCES project(id) ON DELETE CASCADE,
+    entity_id   INTEGER NOT NULL REFERENCES entity(id) ON DELETE CASCADE,
+    category    TEXT NOT NULL DEFAULT 'note',
+    content     TEXT NOT NULL,
+    context     TEXT,
+    tags        TEXT NOT NULL DEFAULT '[]',
+    -- Upstream 0.24.0 (#1426, SPEC-82): an authored `@effective`/`@valid`/... qualifier
+    -- states when the claim holds. NULL for an observation without one.
+    time_kind   TEXT,
+    valid_start TEXT,
+    -- Half-open: `valid_end` is exclusive. An instant stores the same value in both, so a
+    -- range test needs no special case.
+    valid_end   TEXT
 );
 
 CREATE INDEX IF NOT EXISTS ix_observation_entity_id ON observation (entity_id);
 CREATE INDEX IF NOT EXISTS ix_observation_category ON observation (category);
+-- The valid-time filters scan by range, so the start is indexed for the ordered case.
+CREATE INDEX IF NOT EXISTS ix_observation_valid_start ON observation (valid_start);
 
 CREATE TABLE IF NOT EXISTS relation (
     id            INTEGER PRIMARY KEY,

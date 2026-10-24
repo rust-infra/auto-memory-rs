@@ -562,21 +562,36 @@ impl Store {
                         .map(Value::String)
                         .collect::<Vec<_>>(),
                 )?;
+                // Upstream 0.24.0 (#1426): the valid-time qualifier is stored beside the
+                // text so a search can filter by when the claim holds.
+                let (time_kind, valid_start, valid_end) = match &observation.valid_time {
+                    Some(time) => (
+                        Some(time.kind.as_str().to_owned()),
+                        Some(time.start.clone()),
+                        Some(time.end.clone()),
+                    ),
+                    None => (None, None, None),
+                };
                 tx.execute(
-                "INSERT INTO observation (project_id, entity_id, category, content, context, tags)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-                params![
-                    project_id,
-                    entity_id,
-                    observation
-                        .category
-                        .clone()
-                        .unwrap_or_else(|| "note".to_owned()),
-                    observation.content,
-                    observation.context,
-                    tags
-                ],
-            )?;
+                    "INSERT INTO observation
+                    (project_id, entity_id, category, content, context, tags,
+                     time_kind, valid_start, valid_end)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                    params![
+                        project_id,
+                        entity_id,
+                        observation
+                            .category
+                            .clone()
+                            .unwrap_or_else(|| "note".to_owned()),
+                        observation.content,
+                        observation.context,
+                        tags,
+                        time_kind,
+                        valid_start,
+                        valid_end
+                    ],
+                )?;
                 observation_ids.push((tx.last_insert_rowid(), observation));
             }
 

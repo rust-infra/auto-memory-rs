@@ -12,6 +12,7 @@ pub mod permalink;
 pub mod relation;
 pub mod search;
 pub mod timeframe;
+pub mod valid_time;
 
 pub use dateparser::parse_after_date;
 pub use document::{DocumentTimestamps, ParsedDocument};
@@ -22,3 +23,4 @@ pub use observation::Observation;
 pub use permalink::{Permalink, RelationType};
 pub use relation::Relation;
 pub use search::{SearchItemType, SearchQuery, SearchResult};
+pub use valid_time::{ParsedQualifier, TimeKind, ValidTime, parse_qualifier};

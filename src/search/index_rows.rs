@@ -295,6 +295,7 @@ mod tests {
             content: long,
             tags: vec![],
             context: None,
+            valid_time: None,
         };
         let row = observation_row(1, 1, Some("p/a"), "a.md", &observation);
         assert_eq!(row.title, format!("fact: {}...", "x".repeat(100)));

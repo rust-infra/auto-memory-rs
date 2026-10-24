@@ -339,6 +339,18 @@ pub(crate) struct SearchNotesParams {
     /// Frontmatter key/value filters.
     #[serde(deserialize_with = "lax")]
     pub(crate) metadata_filters: Option<Value>,
+    /// Only observations whose valid-time range covers this instant (upstream 0.24.0
+    /// #1426).
+    #[serde(deserialize_with = "lax")]
+    pub(crate) valid_at: Option<String>,
+    /// Only observations whose valid-time range overlaps `[valid_overlaps_start,
+    /// valid_overlaps_end)`.
+    #[serde(rename = "valid_overlaps", deserialize_with = "lax")]
+    pub(crate) valid_overlaps: Option<Value>,
+    /// Only observations of this time kind (`effective`, `valid`, `occurred`, `due`,
+    /// `mentioned`).
+    #[serde(deserialize_with = "lax")]
+    pub(crate) time_kind: Option<String>,
     /// Per-query floor for the vector legs.
     #[serde(deserialize_with = "lax")]
     pub(crate) min_similarity: Option<f64>,
@@ -392,6 +404,21 @@ impl SearchNotesParams {
     /// value filters nothing.
     pub(crate) fn metadata_filters(&self) -> Option<&Map<String, Value>> {
         self.metadata_filters.as_ref().and_then(Value::as_object)
+    }
+
+    /// The `valid_overlaps` range, from either an `[start, end]` array or a
+    /// `"start,end"` string.
+    pub(crate) fn valid_overlaps(&self) -> Option<(String, String)> {
+        let value = self.valid_overlaps.as_ref()?;
+        let parts: Vec<String> = match value {
+            Value::Array(items) => items
+                .iter()
+                .filter_map(|item| item.as_str().map(str::to_owned))
+                .collect(),
+            Value::String(text) => text.split(',').map(|part| part.trim().to_owned()).collect(),
+            _ => return None,
+        };
+        (parts.len() == 2).then(|| (parts[0].clone(), parts[1].clone()))
     }
 
     pub(crate) fn output_format(&self) -> OutputFormat {

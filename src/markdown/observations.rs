@@ -72,12 +72,17 @@ fn parse_line(input: &str) -> Option<Observation> {
     }
 
     let (body, context) = split_context(&rest);
-    let tags = extract_tags(&body);
+    // Upstream 0.24.0 (#1426): a leading `@effective`/`@valid`/`@occurred`/`@due`/
+    // `@mentioned` qualifier states when the claim holds. It is parsed off the text the
+    // index stores, and a qualifier that does not parse stays in the text verbatim.
+    let qualifier = crate::domain::valid_time::parse_qualifier(&body);
+    let tags = extract_tags(&qualifier.body);
     Some(Observation {
         category,
-        content: body,
+        content: qualifier.body,
         tags,
         context,
+        valid_time: qualifier.time,
     })
 }
 

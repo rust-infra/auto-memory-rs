@@ -9,6 +9,7 @@ pub mod query;
 pub mod relaxation;
 pub mod rerank;
 pub mod text;
+pub use text::implicit_entity_types;
 pub mod vector;
 
 pub use chunking::{
