@@ -1,8 +1,13 @@
 //! Semantic chunking — a port of `basic_memory.repository.semantic_chunking`.
 //!
 //! Markdown headers and bullets are natural boundaries; long sections are split
-//! into overlapping character windows (900 chars, 120 overlap). Chunk keys are
-//! `type:id:index`, and `source_hash` is the SHA-256 of the chunk text.
+//! into overlapping character windows (900 chars, 120 overlap).
+//!
+//! A chunk key is content-addressed — `type:source_hash:index` — so rewriting a note does
+//! not change the key of text it did not touch, and the stored vector is reused (upstream
+//! 0.24.0 #1691). The row a chunk belongs to is carried separately as `row_key`, because a
+//! content key cannot encode a row id that every rewrite replaces. `source_hash` remains
+//! the SHA-256 of the chunk text.
 
 use serde::Serialize;
 use sha2::{Digest, Sha256};
@@ -36,8 +41,13 @@ pub struct SemanticRow {
 /// One deterministic chunk record.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ChunkRecord {
-    /// `type:id:index`.
+    /// `type:source_hash:index` — content-addressed, so unchanged text keeps its vector.
     pub chunk_key: String,
+    /// `type:id` of the search row the chunk was cut from.
+    ///
+    /// Stored beside the vector rather than derived from [`Self::chunk_key`]: the key is
+    /// content-addressed and cannot name a row id that a rewrite replaces.
+    pub row_key: String,
     /// Chunk text that gets embedded.
     pub chunk_text: String,
     /// SHA-256 of the chunk text.
@@ -228,27 +238,22 @@ fn split_by_char_window(paragraph: &str) -> Vec<String> {
 /// Build deterministic chunk records for a set of search rows.
 pub fn build_chunk_records(rows: &[SemanticRow]) -> Vec<ChunkRecord> {
     let mut records: Vec<ChunkRecord> = Vec::new();
-    let mut index_by_key: std::collections::HashMap<String, usize> =
-        std::collections::HashMap::new();
     for row in rows {
         let source_text = compose_row_source_text(row);
+        let row_key = format!("{}:{}", row.item_type, row.id);
         for (chunk_index, chunk_text) in
             split_text_into_chunks(&source_text).into_iter().enumerate()
         {
-            let chunk_key = format!("{}:{}:{}", row.item_type, row.id, chunk_index);
+            // Upstream 0.24.0 (#1691): the key names the content, not the row. A rewrite
+            // recreates the search rows with new ids, so an id-keyed chunk never matched
+            // its predecessor and every edit re-embedded the whole note.
             let source_hash = sha256_hex(&chunk_text);
-            let record = ChunkRecord {
-                chunk_key: chunk_key.clone(),
+            records.push(ChunkRecord {
+                chunk_key: format!("{}:{}:{}", row.item_type, source_hash, chunk_index),
+                row_key: row_key.clone(),
                 chunk_text,
                 source_hash,
-            };
-            match index_by_key.get(&chunk_key) {
-                Some(index) => records[*index] = record,
-                None => {
-                    index_by_key.insert(chunk_key, records.len());
-                    records.push(record);
-                }
-            }
+            });
         }
     }
     records
@@ -257,7 +262,14 @@ pub fn build_chunk_records(rows: &[SemanticRow]) -> Vec<ChunkRecord> {
 /// Reference entity fingerprint: SHA-256 over the sorted `(chunk_key, source_hash)` pairs.
 pub fn entity_fingerprint(records: &[ChunkRecord]) -> String {
     let mut sorted: Vec<&ChunkRecord> = records.iter().collect();
-    sorted.sort_by(|left, right| left.chunk_key.cmp(&right.chunk_key));
+    // Content-addressed keys can repeat across rows, so the row key breaks the tie: a
+    // fingerprint has to be stable for the same set of chunks in any order.
+    sorted.sort_by(|left, right| {
+        left.chunk_key
+            .cmp(&right.chunk_key)
+            .then_with(|| left.row_key.cmp(&right.row_key))
+            .then_with(|| left.source_hash.cmp(&right.source_hash))
+    });
     let payload = sorted
         .iter()
         .map(|record| {
@@ -486,7 +498,7 @@ mod tests {
     }
 
     #[test]
-    fn chunk_keys_use_type_id_index() {
+    fn chunk_keys_are_content_addressed_and_name_their_row() {
         let rows = vec![SemanticRow {
             id: 7,
             item_type: "entity".to_owned(),
@@ -498,19 +510,54 @@ mod tests {
             entity_id: Some(7),
         }];
         let records = build_chunk_records(&rows);
-        assert_eq!(records[0].chunk_key, "entity:7:0");
+        // Upstream 0.24.0 (#1691): the key is `type:source_hash:index`, so it survives the
+        // search rows being recreated; the row is named by `row_key`.
+        assert_eq!(records[0].row_key, "entity:7");
+        assert_eq!(
+            records[0].chunk_key,
+            format!("entity:{}:0", records[0].source_hash)
+        );
         assert_eq!(records[0].source_hash, sha256_hex(&records[0].chunk_text));
+    }
+
+    #[test]
+    fn an_unchanged_note_keeps_its_chunk_keys_across_a_rebuild() {
+        // This is the property #1691 exists for: the vector store's identity is the chunk
+        // key, so re-embedding is skipped exactly when the key is unchanged.
+        let row = |id: i64| SemanticRow {
+            id,
+            item_type: "entity".to_owned(),
+            title: Some("Title".to_owned()),
+            permalink: Some("p/title".to_owned()),
+            content_snippet: Some("Body".to_owned()),
+            category: None,
+            relation_type: None,
+            entity_id: Some(id),
+        };
+        let before = build_chunk_records(&[row(7)]);
+        // The rewrite recreates the row with a new id but the same text.
+        let after = build_chunk_records(&[row(99)]);
+        let keys = |records: &[ChunkRecord]| {
+            records
+                .iter()
+                .map(|record| record.chunk_key.clone())
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(keys(&before), keys(&after), "the text did not change");
+        assert_ne!(before[0].row_key, after[0].row_key);
     }
 
     #[test]
     fn fingerprint_is_order_independent() {
         let first = ChunkRecord {
-            chunk_key: "entity:1:0".to_owned(),
+            chunk_key: format!("entity:{}:0", sha256_hex("a")),
+            row_key: "entity:1".to_owned(),
             chunk_text: "a".to_owned(),
             source_hash: sha256_hex("a"),
         };
         let second = ChunkRecord {
-            chunk_key: "entity:1:1".to_owned(),
+            chunk_key: format!("entity:{}:0", sha256_hex("b")),
+            row_key: "entity:1".to_owned(),
             chunk_text: "b".to_owned(),
             source_hash: sha256_hex("b"),
         };

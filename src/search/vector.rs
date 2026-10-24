@@ -83,8 +83,11 @@ pub struct ScoredChunk {
 }
 
 /// Extract the `(type, id)` search-row key from a `type:id:index` chunk key.
-pub fn row_key_from_chunk_key(chunk_key: &str) -> Option<SearchKey> {
-    let mut parts = chunk_key.split(':');
+pub fn row_key_from_chunk_key(row_key: &str) -> Option<SearchKey> {
+    // `row_key` is `type:id`. A chunk key is content-addressed
+    // (`type:source_hash:index`), so its second segment is a hash, not an id — the row is
+    // read from the field that carries it (upstream 0.24.0 #1691).
+    let mut parts = row_key.split(':');
     let item_type = parts.next()?;
     let id = parts.next()?.parse::<i64>().ok()?;
     Some(SearchKey {
@@ -110,7 +113,7 @@ pub fn rank_chunks(
         if score < min_similarity {
             continue;
         }
-        let Some(key) = row_key_from_chunk_key(&chunk.chunk_key) else {
+        let Some(key) = row_key_from_chunk_key(&chunk.row_key) else {
             continue;
         };
         let candidate = ScoredChunk {
@@ -354,7 +357,7 @@ pub fn aggregate_matches(
                 // 相识度
                 cosine_similarity(query_vector, &chunk.embedding),
                 chunk.entity_id,
-                chunk.chunk_key.as_str(),
+                chunk.row_key.as_str(),
                 chunk.chunk_text.clone(),
             )
         })
@@ -370,8 +373,10 @@ pub fn aggregate_matches(
 
     let mut order: Vec<SearchKey> = Vec::new();
     let mut rows: HashMap<SearchKey, RowMatch> = HashMap::new();
-    for (score, _, chunk_key, chunk_text) in scored {
-        let Some(key) = row_key_from_chunk_key(chunk_key) else {
+    for (score, _, row_key, chunk_text) in scored {
+        // The row is named by `row_key`; a chunk key is content-addressed and its second
+        // segment is a hash, not an id (upstream 0.24.0 #1691).
+        let Some(key) = row_key_from_chunk_key(row_key) else {
             continue;
         };
         // entity:7:0 ─┐
@@ -810,40 +815,51 @@ async fn entity_hydration(
 mod tests {
     use super::*;
 
-    fn chunk(chunk_key: &str, chunk_text: &str) -> ChunkRecord {
+    /// A chunk for `row_key`, content-addressed so the key does not name the row.
+    fn chunk(row_key: &str, chunk_text: &str) -> ChunkRecord {
+        let source_hash = format!("hash-{}", chunk_text.len());
         ChunkRecord {
-            chunk_key: chunk_key.to_owned(),
+            chunk_key: format!(
+                "{}:{source_hash}:0",
+                row_key.split(':').next().unwrap_or("")
+            ),
+            row_key: row_key.to_owned(),
             chunk_text: chunk_text.to_owned(),
-            source_hash: format!("hash-{chunk_key}"),
+            source_hash,
         }
     }
 
     #[test]
-    fn chunk_keys_parse_into_search_row_keys() {
-        let key = row_key_from_chunk_key("relation:12:0").expect("key");
+    fn row_keys_parse_into_search_row_keys() {
+        let key = row_key_from_chunk_key("relation:12").expect("key");
         assert_eq!(key.item_type, "relation");
         assert_eq!(key.id, 12);
-        assert!(row_key_from_chunk_key("entity:not-a-number:0").is_none());
+        assert!(row_key_from_chunk_key("entity:not-a-number").is_none());
         assert!(row_key_from_chunk_key("entity").is_none());
+        // A content-addressed chunk key is no longer a row key: its second segment is a
+        // hash, so treating it as one would invent a row that does not exist.
+        assert!(row_key_from_chunk_key("entity:9f8e7d6c:0").is_none());
     }
 
     #[test]
     fn rank_chunks_keeps_the_best_chunk_per_row() {
+        // Row identity comes from `row_key`; the chunk key is content-addressed, so two
+        // chunks of one row share the type but never a key.
         let chunks = vec![
-            chunk("entity:1:0", "weak"),
-            chunk("entity:1:1", "strong"),
-            chunk("entity:2:0", "mid"),
+            chunk("entity:1", "weak"),
+            chunk("entity:1", "strong"),
+            chunk("entity:2", "mid"),
         ];
         let mut vectors = HashMap::new();
-        vectors.insert("entity:1:0".to_owned(), vec![0.6, 0.8]);
-        vectors.insert("entity:1:1".to_owned(), vec![1.0, 0.0]);
-        vectors.insert("entity:2:0".to_owned(), vec![0.9, 0.1]);
+        vectors.insert(chunks[0].chunk_key.clone(), vec![0.6, 0.8]);
+        vectors.insert(chunks[1].chunk_key.clone(), vec![1.0, 0.0]);
+        vectors.insert(chunks[2].chunk_key.clone(), vec![0.9, 0.1]);
 
         let ranked = rank_chunks(&chunks, &vectors, &[1.0, 0.0], 0.55, 10);
         assert_eq!(ranked.len(), 2);
         assert_eq!(ranked[0].key.id, 1);
         assert!(ranked[0].score > ranked[1].score);
-        assert_eq!(ranked[0].chunk_key, "entity:1:1", "best chunk wins");
+        assert_eq!(ranked[0].chunk_key, chunks[1].chunk_key, "best chunk wins");
 
         let filtered = rank_chunks(&chunks, &vectors, &[0.0, 1.0], 0.95, 10);
         assert!(filtered.is_empty(), "threshold filters weak chunks");

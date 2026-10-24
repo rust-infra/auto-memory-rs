@@ -10,7 +10,7 @@ use rusqlite::Connection;
 use crate::error::Result;
 
 /// Current schema version written to `index_metadata`.
-pub const SCHEMA_VERSION: i64 = 1;
+pub const SCHEMA_VERSION: i64 = 2;
 
 const DDL: &str = r#"
 PRAGMA foreign_keys = ON;
@@ -169,6 +169,9 @@ CREATE TABLE IF NOT EXISTS search_vector_chunks (
     entity_id          INTEGER NOT NULL,
     project_id         INTEGER NOT NULL REFERENCES project(id) ON DELETE CASCADE,
     chunk_key          TEXT NOT NULL,
+    -- The search row the chunk was cut from, as `type:id`. Kept beside the vector because
+    -- the chunk key is content-addressed and cannot name a row id (0.24.0 #1691).
+    row_key            TEXT NOT NULL DEFAULT '',
     chunk_text         TEXT NOT NULL,
     source_hash        TEXT NOT NULL,
     entity_fingerprint TEXT NOT NULL,
@@ -181,7 +184,7 @@ CREATE TABLE IF NOT EXISTS search_vector_chunks (
 CREATE INDEX IF NOT EXISTS idx_search_vector_chunks_project_entity
     ON search_vector_chunks (project_id, entity_id);
 CREATE UNIQUE INDEX IF NOT EXISTS uix_search_vector_chunks_entity_key
-    ON search_vector_chunks (project_id, entity_id, chunk_key);
+    ON search_vector_chunks (project_id, row_key, chunk_key);
 
 CREATE TABLE IF NOT EXISTS search_vector_embeddings (
     rowid       INTEGER PRIMARY KEY REFERENCES search_vector_chunks(id) ON DELETE CASCADE,
@@ -193,10 +196,46 @@ CREATE TABLE IF NOT EXISTS search_vector_embeddings (
 /// Create tables if needed and record the schema version.
 pub fn migrate(conn: &Connection) -> Result<()> {
     conn.execute_batch(DDL)?;
+    upgrade_vector_chunk_row_key(conn)?;
     conn.execute(
         "INSERT INTO index_metadata (key, value) VALUES ('schema_version', ?1)
          ON CONFLICT(key) DO UPDATE SET value = excluded.value",
         [SCHEMA_VERSION.to_string()],
+    )?;
+    Ok(())
+}
+
+/// Add `search_vector_chunks.row_key` to a database written before it existed.
+///
+/// Upstream 0.24.0 (#1691) re-keyed chunks by content, which left the search row with no
+/// place in the key. A database from before the change already carries the row in its old
+/// `type:id:index` key, so the column is backfilled exactly and nothing is re-embedded.
+fn upgrade_vector_chunk_row_key(conn: &Connection) -> Result<()> {
+    let mut statement = conn.prepare("PRAGMA table_info(search_vector_chunks)")?;
+    let columns: Vec<String> = statement
+        .query_map([], |row| row.get::<_, String>(1))?
+        .collect::<std::result::Result<_, _>>()?;
+    if columns.is_empty() || columns.iter().any(|column| column == "row_key") {
+        // A fresh database got the column from the DDL, and one already upgraded needs
+        // nothing. Either way this is the no-op path.
+        return Ok(());
+    }
+    conn.execute_batch(
+        "ALTER TABLE search_vector_chunks
+             ADD COLUMN row_key TEXT NOT NULL DEFAULT '';
+         -- Legacy keys are `type:id:index`, so `type:id` is recovered exactly: the first
+         -- colon ends the type, and the second ends the id.
+         UPDATE search_vector_chunks
+            SET row_key = substr(
+                    chunk_key,
+                    1,
+                    instr(chunk_key, ':')
+                      + instr(substr(chunk_key, instr(chunk_key, ':') + 1), ':')
+                      - 1)
+          WHERE row_key = '' AND instr(chunk_key, ':') > 0;
+         DROP INDEX IF EXISTS uix_search_vector_chunks_entity_key;
+         CREATE UNIQUE INDEX uix_search_vector_chunks_entity_key
+             ON search_vector_chunks (project_id, row_key, chunk_key);",
     )?;
     Ok(())
 }
@@ -211,4 +250,128 @@ pub fn metadata(conn: &Connection, key: &str) -> Result<Option<String>> {
 /// Whether this SQLite build exposes FTS5.
 pub fn has_fts5(conn: &Connection) -> bool {
     conn.prepare("SELECT count(*) FROM search_index").is_ok()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The vector table as it looked before #1691: no `row_key`, and a chunk key that names
+    /// the row as `type:id:index`.
+    const LEGACY_DDL: &str = "
+        CREATE TABLE project (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL UNIQUE,
+            permalink TEXT NOT NULL UNIQUE,
+            path TEXT NOT NULL
+        );
+        CREATE TABLE search_vector_chunks (
+            id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+            entity_id          INTEGER NOT NULL,
+            project_id         INTEGER NOT NULL REFERENCES project(id) ON DELETE CASCADE,
+            chunk_key          TEXT NOT NULL,
+            chunk_text         TEXT NOT NULL,
+            source_hash        TEXT NOT NULL,
+            entity_fingerprint TEXT NOT NULL,
+            embedding_model    TEXT NOT NULL,
+            vector_index       TEXT NOT NULL,
+            embedding_status   TEXT NOT NULL CHECK (embedding_status IN ('pending', 'ready')),
+            updated_at         TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE UNIQUE INDEX uix_search_vector_chunks_entity_key
+            ON search_vector_chunks (project_id, entity_id, chunk_key);
+        CREATE TABLE search_vector_embeddings (
+            rowid       INTEGER PRIMARY KEY REFERENCES search_vector_chunks(id) ON DELETE CASCADE,
+            embedding   BLOB NOT NULL,
+            source_hash TEXT NOT NULL
+        );
+    ";
+
+    fn legacy_connection() -> rusqlite::Connection {
+        let conn = rusqlite::Connection::open_in_memory().expect("open");
+        conn.execute_batch(LEGACY_DDL).expect("legacy ddl");
+        conn.execute_batch(
+            "INSERT INTO project (id, name, permalink, path)
+                 VALUES (1, 'oracle', 'oracle', '/tmp/vault');
+             INSERT INTO search_vector_chunks
+                 (entity_id, project_id, chunk_key, chunk_text, source_hash,
+                  entity_fingerprint, embedding_model, vector_index, embedding_status)
+             VALUES (1, 1, 'entity:7:0', 'text', 'hash', 'fp', 'model', 'idx', 'ready'),
+                    (2, 1, 'observation:42:1', 'text', 'hash', 'fp', 'model', 'idx', 'ready'),
+                    (3, 1, 'relation:12:0', 'text', 'hash', 'fp', 'model', 'idx', 'ready');",
+        )
+        .expect("legacy rows");
+        conn
+    }
+
+    #[test]
+    fn an_upgrade_backfills_the_row_key_from_a_legacy_chunk_key() {
+        // Upstream 0.24.0 (#1691) moved the row out of the chunk key. A database written
+        // before that still carries the row in the key, so the upgrade recovers it exactly
+        // and nothing has to be re-embedded.
+        let conn = legacy_connection();
+        migrate(&conn).expect("migrate");
+        let mut statement = conn
+            .prepare("SELECT chunk_key, row_key FROM search_vector_chunks ORDER BY entity_id")
+            .expect("prepare");
+        let rows: Vec<(String, String)> = statement
+            .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
+            .expect("query")
+            .collect::<std::result::Result<_, _>>()
+            .expect("rows");
+        assert_eq!(
+            rows,
+            vec![
+                ("entity:7:0".to_owned(), "entity:7".to_owned()),
+                ("observation:42:1".to_owned(), "observation:42".to_owned()),
+                ("relation:12:0".to_owned(), "relation:12".to_owned()),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_second_migration_is_a_no_op() {
+        // Every store open runs `migrate`, so the upgrade has to be idempotent: adding the
+        // column twice would be an error, and re-backfilling would rewrite nothing.
+        let conn = legacy_connection();
+        migrate(&conn).expect("first");
+        let after_first: Vec<(String, String)> = conn
+            .prepare("SELECT chunk_key, row_key FROM search_vector_chunks ORDER BY entity_id")
+            .expect("prepare")
+            .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
+            .expect("query")
+            .collect::<std::result::Result<_, _>>()
+            .expect("rows");
+        migrate(&conn).expect("second");
+        let after_second: Vec<(String, String)> = conn
+            .prepare("SELECT chunk_key, row_key FROM search_vector_chunks ORDER BY entity_id")
+            .expect("prepare")
+            .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
+            .expect("query")
+            .collect::<std::result::Result<_, _>>()
+            .expect("rows");
+        assert_eq!(after_first, after_second);
+    }
+
+    #[test]
+    fn a_fresh_database_gets_the_column_without_a_backfill() {
+        let conn = rusqlite::Connection::open_in_memory().expect("open");
+        migrate(&conn).expect("migrate");
+        let mut statement = conn
+            .prepare("PRAGMA table_info(search_vector_chunks)")
+            .expect("prepare");
+        let columns: Vec<String> = statement
+            .query_map([], |row| row.get::<_, String>(1))
+            .expect("query")
+            .collect::<std::result::Result<_, _>>()
+            .expect("rows");
+        assert!(
+            columns.iter().any(|column| column == "row_key"),
+            "{columns:?}"
+        );
+        let version = metadata(&conn, "schema_version")
+            .expect("metadata")
+            .expect("present");
+        assert_eq!(version, SCHEMA_VERSION.to_string());
+    }
 }

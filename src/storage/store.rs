@@ -1261,10 +1261,10 @@ impl Store {
             {
                 let mut insert_chunk = tx.prepare(
                     "INSERT INTO search_vector_chunks
-                        (entity_id, project_id, chunk_key, chunk_text, source_hash,
+                        (entity_id, project_id, chunk_key, row_key, chunk_text, source_hash,
                          entity_fingerprint, embedding_model, vector_index, embedding_status,
                          updated_at)
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'ready', ?9)",
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 'ready', ?10)",
                 )?;
                 let mut insert_embedding = tx.prepare(
                     "INSERT INTO search_vector_embeddings (rowid, embedding, source_hash)
@@ -1275,6 +1275,7 @@ impl Store {
                         row.entity_id,
                         project_id,
                         row.chunk_key,
+                        row.row_key,
                         row.chunk_text,
                         row.source_hash,
                         row.entity_fingerprint,
@@ -1301,7 +1302,8 @@ impl Store {
         let model = model.to_owned();
         self.call(move |conn| {
             let mut statement = conn.prepare(
-                "SELECT c.id, c.entity_id, c.chunk_key, c.chunk_text, c.source_hash, e.embedding
+                "SELECT c.id, c.entity_id, c.chunk_key, c.row_key, c.chunk_text, c.source_hash,
+                        e.embedding
                    FROM search_vector_chunks c
                    JOIN search_vector_embeddings e ON e.rowid = c.id
                   WHERE c.project_id = ?1 AND c.vector_index = ?2
@@ -1315,9 +1317,10 @@ impl Store {
                         id: row.get(0)?,
                         entity_id: row.get(1)?,
                         chunk_key: row.get(2)?,
-                        chunk_text: row.get(3)?,
-                        source_hash: row.get(4)?,
-                        embedding: decode_vector(&row.get::<_, Vec<u8>>(5)?),
+                        row_key: row.get(3)?,
+                        chunk_text: row.get(4)?,
+                        source_hash: row.get(5)?,
+                        embedding: decode_vector(&row.get::<_, Vec<u8>>(6)?),
                     })
                 })?;
             Ok(rows.collect::<std::result::Result<Vec<_>, _>>()?)

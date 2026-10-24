@@ -105,8 +105,10 @@ pub struct VectorChunkRow {
     pub id: i64,
     /// Owning entity.
     pub entity_id: i64,
-    /// `type:id:index`.
+    /// `type:source_hash:index` — content-addressed (upstream 0.24.0 #1691).
     pub chunk_key: String,
+    /// `type:id` of the search row the chunk was cut from.
+    pub row_key: String,
     /// Chunk text that was embedded.
     pub chunk_text: String,
     /// SHA-256 of the chunk text.
@@ -120,8 +122,10 @@ pub struct VectorChunkRow {
 pub struct VectorRow {
     /// Owning entity.
     pub entity_id: i64,
-    /// `type:id:index`.
+    /// `type:source_hash:index` — content-addressed (upstream 0.24.0 #1691).
     pub chunk_key: String,
+    /// `type:id` of the search row the chunk was cut from.
+    pub row_key: String,
     /// Chunk text that was embedded.
     pub chunk_text: String,
     /// SHA-256 of the chunk text.

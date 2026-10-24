@@ -379,22 +379,16 @@ impl<'a> IndexService<'a> {
         let mut fingerprints: std::collections::HashMap<String, String> =
             std::collections::HashMap::new();
         for row in &rows {
+            let row_key = format!("{}:{}", row.item_type, row.id);
             let owned: Vec<_> = records
                 .iter()
-                .filter(|record| {
-                    record
-                        .chunk_key
-                        .starts_with(&format!("{}:{}:", row.item_type, row.id))
-                })
+                .filter(|record| record.row_key == row_key)
                 .cloned()
                 .collect();
             if owned.is_empty() {
                 continue;
             }
-            fingerprints.insert(
-                format!("{}:{}", row.item_type, row.id),
-                entity_fingerprint(&owned),
-            );
+            fingerprints.insert(row_key, entity_fingerprint(&owned));
         }
 
         let mut report = EmbeddingReport {
@@ -435,11 +429,10 @@ impl<'a> IndexService<'a> {
             fresh.insert(record.chunk_key.as_str(), vector);
         }
 
-        // A chunk key is `type:id:index`, so the owning search row is the `type:id` prefix.
-        // `None` — an unparseable key, or a row missing from `rows` — skips the chunk rather
-        // than writing a vector with no owner.
-        let owner_of = |chunk_key: &str| -> Option<i64> {
-            let (item_type, id) = chunk_key.split_once(':')?;
+        // A chunk names its row as `type:id`. `None` — an unparseable key, or a row missing
+        // from `rows` — skips the chunk rather than writing a vector with no owner.
+        let owner_of = |row_key: &str| -> Option<i64> {
+            let (item_type, id) = row_key.split_once(':')?;
             let id = id.split(':').next()?.parse::<i64>().ok()?;
             rows.iter()
                 .find(|row| row.item_type == item_type && row.id == id)
@@ -448,7 +441,7 @@ impl<'a> IndexService<'a> {
 
         let mut vector_rows = Vec::with_capacity(records.len());
         for record in &records {
-            let Some(entity_id) = owner_of(&record.chunk_key) else {
+            let Some(entity_id) = owner_of(&record.row_key) else {
                 continue;
             };
             let vector = match existing.get(&record.chunk_key) {
@@ -464,17 +457,13 @@ impl<'a> IndexService<'a> {
             vector_rows.push(VectorRow {
                 entity_id,
                 chunk_key: record.chunk_key.clone(),
+                row_key: record.row_key.clone(),
                 chunk_text: record.chunk_text.clone(),
                 source_hash: record.source_hash.clone(),
+                // Keyed by `type:id`; the chunk key is content-addressed, so the row is read
+                // from the field that names it.
                 entity_fingerprint: fingerprints
-                    .get(
-                        &record
-                            .chunk_key
-                            .split(':')
-                            .take(2)
-                            .collect::<Vec<_>>()
-                            .join(":"),
-                    )
+                    .get(&record.row_key)
                     .cloned()
                     .unwrap_or_default(),
                 embedding: vector,

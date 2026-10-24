@@ -77,16 +77,10 @@ async fn chunks_match_reference_corpus() {
     let mut actual: Vec<(String, String, String)> = records
         .iter()
         .map(|record| {
-            // Recover the row permalink from the owning search row.
-            let key = record
-                .chunk_key
-                .split(':')
-                .take(2)
-                .collect::<Vec<_>>()
-                .join(":");
+            // The owning row is named by `row_key`, not by the content-addressed chunk key.
             let permalink = rows
                 .iter()
-                .find(|row| format!("{}:{}", row.item_type, row.id) == key)
+                .find(|row| format!("{}:{}", row.item_type, row.id) == record.row_key)
                 .and_then(|row| row.permalink.clone())
                 .unwrap_or_default();
             (
@@ -108,13 +102,10 @@ async fn chunks_match_reference_corpus() {
     let mut our_entities: Vec<i64> = Vec::new();
     for row in &rows {
         if let Some(entity_id) = row.entity_id {
+            let row_key = format!("{}:{}", row.item_type, row.id);
             let owned: Vec<_> = records
                 .iter()
-                .filter(|record| {
-                    record
-                        .chunk_key
-                        .starts_with(&format!("{}:{}:", row.item_type, row.id))
-                })
+                .filter(|record| record.row_key == row_key)
                 .cloned()
                 .collect();
             if !owned.is_empty() {

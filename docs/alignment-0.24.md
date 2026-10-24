@@ -109,13 +109,14 @@ found by re-reading all 161 numbered entries against the code, and are now imple
 | #1537 | An editor's scratch copy (`#note.md#`, `.#note.md`, `.swp`) is not a note. |
 | #1539 | An escaped hash in `.bmignore` is a pattern, not a comment. |
 | #1657 | `IT-644 cacheability` quotes only the punctuated word and requires every word, instead of becoming one exact phrase. |
+| #1691 | A chunk key is content-addressed (`type:source_hash:index`), so an edit re-embeds only the text it changed. The owning search row travels in a new `row_key` column: `type:id` beside a hash can no longer encode a row id. A database written before the change is upgraded in place, backfilling `row_key` from the old `type:id:index` key, so nothing is re-embedded by the migration. |
+| #1555 | The ONNX reranker scores candidates eight at a time, which bounds the arena without changing a score. |
 
 ### Gaps that remain open
 
 | Upstream | What is missing |
 |---|---|
-| #1335 | Entity-body chunks still come one per bullet. Splitting on headings and a size budget changes the chunk corpus, which the captured vector golden pins — it is a corpus change, not a bug fix. |
-| #1691 | Chunks are keyed by the search row id they were cut from, so a rewrite re-embeds unchanged text. Re-keying by text hash needs a migration that rewrites the existing manifest. |
+| #1335 | Entity-body chunks still come one per bullet. Splitting on headings and a size budget rewrites every entity-body chunk text, and the captured vector corpus holds the reference *vectors* for the per-bullet texts. Re-capturing them needs the reference embedding model, which is not in this environment: `tests/embedding_runtime.rs` skips rather than runs. Until that capture is redone, implementing #1335 would replace a verified reference comparison with a self-consistency check, so it is deliberately held rather than half-done. |
 | #1788 | Chunk metadata updates are written per row rather than in one set-based statement. |
 
 ### Upstream items that do not arise in this design
@@ -180,6 +181,6 @@ behaviors) and `tests/gaps_group_b.rs` (#1537/#1539 walks and ignore patterns), 
 tests beside `src/application/search_text.rs` (the two guidance branches) and
 `src/search/query.rs` (#1657's preparation).
 
-The suite is now **55 test binaries / 666 tests**, all passing, and
+The suite is now **56 test binaries / 670 tests**, and
 `./scripts/check-rust.sh` (format, clippy `-D warnings`, the full suite, the doc build and
 the DSH plugin check) is green.
