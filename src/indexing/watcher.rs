@@ -11,7 +11,11 @@ use std::future::Future;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
-use notify::{Event, EventKind, RecursiveMode, Watcher, event::ModifyKind};
+use notify::Event;
+use notify::EventKind;
+use notify::RecursiveMode;
+use notify::Watcher;
+use notify::event::ModifyKind;
 use serde::Serialize;
 
 use crate::error::Result;

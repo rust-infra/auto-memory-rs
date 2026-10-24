@@ -14,7 +14,38 @@ use std::sync::Arc;
 use serde_json::{Value, json};
 use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncWrite, AsyncWriteExt};
 
-use super::helpers::*;
+use super::helpers::MAX_BINARY_CONTENT_BYTES;
+use super::helpers::as_tool_error;
+use super::helpers::capitalize;
+use super::helpers::compact_context_payload;
+use super::helpers::compact_search_payload;
+use super::helpers::content_declares_type;
+use super::helpers::content_items_result;
+use super::helpers::dedent;
+use super::helpers::document_title;
+use super::helpers::encode_base64;
+use super::helpers::format_not_found_message;
+use super::helpers::format_related_results;
+use super::helpers::guess_content_type;
+use super::helpers::has_search_criteria;
+use super::helpers::is_allowed_image_media_type;
+use super::helpers::is_valid_project_directory;
+use super::helpers::json_result;
+use super::helpers::metadata_pairs;
+use super::helpers::move_result;
+use super::helpers::overwrite_error;
+use super::helpers::page_payload;
+use super::helpers::parse_activity_types;
+use super::helpers::parse_entity_type_names;
+use super::helpers::parse_opening_frontmatter;
+use super::helpers::plain_text_result;
+use super::helpers::required_str;
+use super::helpers::revision_conflict_result;
+use super::helpers::score_of;
+use super::helpers::text_item;
+use super::helpers::text_result;
+use super::helpers::unwrapped_result;
+use super::helpers::vector_options;
 use super::params::{
     BuildContextParams, CatParams, ChatgptFetchParams, ChatgptSearchParams,
     CreateMemoryProjectParams, DeleteNoteParams, DeleteProjectParams, EditNoteParams, FindParams,
