@@ -114,6 +114,22 @@ fn collect_files(directory: &Path, out: &mut Vec<PathBuf>) {
 }
 
 /// The reference golden captured from `basic-memory mcp` (`tools/dump_reference_mcp.py`).
+/// The note titles a miss-suggestion markdown block lists, sorted.
+///
+/// A suggestion block is `## <rank>. <title>` per row. The 0.24 n-gram column changes
+/// FTS5's bm25 length normalization, which can swap two adjacent suggestions whose scores
+/// are within a few percent, so a suggestion list is compared by membership.
+fn suggestion_titles(text: &str) -> Vec<String> {
+    let mut titles: Vec<String> = text
+        .lines()
+        .filter_map(|line| line.strip_prefix("## "))
+        .filter_map(|line| line.split_once(". "))
+        .map(|(_, title)| title.trim().to_owned())
+        .collect();
+    titles.sort();
+    titles
+}
+
 fn reference_session() -> Vec<Value> {
     let raw = fs::read_to_string(repo_root().join("tests/golden/mcp/responses.json"))
         .expect("reference MCP golden");
@@ -509,7 +525,19 @@ fn mcp_read_content_and_view_note_replay_the_reference_payloads() {
         let expected = text_payload(golden_case(&reference, id));
         if id.starts_with("view-note") || id.ends_with("-text") {
             // `view_note` and `read_note(output_format="text")` return `str`, so their
-            // content text is byte-comparable.
+            // content text is byte-comparable — except in a *miss* suggestion list, which
+            // is a ranked fallback search. The 0.24 n-gram column (#1294) changes FTS5's
+            // bm25 length normalization, which can swap two adjacent suggestions
+            // (`task-markers` and `中文测试文档` sit within 3% of each other). Membership
+            // and count are pinned; the rank order within a suggestion list is not.
+            if id.ends_with("-missing") || id.ends_with("-missing-text") {
+                assert_eq!(
+                    suggestion_titles(&ours),
+                    suggestion_titles(&expected),
+                    "{id} suggestions differ"
+                );
+                continue;
+            }
             assert_eq!(ours, expected, "{id} text differs");
             continue;
         }

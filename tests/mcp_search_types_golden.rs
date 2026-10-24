@@ -63,8 +63,25 @@ fn mcp_search_types_replay_the_reference() {
 
         // `output_format` defaults to text: a miss renders guidance, not JSON.
         if expected.starts_with('#') || expected.starts_with("No results found") {
+            // A results page is compared with its `- score:` lines blanked out: the 0.24
+            // n-gram column (#1294) changes FTS5's bm25 length normalization, so the
+            // numbers move while every title, permalink and rank stays put. Guidance text
+            // has no scores and is compared verbatim.
+            let strip_scores = |text: &str| -> String {
+                text.lines()
+                    .map(|line| {
+                        if line.starts_with("- score: ") {
+                            "- score: <rescaled>"
+                        } else {
+                            line
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            };
             assert_eq!(
-                ours_text, expected_text,
+                strip_scores(&ours_text),
+                strip_scores(&expected_text),
                 "{}: text surface differs",
                 case["id"]
             );

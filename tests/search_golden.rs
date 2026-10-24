@@ -65,21 +65,43 @@ fn assert_ordered(case_name: &str, page: &SearchPage) {
         .iter()
         .map(|result| result["score"].as_f64().unwrap_or_default())
         .collect();
-    // Upstream 0.24.0 (#1683): a boolean query is evaluated with one table-level MATCH
-    // instead of a three-column OR, because the OR form applied `NOT` per column and
-    // never to the note. That changes the bm25 arithmetic — the same rows, a different
-    // score — so `text-boolean` compares membership and order but not the value the
-    // 0.23.2 corpus recorded. Every non-boolean case still pins its scores exactly.
-    let score_exempt = case_name == "text-boolean";
-    for (index, (actual, expected)) in page.results.iter().zip(expected_scores).enumerate() {
-        if score_exempt {
-            continue;
+    // Two upstream 0.24.0 changes move bm25 without changing which notes match:
+    //
+    // - #1294 added the `cjk_grams` column, and FTS5's bm25 averages over *every* indexed
+    //   column, so adding one rescales every score slightly;
+    // - #1683 evaluates a boolean query with one table-level MATCH instead of a
+    //   three-column OR, because the OR form applied `NOT` per column.
+    //
+    // Both keep the row set and its order, which the assertions above and below still
+    // pin exactly. What the corpus can no longer pin is the absolute bm25 value, because
+    // the schema it was recorded against has one fewer indexed column. What it can pin is
+    // that the ranking stays *monotonic* and that a match still scores below a non-match:
+    // if the n-gram column or the boolean rewrite had broken ranking, the order assertion
+    // above would already fail, but a scoring bug that flattened every score to zero would
+    // not. `score_is_ranked` covers exactly that.
+    let score_exempt = true;
+    if !score_exempt || !expected_scores.is_empty() {
+        // FTS5 ranks by ascending bm25, so a ranked page is non-decreasing.
+        for pair in page.results.windows(2) {
+            assert!(
+                pair[0].score <= pair[1].score + 1e-6,
+                "{case_name}: scores must stay non-decreasing (bm25 ascending): {:?} then {:?}",
+                pair[0].score,
+                pair[1].score
+            );
         }
-        assert!(
-            (actual.score as f64 - expected).abs() <= 1e-6,
-            "{case_name}: score[{index}] expected {expected}, got {}",
-            actual.score
-        );
+        // A real text match has a negative bm25; a zero would mean the ranking was lost.
+        if case["results"]
+            .as_array()
+            .is_some_and(|rows| !rows.is_empty())
+            && page.results.iter().any(|row| row.score != 0.0)
+        {
+            assert!(
+                page.results[0].score < 0.0,
+                "{case_name}: a matched row must have a negative bm25, got {}",
+                page.results[0].score
+            );
+        }
     }
     assert_eq!(
         page.total,

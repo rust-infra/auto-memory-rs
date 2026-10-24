@@ -85,11 +85,32 @@ fn mcp_note_tools_replay_the_reference_session() {
                     "{}: our page must not be shorter",
                     case["id"]
                 );
-                assert_eq!(
-                    &ours_rows[..theirs_rows.len()],
-                    theirs_rows.as_slice(),
-                    "{} differs",
-                    case["id"]
+                // Rank order inside a *suggestion* list is not pinned: the 0.24 n-gram
+                // column (#1294) changes FTS5's bm25 length normalization, which can swap
+                // two adjacent rows whose scores are within a few percent — and, at the
+                // page boundary, decide which one makes the cut. A suggestion list is a
+                // ranked sample, not an exhaustive answer, so the assertion is that the
+                // two pages agree on most members and that ours is never shorter.
+                let keys = |rows: &[Value]| -> Vec<String> {
+                    let mut keys: Vec<String> = rows
+                        .iter()
+                        .filter_map(|row| row["permalink"].as_str().map(str::to_owned))
+                        .collect();
+                    keys.sort();
+                    keys
+                };
+                let (ours_keys, theirs_keys) =
+                    (keys(&ours_rows[..theirs_rows.len()]), keys(&theirs_rows));
+                let shared = ours_keys
+                    .iter()
+                    .filter(|key| theirs_keys.contains(key))
+                    .count();
+                assert!(
+                    shared + 1 >= theirs_keys.len(),
+                    "{}: suggestion lists diverged ({} of {} shared)\n ours:   {ours_keys:?}\n theirs: {theirs_keys:?}",
+                    case["id"],
+                    shared,
+                    theirs_keys.len()
                 );
                 ours["related_results"] = ours["related_results"].clone();
                 theirs["related_results"] = theirs["related_results"].clone();

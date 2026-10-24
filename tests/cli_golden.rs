@@ -179,7 +179,12 @@ fn semantic_search_cli_replays_reference_results() {
     // ranks by up to 1.21e-4, above the 1e-4 the first capture needed. Rankings and
     // `matched_chunk` stay exact — those are the contract; the score is a float that two
     // reference runs do not agree on.
-    const SCORE_TOLERANCE: f64 = 5e-4;
+    // A hybrid score is a fusion of the FTS and vector legs, normalized into [0, 1]. The
+    // 0.24 n-gram column (#1294) changes FTS5's bm25 length normalization, which moves the
+    // FTS half by a few thousandths and therefore the fused score with it. Ranking, the
+    // result set and `matched_chunk` are all still pinned exactly below; the tolerance
+    // covers the rescaling, not a reordering.
+    const SCORE_TOLERANCE: f64 = 5e-3;
     for (flags, query, golden_name) in [
         (vec!["--vector"], "local index", "vector-local-index"),
         (vec!["--hybrid"], "rust", "hybrid-rust"),

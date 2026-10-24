@@ -28,6 +28,8 @@ pub struct SearchIndexWriteRow {
     pub title: String,
     /// Searchable text (variant concatenation).
     pub content_stems: String,
+    /// Character unigrams and bigrams for unsegmented scripts (upstream 0.24.0 #1294).
+    pub cjk_grams: String,
     /// Display content.
     pub content_snippet: Option<String>,
     /// Row permalink.
@@ -82,6 +84,31 @@ fn join_variants(parts: impl IntoIterator<Item = String>) -> String {
     stems
 }
 
+/// Collect the n-grams of every text field of an entity row.
+///
+/// A note's title, body, permalink, path and tags can each carry unsegmented text, so each
+/// contributes its own n-grams. They are joined with spaces because the FTS tokenizer
+/// splits on whitespace, which keeps each gram a term of its own.
+fn collect_ngrams(
+    title: &str,
+    content: &str,
+    permalink: Option<&str>,
+    file_path: &str,
+    tags: &[String],
+) -> String {
+    let mut grams: Vec<String> = Vec::new();
+    for text in std::iter::once(title)
+        .chain(std::iter::once(content))
+        .chain(permalink)
+        .chain(std::iter::once(file_path))
+        .chain(tags.iter().map(String::as_str))
+    {
+        grams.extend(crate::search::ngram::ngrams(text));
+    }
+    grams.dedup();
+    grams.join(" ")
+}
+
 /// Build the entity-level search row.
 #[allow(clippy::too_many_arguments)]
 pub fn entity_row(
@@ -108,6 +135,12 @@ pub fn entity_row(
         item_type: "entity".to_owned(),
         title: title.to_owned(),
         content_stems: join_variants(parts),
+        // Upstream 0.24.0 (#1294): scripts written without spaces are indexed by
+        // character unigrams and bigrams too, because `unicode61` would otherwise file a
+        // whole Chinese sentence as one token and `中文` would never match it. They live
+        // in their own column so they add recall without changing the word index's bm25
+        // length normalization.
+        cjk_grams: collect_ngrams(title, content, permalink, file_path, tags),
         content_snippet: (!content.is_empty()).then(|| content.to_owned()),
         permalink: permalink.map(str::to_owned),
         file_path: file_path.to_owned(),
@@ -147,6 +180,7 @@ pub fn observation_row(
         item_type: "observation".to_owned(),
         title,
         content_stems: join_variants(text_variants(&observation.content)),
+        cjk_grams: crate::search::ngram::ngrams(&observation.content).join(" "),
         content_snippet: Some(observation.content.clone()),
         permalink,
         file_path: file_path.to_owned(),
@@ -181,6 +215,7 @@ pub fn relation_row(
         item_type: "relation".to_owned(),
         title: title.clone(),
         content_stems: join_variants(text_variants(&title)),
+        cjk_grams: crate::search::ngram::ngrams(&title).join(" "),
         content_snippet: None,
         permalink: permalink.map(str::to_owned),
         file_path: file_path.to_owned(),

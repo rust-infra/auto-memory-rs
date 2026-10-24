@@ -83,14 +83,28 @@ fn assert_matches(case: &str, payload: &Value) {
             .collect::<Vec<_>>(),
         "{case}: results differ"
     );
-    for (index, ((permalink, actual), (_, reference))) in
-        actual.iter().zip(reference.iter()).enumerate()
-    {
-        assert!(
-            (actual - reference).abs() <= 1e-6,
-            "{case}: {permalink} score[{index}] expected {reference}, got {actual}"
-        );
+    // The 0.24 n-gram column (#1294) changes FTS5's bm25 length normalization, so an
+    // absolute score from the 0.23.2 schema no longer matches. Two invariants remain and
+    // they are what catch a broken ranking rather than a rescaled one:
+    //
+    // - a *query* search still scores every hit negative (a zero would mean bm25 stopped
+    //   running), while a filter-only search reports 0 by design;
+    // - the page still lists the same rows in the same order, which the permalink
+    //   comparison above pins exactly.
+    let scored = reference.iter().any(|(_, score)| *score != 0.0);
+    if scored {
+        for (index, ((permalink, actual), _)) in actual.iter().zip(reference.iter()).enumerate() {
+            assert!(
+                *actual < 0.0,
+                "{case}: {permalink} score[{index}] must be a negative bm25, got {actual}"
+            );
+        }
     }
+    // A page is ordered by bm25 ascending, but a *relaxed* fallback re-runs the query and
+    // the relation rows it returns can share a score band, so the page is not guaranteed
+    // strictly monotonic. The negative-score assertion above is what pins that ranking
+    // still happens; the exact order is already pinned by the permalink comparison, which
+    // is unchanged by the score rescaling.
 }
 
 #[test]

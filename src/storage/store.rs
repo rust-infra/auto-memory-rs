@@ -1612,10 +1612,11 @@ fn insert_search_rows(
 
     let mut statement = conn.prepare(
         "INSERT INTO search_index
-            (id, title, content_stems, content_snippet, permalink, file_path, type,
-             project_id, from_id, to_id, relation_type, entity_id, category, metadata,
-             created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
+            (id, title, content_stems, cjk_grams, content_snippet, permalink, file_path,
+             type, project_id, from_id, to_id, relation_type, entity_id, category,
+             metadata, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16,
+                 ?17)",
     )?;
     for row in rows {
         let (created_at, updated_at) = timestamps
@@ -1626,6 +1627,7 @@ fn insert_search_rows(
             row.id,
             row.title,
             row.content_stems,
+            row.cjk_grams,
             row.content_snippet,
             row.permalink,
             row.file_path,

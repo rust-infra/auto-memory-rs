@@ -124,6 +124,40 @@ pub fn prepare_fts_query(input: &str) -> Option<String> {
     (!prepared.is_empty()).then_some(prepared)
 }
 
+/// Prepare the `cjk_grams` leg of a query.
+///
+/// Upstream 0.24.0 (#1294): a query for a script written without spaces is expanded into
+/// the same unigrams and bigrams the index stores, joined with `AND` so a multi-character
+/// query keeps its precision. `中文笔记` becomes `"中文" AND "文笔" AND "笔记"` — matching
+/// the bigrams is what distinguishes a note about that phrase from one that merely
+/// contains `中`.
+///
+/// Returns `None` when the query carries no unsegmented text, in which case the `cjk_grams`
+/// column contributes nothing and the ordinary word index answers alone.
+#[must_use]
+pub fn prepare_ngram_query(input: &str) -> Option<String> {
+    let trimmed = input.trim();
+    if trimmed.is_empty() || !crate::search::ngram::contains_unsegmented_script(trimmed) {
+        return None;
+    }
+    // The bigrams are the precise terms; a one-character run has only its unigram.
+    let grams = crate::search::ngram::ngrams(trimmed);
+    let bigrams: Vec<&String> = grams
+        .iter()
+        .filter(|gram| gram.chars().count() == 2)
+        .collect();
+    let terms: Vec<String> = if bigrams.is_empty() {
+        grams
+            .iter()
+            .filter(|gram| gram.chars().count() == 1)
+            .map(|gram| format!("\"{gram}\""))
+            .collect()
+    } else {
+        bigrams.iter().map(|gram| format!("\"{gram}\"")).collect()
+    };
+    (!terms.is_empty()).then(|| terms.join(" AND "))
+}
+
 /// Prepare a title query (no prefix wildcards, matching the reference title search).
 pub fn prepare_title_query(input: &str) -> Option<String> {
     let trimmed = input.trim();

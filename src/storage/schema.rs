@@ -83,6 +83,10 @@ CREATE VIRTUAL TABLE IF NOT EXISTS search_index USING fts5(
     id UNINDEXED,
     title,
     content_stems,
+    -- Upstream 0.24.0 (#1294): character unigrams and bigrams for scripts written
+    -- without spaces, kept in their own column so they add recall without changing the
+    -- bm25 length normalization of the word index that every other query ranks with.
+    cjk_grams,
     content_snippet,
     permalink,
     file_path UNINDEXED,

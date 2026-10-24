@@ -12,6 +12,14 @@
 /// exact; only the float is allowed to drift.
 const SCORE_TOLERANCE: f32 = 5e-4;
 
+/// Tolerance for a *fused* hybrid score.
+///
+/// A hybrid score combines the FTS and vector legs. The 0.24 n-gram column (#1294)
+/// changes FTS5's bm25 length normalization, which moves the FTS half by a few thousandths
+/// and the fused score with it. Ranking, the result set and `matched_chunk` are still
+/// compared exactly; only the fused float is allowed the extra room.
+const HYBRID_SCORE_TOLERANCE: f32 = 5e-3;
+
 use std::collections::HashMap;
 use std::fs;
 
@@ -356,7 +364,7 @@ async fn stored_vector_index_replays_reference_search() {
             .expect("golden"),
     )
     .expect("json");
-    compare_search_page(&hybrid, &golden, SCORE_TOLERANCE, "hybrid");
+    compare_search_page(&hybrid, &golden, HYBRID_SCORE_TOLERANCE, "hybrid");
 
     // Filters on the semantic legs. The reference passes them to the FTS leg natively
     // and intersects the vector leg with a filter-only scan, so these cases would pass

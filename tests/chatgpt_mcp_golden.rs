@@ -31,6 +31,21 @@ fn replay(requests: &[Value]) -> Vec<Value> {
     frames
 }
 
+/// The note titles a miss-suggestion markdown block lists, sorted.
+///
+/// The suggestion block is `## 1. <title>` per row; the rank is the reference's, and the
+/// 0.24 n-gram column can swap two adjacent rows, so the comparison is on membership.
+fn suggestion_titles(text: &str) -> Vec<String> {
+    let mut titles: Vec<String> = text
+        .lines()
+        .filter_map(|line| line.strip_prefix("## "))
+        .filter_map(|line| line.split_once(". "))
+        .map(|(_, title)| title.trim().to_owned())
+        .collect();
+    titles.sort();
+    titles
+}
+
 /// Decode one adapter payload: the content list's first item holds the JSON body.
 fn payload_of(frame: &Value) -> Value {
     let items: Value = serde_json::from_str(&text_payload(frame)).expect("content list");
@@ -63,6 +78,29 @@ fn chatgpt_adapters_replay_the_reference_frames() {
 
             // The text surface is the stringified content list, and the structured
             // payload is that same list — both are compared.
+            //
+            // One exception, and only in a *miss* suggestion list: a `fetch` of a note
+            // that does not exist answers with the notes the fallback search ranked. The
+            // 0.24 n-gram column (#1294) changes FTS5's bm25 length normalization, which
+            // can reorder two suggestions whose scores are within 3% of each other (the
+            // fixture's `task-markers` and `中文测试文档`). Membership is what matters for
+            // a suggestion list, so those cases compare the set and pin the count.
+            let is_miss_suggestions = case["id"]
+                .as_str()
+                .is_some_and(|id| id.ends_with("-fetch") || id.ends_with("-search"))
+                && text_payload(reference).contains("Note Not Found");
+            if is_miss_suggestions {
+                assert_eq!(
+                    suggestion_titles(&text_payload(ours)),
+                    suggestion_titles(&text_payload(reference)),
+                    "{} :: {} suggestions differ",
+                    suite["name"].as_str().unwrap_or("?"),
+                    case["id"]
+                );
+                assert_eq!(ours["result"]["isError"], false);
+                checked += 1;
+                continue;
+            }
             assert_eq!(
                 text_payload(ours),
                 text_payload(reference),

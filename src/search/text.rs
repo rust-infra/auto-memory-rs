@@ -123,6 +123,27 @@ pub fn search_text(
         page,
         page_size,
     )?;
+    // Upstream 0.24.0 (#1294): when the ordinary word index finds nothing for a query
+    // written in a script without spaces, retry against the character n-grams. The
+    // `unicode61` tokenizer files a whole Chinese sentence as one token, so without this
+    // leg a search for `中文` never matches a note that contains it.
+    if result.total == 0
+        && let Some(input) = options.query.as_deref()
+        && let Some(ngram_query) = crate::search::query::prepare_ngram_query(input)
+    {
+        let ngram_result = run_query_with_match(
+            conn,
+            project_id,
+            options,
+            Some(&ngram_query),
+            Some("cjk_grams"),
+            page,
+            page_size,
+        )?;
+        if ngram_result.total > 0 {
+            return Ok(ngram_result);
+        }
+    }
     if result.total == 0 {
         if let Some(input) = options.query.as_deref() {
             if let Some(relaxed) = relaxed_query(input) {
@@ -141,7 +162,33 @@ fn run_query(
     page: u32,
     page_size: u32,
 ) -> Result<SearchPage> {
-    let (where_clause, mut params) = build_filters(project_id, options, match_query)?;
+    run_query_with_match(
+        conn,
+        project_id,
+        options,
+        match_query,
+        None,
+        page,
+        page_size,
+    )
+}
+
+/// Run one page, optionally against the `cjk_grams` column instead of the word columns.
+///
+/// `match_column` names the column the `MATCH` predicate targets; `None` keeps the
+/// historical word-index shape. Everything else — filters, ordering, pagination, the
+/// content-length fields — is shared, so the two legs cannot drift.
+fn run_query_with_match(
+    conn: &Connection,
+    project_id: i64,
+    options: &TextSearchOptions,
+    match_query: Option<&str>,
+    match_column: Option<&str>,
+    page: u32,
+    page_size: u32,
+) -> Result<SearchPage> {
+    let (where_clause, mut params) =
+        build_filters_with_column(project_id, options, match_query, match_column)?;
     let from_clause = "FROM search_index";
 
     let count_sql = format!("SELECT count(*) {from_clause} WHERE {where_clause}");
@@ -354,10 +401,26 @@ impl MatchPredicate {
 /// A single predicate keeps the SQL the goldens pin verbatim. Two or more become one
 /// `search_index MATCH ?` whose column filters (`{title} : (…)`) carry the scopes the
 /// separate clauses carried, because FTS5 only accepts that shape.
-fn match_filter(
+/// Fold predicates into a WHERE fragment, optionally targeting one named column.
+///
+/// A `Some(column)` makes every text leg a `column MATCH ?`, which is how the `cjk_grams`
+/// retry runs: the n-gram terms only exist in that column, so pointing the ordinary
+/// three-column OR at them would match nothing.
+fn match_filter_with_column(
     predicates: &[MatchPredicate],
     options: &TextSearchOptions,
+    match_column: Option<&str>,
 ) -> Option<(String, Vec<Value>)> {
+    if let Some(column) = match_column {
+        let query = predicates.iter().find_map(|predicate| match predicate {
+            MatchPredicate::Text(query) => Some(query.clone()),
+            _ => None,
+        })?;
+        return Some((
+            format!("search_index.{column} MATCH ?"),
+            vec![Value::Text(query)],
+        ));
+    }
     match predicates {
         [] => None,
         [MatchPredicate::Text(query)] => {
@@ -421,10 +484,12 @@ fn has_user_boolean_operator(query: &str) -> bool {
         .any(|op| format!(" {query} ").contains(op))
 }
 
-fn build_filters(
+/// Compile the WHERE clause, optionally pointing the text `MATCH` at `cjk_grams`.
+fn build_filters_with_column(
     project_id: i64,
     options: &TextSearchOptions,
     match_query: Option<&str>,
+    match_column: Option<&str>,
 ) -> Result<(String, Vec<Value>)> {
     let mut clauses = vec!["search_index.project_id = ?".to_owned()];
     let mut params: Vec<Value> = vec![Value::Integer(project_id)];
@@ -543,7 +608,8 @@ fn build_filters(
         params.push(Value::Text(after_date.clone()));
     }
 
-    if let Some((clause, match_params)) = match_filter(&matches, options) {
+    if let Some((clause, match_params)) = match_filter_with_column(&matches, options, match_column)
+    {
         // The MATCH predicate sits directly after the project filter, so its parameters
         // sit directly after the project id.
         clauses.insert(1, clause);
@@ -576,7 +642,8 @@ mod tests {
     #[test]
     fn filter_sql_defaults_to_entity_rows() {
         let (clause, params) =
-            build_filters(1, &TextSearchOptions::default(), None).expect("filters");
+            build_filters_with_column(1, &TextSearchOptions::default(), None, None)
+                .expect("filters");
         assert!(clause.contains("search_index.type IN (?)"));
         assert_eq!(params[0], Value::Integer(1));
         assert_eq!(params[1], Value::Text("entity".to_owned()));
@@ -590,7 +657,8 @@ mod tests {
             ..TextSearchOptions::default()
         };
         let (clause, params) =
-            build_filters(1, &options, Some("coffee* NOT pour*")).expect("filters");
+            build_filters_with_column(1, &options, Some("coffee* NOT pour*"), None)
+                .expect("filters");
         assert_eq!(clause.matches("MATCH").count(), 1, "{clause}");
         assert!(clause.contains("search_index MATCH ?"), "{clause}");
         assert!(!clause.contains("content_stems MATCH"), "{clause}");
@@ -603,7 +671,8 @@ mod tests {
             query: Some("rust".to_owned()),
             ..TextSearchOptions::default()
         };
-        let (clause, _) = build_filters(1, &options, Some("rust*")).expect("filters");
+        let (clause, _) =
+            build_filters_with_column(1, &options, Some("rust*"), None).expect("filters");
         assert!(clause.contains("search_index.title MATCH ?"), "{clause}");
         assert!(clause.contains("content_stems MATCH"), "{clause}");
     }
@@ -614,7 +683,7 @@ mod tests {
             metadata_filters: vec![exact_filter("status", "active")],
             ..TextSearchOptions::default()
         };
-        let (clause, params) = build_filters(1, &options, None).expect("filters");
+        let (clause, params) = build_filters_with_column(1, &options, None, None).expect("filters");
         assert!(
             clause.contains("json_extract(entity_metadata, ?) = ?"),
             "{clause}"
@@ -641,7 +710,8 @@ mod tests {
     #[test]
     fn text_match_uses_column_scoped_or() {
         let (clause, params) =
-            build_filters(1, &TextSearchOptions::default(), Some("rust*")).expect("filters");
+            build_filters_with_column(1, &TextSearchOptions::default(), Some("rust*"), None)
+                .expect("filters");
         assert!(clause.contains("content_stems MATCH"));
         assert_eq!(
             params
@@ -662,7 +732,8 @@ mod tests {
             title: Some("Alpha".to_owned()),
             ..TextSearchOptions::default()
         };
-        let (clause, params) = build_filters(1, &options, Some("rust*")).expect("filters");
+        let (clause, params) =
+            build_filters_with_column(1, &options, Some("rust*"), None).expect("filters");
         assert_eq!(clause.matches("MATCH").count(), 1, "{clause}");
         assert!(clause.contains("search_index MATCH ?"), "{clause}");
         assert_eq!(params[0], Value::Integer(1));
@@ -680,7 +751,8 @@ mod tests {
             permalink_match: Some("alpha".to_owned()),
             ..TextSearchOptions::default()
         };
-        let (clause, params) = build_filters(1, &options, Some("rust*")).expect("filters");
+        let (clause, params) =
+            build_filters_with_column(1, &options, Some("rust*"), None).expect("filters");
         assert_eq!(clause.matches("MATCH").count(), 1, "{clause}");
         assert_eq!(
             params[1],
