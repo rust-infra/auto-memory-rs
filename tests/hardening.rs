@@ -218,9 +218,10 @@ async fn malformed_utf8_file_is_skipped_without_losing_the_vault() {
         "reindex must not fail the whole run"
     );
     let report: Value = serde_json::from_slice(&output.stdout).expect("report");
-    // The fixture vault already ships one malformed-frontmatter note, so the undecodable
-    // file is the second skip.
-    assert_eq!(report["skipped"], 2, "{report}");
+    // The undecodable file is the only skip. Upstream 0.24.0 (#1451) stopped dropping a
+    // file whose leading `---` block is not a YAML mapping — the fixture vault ships one,
+    // and it is now indexed as plain markdown — so it no longer counts here.
+    assert_eq!(report["skipped"], 1, "{report}");
     assert!(report["added"].as_u64().unwrap_or(0) > 0, "{report}");
 
     let store = auto_memory::storage::Store::open(&index)

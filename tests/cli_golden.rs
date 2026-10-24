@@ -171,8 +171,14 @@ fn semantic_search_cli_replays_reference_results() {
     ]);
     assert!(output.status.success(), "stderr: {:?}", output.stderr);
     let report: Value = serde_json::from_slice(&output.stdout).expect("report");
-    assert_eq!(report["chunks"], 78);
-    assert_eq!(report["embedded"], 78);
+    // Upstream 0.24.0 (#1451): a file whose leading `---` block is not a YAML mapping is
+    // indexed as plain markdown instead of being dropped, so the fixture vault's
+    // `malformed-frontmatter.md` now contributes a chunk. The captured vectors cover the
+    // 78 chunks the 0.23.2 corpus knew; the extra one gets the fixture provider's
+    // deterministic zero vector, which is why the semantic assertions below still hold on
+    // the captured inputs.
+    assert_eq!(report["chunks"], 79);
+    assert_eq!(report["embedded"], 79);
 
     // The semantic score envelope. The reference runtime is not bit-reproducible across
     // runs (ONNX Runtime batching/threading): re-capturing the corpus moved the same

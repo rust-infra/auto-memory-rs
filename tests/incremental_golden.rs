@@ -118,15 +118,14 @@ async fn reconcile_indexes_new_files() {
         .await
         .expect("reconcile");
 
-    assert_eq!(
-        report.added, 15,
-        "15 valid notes; the malformed one is skipped"
-    );
-    assert_eq!(report.skipped, 1);
+    // Upstream 0.24.0 (#1451): the fixture's `malformed-frontmatter.md` is indexed as
+    // plain markdown instead of being skipped, so it counts here and `skipped` is zero.
+    assert_eq!(report.added, 16, "16 notes, none skipped");
+    assert_eq!(report.skipped, 0);
     assert_eq!(report.removed, 0);
 
     let counts = store.counts(project_id).await.expect("counts");
-    assert_eq!(counts.entities, 15);
+    assert_eq!(counts.entities, 16);
     assert_eq!(counts.observations, 16);
     assert_eq!(counts.relations, 16);
 }
@@ -145,8 +144,8 @@ async fn reconcile_is_idempotent_for_unchanged_files() {
 
     assert_eq!(second.added, 0);
     assert_eq!(second.updated, 0);
-    assert_eq!(second.unchanged, 15);
-    assert_eq!(store.counts(project_id).await.expect("counts").entities, 15);
+    assert_eq!(second.unchanged, 16);
+    assert_eq!(store.counts(project_id).await.expect("counts").entities, 16);
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -176,7 +175,7 @@ async fn modified_file_updates_without_duplicates() {
     assert_eq!(report.added, 0);
 
     let counts = store.counts(project_id).await.expect("counts");
-    assert_eq!(counts.entities, 15, "no duplicate entity");
+    assert_eq!(counts.entities, 16, "no duplicate entity");
     assert_eq!(counts.observations, 17, "one observation added");
     let entity = store
         .entity_by_file_path(project_id, "notes/simple.md")
@@ -227,7 +226,7 @@ async fn rename_keeps_permalink_and_leaves_no_ghost() {
         moved.permalink, original.permalink,
         "update_permalinks_on_move defaults to false"
     );
-    assert_eq!(store.counts(project_id).await.expect("counts").entities, 15);
+    assert_eq!(store.counts(project_id).await.expect("counts").entities, 16);
 
     let reconcile = service(&mut store, project_id, &vault, false)
         .reconcile()
@@ -277,7 +276,9 @@ async fn deleted_file_is_pruned() {
         .await
         .expect("reconcile");
     assert_eq!(report.removed, 1);
-    assert_eq!(store.counts(project_id).await.expect("counts").entities, 14);
+    // One fewer than the 16 the fixture vault holds after #1451 indexed its malformed
+    // file rather than dropping it.
+    assert_eq!(store.counts(project_id).await.expect("counts").entities, 15);
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -297,11 +298,13 @@ async fn malformed_file_does_not_corrupt_the_index() {
         .reconcile()
         .await
         .expect("reconcile");
-    // The fixture vault already contains one malformed file; the new one adds a second.
-    assert_eq!(report.skipped, 2);
-    assert_eq!(report.added, 0);
+    // Upstream 0.24.0 (#1451): a leading `---` block that is not a YAML mapping is
+    // indexed as plain markdown, so neither the fixture's malformed file nor the new one
+    // is skipped. What the guard still refuses is rewriting the file.
+    assert_eq!(report.skipped, 0, "{report:?}");
+    assert_eq!(report.added, 1, "the new note is added: {report:?}");
     let counts = store.counts(project_id).await.expect("counts");
-    assert_eq!(counts.entities, 15, "broken file is not indexed");
+    assert_eq!(counts.entities, 17, "the new note is indexed");
     assert!(
         store
             .entity_by_file_path(project_id, "notes/simple.md")

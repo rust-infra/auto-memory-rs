@@ -81,7 +81,10 @@ fn project_add_registers_and_indexes() {
     assert!(ok);
     assert_eq!(payload["action"], "added");
     assert_eq!(payload["permalink"], "oracle");
-    assert_eq!(payload["indexed"]["entities"], 15);
+    // Upstream 0.24.0 (#1451) indexes the fixture's `malformed-frontmatter.md` as plain
+    // markdown instead of dropping it, so the vault has one more entity than the 0.23.2
+    // corpus recorded.
+    assert_eq!(payload["indexed"]["entities"], 16);
     assert_eq!(payload["indexed"]["observations"], 16);
     assert_eq!(payload["indexed"]["relations"], 16);
 
@@ -97,7 +100,10 @@ fn project_add_registers_and_indexes() {
     ]);
     assert!(ok);
     assert_eq!(payload["action"], "updated");
-    assert_eq!(payload["indexed"]["entities"], 15);
+    // Upstream 0.24.0 (#1451) indexes the fixture's `malformed-frontmatter.md` as plain
+    // markdown instead of dropping it, so the vault has one more entity than the 0.23.2
+    // corpus recorded.
+    assert_eq!(payload["indexed"]["entities"], 16);
 }
 
 /// `--no-index` is the escape hatch for registering a vault that is indexed separately.
@@ -173,7 +179,10 @@ async fn project_remove_drops_the_index_and_keeps_the_vault() {
         "--json",
     ]);
     assert!(ok);
-    assert_eq!(payload["indexed"]["entities"], 15);
+    // Upstream 0.24.0 (#1451) indexes the fixture's `malformed-frontmatter.md` as plain
+    // markdown instead of dropping it, so the vault has one more entity than the 0.23.2
+    // corpus recorded.
+    assert_eq!(payload["indexed"]["entities"], 16);
     let markdown_before = std::fs::read_dir(vault.join("notes"))
         .expect("notes")
         .count();

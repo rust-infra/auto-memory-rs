@@ -88,10 +88,20 @@ pub fn load_indexed_document(
         return Ok(LoadOutcome::Missing);
     };
     let document = parse_document(relative_path, &content)?;
-    if document.frontmatter_error {
-        return Ok(LoadOutcome::MalformedFrontmatter);
-    }
-    let permalink = policy.for_document(&document, relative_path);
+    // Upstream 0.24.0 (#1451): a leading `---` block that is not a YAML mapping (a
+    // letterhead between horizontal rules) is indexed as plain markdown. The parser
+    // already treats such a block as body; the indexer used to drop the file entirely,
+    // which made a vault of letterheads look empty while readiness reported idle.
+    //
+    // The guard that stands: the file is never rewritten. `frontmatter_error` still
+    // records the condition, and the write path refuses to add a permalink to it.
+    let permalink = if document.frontmatter_error {
+        // No generated permalink: writing one would mean editing the malformed block,
+        // which the guard refuses. An empty permalink is how the store records "none".
+        String::new()
+    } else {
+        policy.for_document(&document, relative_path)
+    };
     let timestamps = DocumentTimestamps::for_document(&document, file_times.0, file_times.1);
     Ok(LoadOutcome::Loaded(Box::new(IndexedDocument {
         relative_path: relative_path.to_owned(),

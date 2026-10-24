@@ -112,11 +112,18 @@ async fn rebuild_matches_reference_projection() {
 
     let expected_entities = golden("entities.json");
     assert_eq!(report.files_seen, 16, "fixture vault has 16 markdown files");
+    // Upstream 0.24.0 (#1451): a leading `---` block that is not a YAML mapping is
+    // indexed as plain markdown instead of being dropped, so nothing is skipped and the
+    // vault yields one more document than the 0.23.2 corpus recorded.
     assert_eq!(
-        report.documents_skipped, 1,
-        "malformed frontmatter file must be skipped, like the reference indexer"
+        report.documents_skipped, 0,
+        "a non-mapping frontmatter block no longer drops the file"
     );
-    assert_eq!(report.documents_indexed, expected_entities.len());
+    assert_eq!(
+        report.documents_indexed,
+        expected_entities.len() + 1,
+        "the corpus plus the newly indexed malformed-frontmatter note"
+    );
 
     let mut expected: Vec<String> = expected_entities
         .iter()
@@ -139,6 +146,25 @@ async fn rebuild_matches_reference_projection() {
         .map(entity_key)
         .collect();
     actual.sort();
+    // The note #1451 newly indexes has no permalink (writing one would mean editing its
+    // malformed block), so it is compared separately rather than folded into the corpus
+    // projection, whose rows all carry a permalink.
+    let extra: Vec<String> = actual
+        .iter()
+        .filter(|row| row.starts_with("notes/malformed-frontmatter.md|"))
+        .cloned()
+        .collect();
+    assert_eq!(
+        extra.len(),
+        1,
+        "the newly indexed note is present: {actual:?}"
+    );
+    assert!(
+        extra[0].ends_with("|malformed-frontmatter|note|"),
+        "it is indexed as a plain note with no permalink: {:?}",
+        extra[0]
+    );
+    actual.retain(|row| !row.starts_with("notes/malformed-frontmatter.md|"));
     assert_eq!(actual, expected, "entity projection mismatch");
 
     let mut expected_observations: Vec<String> = golden("observations.json")

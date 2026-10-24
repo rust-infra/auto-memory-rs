@@ -53,10 +53,14 @@ async fn chunks_match_reference_corpus() {
     .expect("json");
     let expected_chunks = golden["chunks"].as_array().expect("chunks");
 
+    // Upstream 0.24.0 (#1451) indexes the fixture's `malformed-frontmatter.md`, so the
+    // vault yields one chunk the 0.23.2 corpus never captured a vector for. The captured
+    // inputs still have to match exactly, so the extra chunk is set aside here and every
+    // per-chunk assertion below runs on the corpus itself.
     assert_eq!(
         records.len(),
-        expected_chunks.len(),
-        "chunk count must match the reference corpus"
+        expected_chunks.len() + 1,
+        "the corpus plus the chunk #1451 newly indexes"
     );
 
     let mut expected: Vec<(String, String, String)> = expected_chunks
@@ -93,6 +97,9 @@ async fn chunks_match_reference_corpus() {
         })
         .collect();
     actual.sort();
+    // The note #1451 newly indexes contributes a chunk the corpus never captured; the
+    // corpus's own multiset still has to match exactly.
+    actual.retain(|(_, text, _)| !text.contains("Malformed Frontmatter"));
     assert_eq!(actual.len(), expected.len());
     assert_eq!(actual, expected, "chunk text/hash multiset must match");
 
@@ -125,11 +132,19 @@ async fn chunks_match_reference_corpus() {
         .collect();
     expected_entities.sort_unstable();
     expected_entities.dedup();
+    // One more entity contributes chunks than the corpus knew, because #1451 indexes a
+    // note the 0.23.2 capture never saw. Every *corpus* entity still has to contribute.
     assert_eq!(
         our_entities.len(),
-        expected_entities.len(),
-        "every reference entity must contribute chunks"
+        expected_entities.len() + 1,
+        "the corpus entities plus #1451's note"
     );
+    for entity in &expected_entities {
+        assert!(
+            our_entities.contains(entity),
+            "corpus entity {entity} must still contribute chunks"
+        );
+    }
 }
 
 /// End-to-end vector search replay with **reference** embeddings.
@@ -163,10 +178,23 @@ async fn vector_search_replays_reference_scores() {
             vectors.insert(chunk.chunk_key.clone(), vector.clone());
         }
     }
+    // The extra chunk has no captured vector, which is a property of the corpus rather
+    // than of the code: the fixture provider substitutes zeros for it. Every chunk the
+    // corpus *does* cover must still find its vector, so the assertion is on the captured
+    // set rather than on the live chunk list.
     assert_eq!(
         vectors.len(),
-        chunks.len(),
-        "every chunk needs a captured reference vector"
+        chunks
+            .iter()
+            .filter(|chunk| provider.vector_for(&chunk.chunk_text).is_some())
+            .count(),
+        "every captured chunk needs a captured reference vector"
+    );
+    assert!(
+        vectors.len() + 1 == chunks.len(),
+        "exactly one chunk is outside the corpus: {} vectors for {} chunks",
+        vectors.len(),
+        chunks.len()
     );
 
     let query = provider.embed_query("local index").expect("query vector");
@@ -319,7 +347,8 @@ async fn stored_vector_index_replays_reference_search() {
         .reindex_embeddings(&provider)
         .await
         .expect("embedding reindex");
-    assert_eq!(first.chunks, 78, "chunk corpus size");
+    // Upstream 0.24.0 (#1451) adds one chunk for the note the corpus never indexed.
+    assert_eq!(first.chunks, 79, "chunk corpus size plus #1451's note");
     assert_eq!(first.reused, 0);
     assert_eq!(first.embedded, first.chunks);
 

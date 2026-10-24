@@ -332,7 +332,9 @@ async fn pagination_matches_reference_counts() {
         )
         .await
         .expect("paginated search");
-    assert_eq!(page.total, 15);
+    // Upstream 0.24.0 (#1451) indexes the fixture's `malformed-frontmatter.md` as plain
+    // markdown instead of dropping it, so the vault holds one more entity.
+    assert_eq!(page.total, 16);
     assert_eq!(page.current_page, 2);
     assert_eq!(page.page_size, 2);
     assert_eq!(page.results.len(), 2);
@@ -368,7 +370,7 @@ async fn non_matching_query_falls_back_to_relaxed_search() {
         )
         .await
         .expect("relaxed search");
-    assert_eq!(page.total, 15, "reference relaxation matches every entity");
+    assert_eq!(page.total, 16, "reference relaxation matches every entity");
     assert_eq!(page.results.len(), 10, "default page size is 10");
     assert!(page.has_more);
 }
@@ -380,8 +382,9 @@ async fn empty_query_without_filters_returns_nothing() {
         .search_text(project_id, &TextSearchOptions::default())
         .await
         .expect("filter-only search");
-    // Filter-only searches with no filters still return every entity (reference behavior).
-    assert_eq!(page.total, 15);
+    // Filter-only searches with no filters still return every entity (reference behavior),
+    // which is one more than the 0.23.2 corpus after #1451.
+    assert_eq!(page.total, 16);
     assert_eq!(page.results[0].score, 0.0);
 }
 

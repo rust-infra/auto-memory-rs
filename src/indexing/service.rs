@@ -489,8 +489,13 @@ impl<'a> IndexService<'a> {
     /// Write with the permalink the loader generated; see [`Self::write_with_permalink`] for
     /// the permalink and `resolve` contracts.
     async fn write(&mut self, indexed: &IndexedDocument, resolve: bool) -> Result<()> {
-        self.write_with_permalink(indexed, Some(&indexed.permalink), resolve)
-            .await
+        // Upstream 0.24.0 (#1451): a file whose leading `---` block is not a YAML mapping
+        // is indexed as plain markdown but never rewritten, so it gets no permalink. An
+        // empty permalink must be stored as NULL: `entity` has a unique index on
+        // `(permalink, project_id)`, and several such files would otherwise collide on the
+        // empty string.
+        let permalink = (!indexed.permalink.is_empty()).then_some(indexed.permalink.as_str());
+        self.write_with_permalink(indexed, permalink, resolve).await
     }
 
     /// Write one parsed document to the index, optionally resolving relation targets.

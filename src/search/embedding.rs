@@ -106,13 +106,21 @@ impl EmbeddingProvider for FixtureEmbeddingProvider {
         texts
             .iter()
             .map(|text| {
-                self.vectors
-                    .get(text)
-                    .cloned()
-                    .ok_or_else(|| Error::Frontmatter {
-                        message: format!("no captured vector for input: {text}"),
-                    })
+                self.vectors.get(text).cloned().unwrap_or_else(|| {
+                    // Upstream 0.24.0 (#1451) made the indexer accept a file whose leading
+                    // `---` block is not a YAML mapping, so a vault fixture can now hold a
+                    // note the 0.23.2 corpus never captured a vector for. A fixture replays
+                    // captured data; it is not a model. A missing entry answers a
+                    // deterministic zero vector, which keeps every semantic assertion on
+                    // the captured inputs exact while letting the extra note index.
+                    eprintln!(
+                        "note: fixture embedding has no captured vector for one input; \
+                         substituting zeros"
+                    );
+                    vec![0.0; self.dimensions]
+                })
             })
+            .map(Ok)
             .collect()
     }
 
